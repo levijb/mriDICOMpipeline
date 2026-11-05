@@ -218,7 +218,7 @@ def test_1000_cached_sessions_do_not_read_scan_contents(project, monkeypatch, ca
             root.mkdir(parents=True)
             (root/'.pipeline_complete.json').write_text('{}')
         def cached_receipt(root):
-            return dict(version=config.VERSION, root=str(root), receipt=str(root/'.pipeline_complete.json'),
+            return dict(version=config.SCHEMA_VERSION, root=str(root), receipt=str(root/'.pipeline_complete.json'),
                         receipt_signature=fsutil.signature(root/'.pipeline_complete.json'),
                         directories={str(root):root.stat().st_mtime_ns}, inventory=str(root/'.inventory.json'))
         conv = cached_receipt(out_root)
@@ -227,7 +227,7 @@ def test_1000_cached_sessions_do_not_read_scan_contents(project, monkeypatch, ca
             archive=str(zip_path), archive_signature=fsutil.signature(zip_path), archive_sha256=d,
             content_sha256=d, extraction=cached_receipt(data_root), conversion=conv, n_dicom=3000, n_series=20)
         s.data['sources'][str(zip_path)] = dict(path=str(zip_path), signature=fsutil.signature(zip_path),
-            key=f'S001/{d}', outcome='prepared', against=d, version=config.VERSION)
+            key=f'S001/{d}', outcome='prepared', against=d, version=config.SCHEMA_VERSION)
     s.flush()
     def forbidden(*a, **k):
         pytest.fail('Cached run attempted to read/process scan contents')

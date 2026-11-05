@@ -161,10 +161,10 @@ def prepare_one(candidate, previous, cfg, stop=None):
                 move_archive(source, canonical, cfg, fingerprint)
                 active_source = canonical
                 fsutil.atomic_json(stage / ".inventory.json", inventory)
-                fsutil.atomic_json(stage / ".pipeline_complete.json", {"version": config.VERSION, "archive_sha256": digest, "receipt_id": uuid.uuid4().hex})
+                fsutil.atomic_json(stage / ".pipeline_complete.json", {"version": config.SCHEMA_VERSION, "archive_sha256": digest, "receipt_id": uuid.uuid4().hex})
                 fsutil.publish_tree(stage, destination, cfg.dicoms)
                 extraction = receipts.receipt_info(destination, destination / ".pipeline_complete.json", destination / ".inventory.json")
-                entry = {"subject_id": sid, "date": date, "label": label, "status": "ready", "version": config.VERSION,
+                entry = {"subject_id": sid, "date": date, "label": label, "status": "ready", "version": config.SCHEMA_VERSION,
                     "archive": str(canonical), "archive_signature": fsutil.signature(canonical), "archive_sha256": digest,
                     "content_sha256": inventory["content_sha256"], "n_dicom": inventory["n_dicom"],
                     "n_series": inventory["n_series"], "dicom_bytes": inventory["dicom_bytes"],
@@ -172,14 +172,14 @@ def prepare_one(candidate, previous, cfg, stop=None):
                     "conversion": previous.get("conversion", {}) if previous else {}}
                 event["session"] = entry
                 event["sources"] = [{"path": str(canonical), "signature": fsutil.signature(canonical), "key": key,
-                    "outcome": "prepared", "against": digest, "version": config.VERSION}]
+                    "outcome": "prepared", "against": digest, "version": config.SCHEMA_VERSION}]
                 event["note"] = f"{inventory['n_dicom']} DICOMs, {inventory['n_series']} series; {inventory['skipped_files']} viewer/non-DICOM files omitted"
                 if inventory["header_dates"] and inventory["header_dates"] != [date]:
                     event["issues"].append(reports.problem("date:" + key, "prepare", sid, label, "Header dates differ from filename; filename date retained", canonical))
                 else:
                     event["clear_issues"].append("date:" + key)
         event["source"] = {"path": str(source), "signature": fingerprint, "key": key, "outcome": event["outcome"],
-                            "against": (event.get("session") or previous)["archive_sha256"], "version": config.VERSION}
+                            "against": (event.get("session") or previous)["archive_sha256"], "version": config.SCHEMA_VERSION}
     except Exception as e:
         interrupted = isinstance(e, InterruptedError)
         event.update(outcome="interrupted" if interrupted else "failed", note=str(e))
@@ -187,9 +187,9 @@ def prepare_one(candidate, previous, cfg, stop=None):
         event["clear_issues"].append(issue_key)
         event["issues"] = [reports.problem(issue_key, "prepare", sid, label, str(e), active_source)]
         event["source"] = {"path": str(active_source), "signature": fingerprint, "key": key, "outcome": "interrupted" if interrupted else "failed",
-                            "against": previous.get("archive_sha256", "") if previous else "", "version": config.VERSION}
+                            "against": previous.get("archive_sha256", "") if previous else "", "version": config.SCHEMA_VERSION}
         if not previous:
-            event["session"] = {"subject_id": sid, "date": date, "label": label, "status": "interrupted" if interrupted else "failed", "version": config.VERSION}
+            event["session"] = {"subject_id": sid, "date": date, "label": label, "status": "interrupted" if interrupted else "failed", "version": config.SCHEMA_VERSION}
     finally:
         fsutil.remove_tree(stage, cfg.work)
     return event
@@ -210,7 +210,7 @@ def plan_prepare(cfg, state, ids, pairs, logger):
             fingerprint = fsutil.signature(source)
             prior = state.data["sessions"].get(key, {})
             cached = state.data["sources"].get(str(source), {})
-            unchanged = cached.get("signature") == fingerprint and cached.get("version") == config.VERSION
+            unchanged = cached.get("signature") == fingerprint and cached.get("version") == config.SCHEMA_VERSION
             valid = prior.get("status") == "ready" and prior.get("extraction", {}).get("root") == str(cfg.dicoms / "Subjects" / sid / label) and receipts.fast_valid(prior["extraction"], "extract", cfg.audit)
             if not cfg.force_reextract and unchanged:
                 if valid and str(source) == prior.get("archive") and fingerprint == prior.get("archive_signature"):

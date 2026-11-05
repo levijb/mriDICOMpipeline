@@ -10,7 +10,7 @@ from . import config, fsutil
 def fast_valid(entry, kind, audit=False):
     """O(directories), never O(DICOM instances), unless explicitly audited."""
     try:
-        if entry.get("version") != config.VERSION or not entry.get("receipt"):
+        if entry.get("version") != config.SCHEMA_VERSION or not entry.get("receipt"):
             return False
         if fsutil.signature(entry["receipt"]) != entry["receipt_signature"]:
             return False
@@ -31,5 +31,5 @@ def fast_valid(entry, kind, audit=False):
 def receipt_info(root, receipt, inventory):
     dirs = {str(p): p.stat().st_mtime_ns for p in root.rglob("*") if p.is_dir()}
     dirs[str(root)] = root.stat().st_mtime_ns
-    return {"version": config.VERSION, "root": str(root), "receipt": str(receipt),
+    return {"version": config.SCHEMA_VERSION, "root": str(root), "receipt": str(receipt),
             "receipt_signature": fsutil.signature(receipt), "directories": dirs, "inventory": str(inventory)}

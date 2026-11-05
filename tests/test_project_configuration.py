@@ -82,10 +82,11 @@ def test_ambiguous_or_missing_columns_rejected(tmp_path, header):
         identity.load_roster(roster)
 
 
-def test_old_state_rejected_without_writes(tmp_path):
+@pytest.mark.parametrize('version', [1, 2])
+def test_old_state_rejected_without_writes(tmp_path, version):
     index = tmp_path / '.state/index.json'
     index.parent.mkdir()
-    original = '{"version":1,"sessions":{},"sources":{},"issues":{}}'
+    original = '{"version":%d,"sessions":{},"sources":{},"issues":{}}' % version
     index.write_text(original)
     with pytest.raises(ValueError, match='Unsupported state version'):
         State(tmp_path)

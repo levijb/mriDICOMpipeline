@@ -1145,7 +1145,7 @@ Per-event journals cover the time between flushes.
     |---|---|---|
     | Parses | Any | Use `index.json` |
     | Missing | Parses | Use `.bak` silently. A crash between the two replaces leaves this state |
-    | Does not parse | Parses | Move the bad file aside to `index.json.corrupt-<run_id>`, use `.bak`, log at error level, and note it in the history row. No persistent issue is raised |
+    | Does not parse | Parses | Use `.bak`, log at error level, and note it in the history row. At the first save, move the bad file aside to `index.json.corrupt-<run_id>` (a dry run never saves, so it writes nothing). No persistent issue is raised |
     | Missing or does not parse | Missing or does not parse, with at least one of the two present | Stop with exit 2 and name both files |
     | Missing | Missing | New project. The adoption rule (Q12) rebuilds state from receipts as `prepare` and `convert` meet existing folders |
 
@@ -1432,7 +1432,7 @@ the recorded risk of the restructure option.
 | 5 | Intents, reconciliation, the adoption rule, stop handling (SIGTERM, Ctrl+C) | `test_recovery.py` |
 | 6 | Preparation: immutable canonical ZIPs, SOP classes, repeats and multi-study holds, `--session`, `--accept-multi-study`, canonical rehash under `--audit`, missing-archive issue, free-space check, moved-project refusal | `test_inputs.py` |
 | 7 | Conversion: strict coverage, Q7 rules (including `--audit --session` revalidation), last-good and last attempt, pass-through NIfTI, provenance, streaming redaction, process groups, classifier revision 2 | `test_conversion.py`; session-level assertions added to `test_real_converter.py` |
-| 8 | Reports and run history: new columns and outcomes, report files held open | `test_conversion.py`, `test_recovery.py::test_history_row_written_on_early_abort` |
+| 8 | Reports and run history: new columns and outcomes, report files held open, the history-row note for an index recovered from `.bak` | `test_conversion.py`, `test_recovery.py::test_history_row_written_on_early_abort` |
 | 9 | README phase 1 updates; runbook | Review against the checklist in Verification Plan |
 
 From step 3 onward, each P-item's regression test (see the traceability
@@ -1554,13 +1554,14 @@ function, so importing the module itself would clash with both.
     and tests that expect `ValueError` keep working. `class State(report_root,
     run_id=None)`; the optional `run_id` keeps today's one-argument calls in
     tests working:
-    *   **Load:** the Q21 load decision table. A corrupt `index.json` is
-        renamed to `index.json.corrupt-<run_id>` (or `-<epoch seconds>`
-        without a run ID), and
-        `recovered_from_backup = True` is set; the runner logs it at error
-        level and notes it in the history row. If neither file can be read
-        but one exists, raise `StateError` naming both paths. If neither
-        exists, start empty (`version 3`, `last_seq 0`).
+    *   **Load:** the Q21 load decision table. A corrupt `index.json` sets
+        `recovered_from_backup = True`, and the runner logs it at error
+        level. The file is renamed to `index.json.corrupt-<run_id>` (or
+        `-<epoch seconds>` without a run ID) at the first save, not at
+        load, so a dry run writes nothing. The history-row note arrives with
+        the history changes in step 8. If neither file can be read but one
+        exists, raise `StateError` naming both paths. If neither exists,
+        start empty (`version 3`, `last_seq 0`).
     *   **Version:** any version other than 3 raises
         `StateError("Unsupported state version N in <path>; this version
         starts new projects only. Use a new --report-root.")` and writes
@@ -1571,7 +1572,8 @@ function, so importing the module itself would clash with both.
         `<seq:016x>_<4 hex>.json` with `atomic_json`, apply the event, and
         flush if more than 10 s have passed since the last flush (as today).
     *   `flush()`: set `last_seq` from memory, write a temporary file with
-        `fsync`, `os.replace` `index.json` onto `index.json.bak`, then
+        `fsync`, `os.replace` `index.json` onto `index.json.bak` (or move a
+        corrupt `index.json` aside instead, keeping the good `.bak`), then
         `os.replace` the temporary file onto `index.json`, then delete
         journals with `seq <= (backup's last_seq)`.
     *   `apply(event)`: as today (session replacement, source upserts, issue

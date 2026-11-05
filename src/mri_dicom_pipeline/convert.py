@@ -135,7 +135,7 @@ def convert_one(entry, cfg, stop):
         complete = not errors
         organized = stage / "organized"
         fsutil.atomic_json(organized / ".inventory.json", {"files": file_list})
-        fsutil.atomic_json(organized / ".pipeline_complete.json", {"version": config.VERSION, "complete": complete,
+        fsutil.atomic_json(organized / ".pipeline_complete.json", {"version": config.SCHEMA_VERSION, "complete": complete,
             "source_sha256": entry["content_sha256"], "receipt_id": uuid.uuid4().hex})
         destination = cfg.niftis / "Subjects" / sid / label if complete else cfg.niftis / ".pending" / sid / label / stage.name
         if complete and destination.exists() and not (destination / ".pipeline_complete.json").exists():

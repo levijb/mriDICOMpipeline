@@ -73,7 +73,10 @@ def run(cfg, phase, ids, pairs, roster_warnings):
         logger.info("Current status: %s | Problems: %s", cfg.reports / "session_status.csv", cfg.reports / "issues.csv")
     for warning in roster_warnings:
         logger.warning(warning)
-    state = State(cfg.reports)
+    state = State(cfg.reports, run_id)
+    if state.recovered_from_backup:
+        logger.error("State index %s could not be read; loaded %s and its journals instead. "
+                     "The unreadable file is moved aside at the next save.", state.path, state.backup)
     if phase == "prepare":
         if not cfg.import_legacy and (cfg.uploads / "Subjects").is_dir() and not state.data["sessions"]:
             logger.warning("Legacy DicomUploads/Subjects is not scanned by default. Preview migration with --import-legacy --dry-run.")

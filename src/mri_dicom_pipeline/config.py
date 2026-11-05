@@ -9,7 +9,7 @@ from pathlib import Path
 from . import __version__
 
 
-VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def config_parser(phase):
