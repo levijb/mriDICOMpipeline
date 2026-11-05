@@ -1,8 +1,11 @@
 # mriDICOMpipeline
 
 Two commands, designed for repeated batches on one allocated compute node.
-Python 3.10+ and `pydicom` are required. Conversion also requires `dcm2niix`
-on PATH, or an explicit `--dcm2niix-bin /path/to/dcm2niix`.
+Python 3.11+ and `pydicom` are required. Conversion also requires `dcm2niix`
+on PATH, or an explicit `--dcm2niix-bin /path/to/dcm2niix`. Linux and Windows
+are supported; macOS is not tested. Operator procedures (first production run,
+resolving holds, crash recovery, Slurm settings) are in
+[`docs/runbook.md`](docs/runbook.md).
 
 ## Installation and first pilot
 
@@ -15,6 +18,7 @@ python -m pip install .
 Keep study data separate from the code checkout when starting a new project.
 Create `sessions.csv` in your study directory using the synthetic example in
 `examples/sessions.csv`. Place incoming archives in `DicomUploads/Uploads`.
+Keep a copy of every ZIP outside the project before the first run.
 Run from that study directory, optionally inside one Slurm compute allocation:
 
 ```bash
@@ -41,6 +45,9 @@ Optional Bash equivalents are `bash Scripts/prepare_dicoms.sh` and
 No account, partition, constraint, or memory requirement is hardcoded. These
 commands do not submit job arrays. One optional single-node sbatch launcher
 can run the same commands, using your cluster's normal resource settings.
+
+`--session SUBJECT/SESSION` (repeatable, both commands) limits a run to the
+named sessions, for example `--session S001/20260725`.
 
 ## Input and identity
 
@@ -77,20 +84,50 @@ mri-dicom-pipeline convert --reference-csv /data/visits.csv --subject-column par
 
 Blank rows are ignored; repeated pairs are
 collapsed. Invalid reference rows are logged and ignored without editing the
-CSV. IDs without dates still register the subject, but do not authorize an
-unlisted date. Unknown IDs and dates are held in Uploads for review. For an
-intentionally unlisted date belonging to a known ID, pass
-`--allow-unlisted-dates` to both commands or update the reference.
+CSV. IDs that differ only by letter case (`S001` and `s001`) would share
+folders on Windows, so every spelling of such an ID is ignored, with a warning
+naming the rows. IDs equal to a Windows device name (`CON`, `PRN`, `AUX`,
+`NUL`, `COM0`-`COM9`, `LPT0`-`LPT9`, in any case) are rejected. IDs without
+dates still register the subject, but do not authorize an unlisted date.
+Unknown IDs and dates are held in Uploads for review. For an intentionally
+unlisted date belonging to a known ID, pass `--allow-unlisted-dates` to both
+commands or update the reference.
 
-Preparation moves accepted ZIPs into SubjectsSorted. It never modifies ZIP
-contents. Viewer software, previews, DICOMDIR indices and non-DICOM files are
-omitted from extracted output; **extensionless DICOM objects are supported**.
-Archive member paths are not used as extraction paths. The original ZIP
-retains all ancillary files. ZIP members are streamed to completion to check
-their CRCs; obviously short uncompressed image objects are also rejected.
+### Uploads and canonical ZIPs
+
+Do not run `prepare` while copies into `Uploads/` are in progress, or copy each
+ZIP under a temporary name (not ending in `.zip`) and rename it when the copy
+is done. A partly copied ZIP fails to open, and it is retried automatically
+once its size or modification time changes.
+
+Preparation moves accepted ZIPs into SubjectsSorted. It never modifies or
+deletes a ZIP, and a ZIP it cannot accept stays where it is, with an issue.
+**An accepted ZIP in SubjectsSorted is immutable:** if different bytes appear
+at that path (for example a re-export copied over it), the session is held
+and its extraction and NIfTI outputs stay unchanged. A corrected export
+becomes a new `_N` session. The same bytes with a new file time (a restore
+from backup) are accepted without extracting again. `--force-reextract` never
+accepts changed bytes. A prepared session whose canonical ZIP disappears gets
+a nonblocking `missing:` issue; conversion continues from the extracted copy.
+
+Viewer software, previews, DICOMDIR indices and non-DICOM files are omitted
+from extracted output; **extensionless DICOM objects are supported**. Archive
+member paths are not used as extraction paths. The original ZIP retains all
+ancillary files. ZIP members are streamed to completion to check their CRCs;
+obviously short uncompressed image objects are also rejected. Objects that
+repeat byte for byte are stored once. A ZIP is held when two objects share a
+SOP Instance UID but differ, or when it holds more than one study; accept a
+genuine multi-study session with `--accept-multi-study SUBJECT/SESSION`.
 This cannot establish whether the original export included every acquired
 image. Nested ZIP containers and loose, already-unzipped exports are not
 accepted in this version: supply the original session ZIPs.
+
+Archives are assumed to come from your own scanner exports; they are parsed
+in-process. Before extracting, `prepare` checks that the ZIP's contents fit on
+disk with a reserve to spare: 5% of the filesystem or 50 GiB, whichever is
+smaller. A ZIP that does not fit is left in place with an issue. On
+quota-managed storage, check your quota as well; the check sees only free
+space.
 
 Header dates are cross-checks only; a mismatch is recorded as a warning.
 Subject identity never comes from patient identification fields or a matching
@@ -109,19 +146,24 @@ from the cache; it does not perform another Python DICOM header pre-scan.
 Unchanged successful sessions are skipped. Missing output directories and
 file deletions/renames in managed output directories invalidate their receipts.
 In-place edits to existing files that preserve directory timestamps are not
-detected by this fast check. Managed outputs should be treated as immutable.
-Use `--audit` for an explicit, slower per-file content check. Keep
-`Reports/.state` and the hidden receipt/inventory files in each session;
-deleting these removes the fast-resume information. Keep state with its
-project at its existing absolute paths; relocation requires rebuilding it.
+detected by this fast check. Use `--audit` for an explicit, slower per-file
+content check; with `prepare`, it also re-hashes canonical ZIPs, so an edit
+that kept a ZIP's size and time is caught. Keep `Reports/.state` and the hidden
+receipt/inventory files in each session; deleting these removes the
+fast-resume information.
+
+State keeps absolute paths. **Moving a project is not supported yet:** when no
+recorded ZIP lies under the configured uploads folder, both commands refuse to
+run and say the project appears moved.
 
 Unchanged failures/partial conversions are recorded and **not retried by
 default**, so repeated batches do not continually reprocess a known bad scan.
 After addressing the cause, pass `--retry-failed`. New/changed inputs are
 considered automatically. Interrupted, unfinished work is retried automatically
-on the next invocation. `--force-reextract` and `--force-reconvert` explicitly
-bypass the relevant successful caches. `--limit N` selects work after cache
-checks, so a pilot can reach new scans beyond already completed ones.
+on the next invocation, except an interrupted explicit reconversion.
+`--force-reextract` and `--force-reconvert` explicitly bypass the relevant
+successful caches. `--limit N` selects work after cache checks, so a pilot can
+reach new scans beyond already completed ones.
 
 An exact repeat ZIP is skipped. A differently packaged ZIP containing the
 same multiset of DICOM file contents is also skipped. Its incoming copy stays
@@ -130,6 +172,36 @@ Different DICOM contents with the same session name are held, preserving both
 archives. Resolve the naming explicitly, for example `_2` for a second
 session. Different anonymized headers can make the same acquisition appear
 different; the pipeline never guesses that such inputs should be merged.
+
+## What "converted" means
+
+A session is `converted` only when dcm2niix exited 0, **every required series
+has at least one valid volume**, nothing failed to organize, and no unexpected
+files remain. Required series are those holding MR image objects; other
+series (for example Siemens CSA Non-Image objects or reports) stay in
+`DicomExtracted/` and are listed as excused. A session that misses a required
+series is `partial`, even when dcm2niix exits 0 (it does so for some series it
+cannot decode).
+
+The pipeline checks its own handling: published NIfTI files decompress to
+exactly the bytes dcm2niix wrote, companions are copied intact, and required
+series are accounted for. **Whether dcm2niix converts correctly (orientation,
+slice order, spacing, scaling, voxel values) is dcm2niix's responsibility.**
+
+**A complete session is never reconverted automatically.** If its folder is
+changed or disappears, the session gets an `output modified` issue and is left
+as it is. Restore the folder and run `convert --audit --session KEY` to
+revalidate it, or reconvert it explicitly with
+`--force-reconvert --session KEY`. An explicit reconversion refuses a folder
+holding files that are not in its inventory, so files people add are never
+deleted. If a reconversion fails, the complete folder and its record stay in
+place; the failed attempt is reported next to it.
+
+Each conversion records its provenance in its receipt and state: package
+version, run ID, converter path and options, and converter versions. Nothing
+compares provenance with the current environment, so outputs made with an
+older dcm2niix stay `converted`; reconvert explicitly after an upgrade if you
+need new outputs.
 
 ## Parallel work and recovery
 
@@ -143,30 +215,56 @@ and the pipeline performs gzip compression once per volume. More workers
 require more memory and temporary disk space. Benchmark your node before
 increasing concurrency. The same settings apply to preparation workers.
 
-One coordinator writes state, CSVs and permanent logs. Every completed session
-has a durable result journal; the compact index is updated periodically and
-on exit. Journals are replayed after interruption. An OS project lock prevents
-concurrent prepare/convert invocations for the same project. This depends on
-the cluster filesystem providing working advisory locks; verify in the pilot.
+One coordinator writes state, CSVs and permanent logs. Every result has a
+numbered journal; the index is saved periodically and on exit, with the
+previous index kept as `index.json.bak`. After a crash, journals newer than
+the saved index are replayed, so no session rolls back. Each command locks
+every storage folder it touches (uploads, DICOM, NIfTI, reports, staging), so
+two commands that share any folder cannot run at once. The lock depends on
+the filesystem's advisory locks; if runs start from more than one machine on
+shared storage, perform the two-node check in the runbook first.
 
 Outputs are staged in an isolated directory, validated, then published through
-a sibling directory swap. Existing successful session outputs remain in place
-if a new conversion fails. NIfTI header text/extensions are cleared while
-geometry and pixel bytes are retained; JSON uses an explicit technical field
-list. Matching .bval/.bvec companions are renamed with their image. All
-converted series/components are retained; no automatic best-scan selection
-is performed. Classification is a heuristic, including ADC before DWI and
-separate post-contrast T1 and SWI phase categories; review before analysis.
+a sibling directory swap. Each publication is recorded first; after a crash,
+the next run rolls back an interrupted swap, redoes unfinished work, or keeps
+a published folder only after checking every listed file. JSON uses an
+explicit technical field list. Matching .bval/.bvec companions are renamed
+with their image. All converted series/components are retained; no automatic
+best-scan selection is performed. Classification is a heuristic that matches
+whole words in the series description (revision 2: for example `AX T2* GRE`
+is GRE, `SWI mIP` is SWI_MINIP, `HEADCOIL T1` is T1); review before analysis.
+
+SIGTERM (for example a Slurm time limit) and Ctrl+C stop the run in order:
+converters are stopped (on Linux with every process they started), sessions
+still running are recorded as interrupted with their working files kept, and
+nothing more is published. The exit code is 143 after SIGTERM and 130 after
+Ctrl+C. On Windows, processes started by the converter are not stopped.
 
 A nonzero converter exit, timeout, no valid volumes or unresolved artifacts
 cannot become a successful cache entry. Valid partial output goes under
 `Niftis/.pending/<id>/<session>/...`; original converter working files are kept
 and their path is written to issues.csv. These exceptional directories need
-manual review/cleanup once resolved; nothing sweeps other workers' staging
-directories. Successful temporary work is cleaned up. The default working
+manual review/cleanup once resolved (see the runbook); nothing deletes them
+automatically. Successful temporary work is cleaned up. The default working
 root is project/.work. `--staging-root` on conversion can select node-local
 scratch; failed scratch files may be removed by the cluster after the job,
 while published partial volumes remain in Niftis/.pending.
+
+## Privacy
+
+The outputs carry identifiers and dates through these channels, and the
+pipeline does not de-identify any of them:
+
+* file and folder names (subject ID and session date);
+* JSON sidecar fields (a selected technical list; no patient names, IDs or
+  free text);
+* NIfTI header text, which dcm2niix fills with fields such as
+  `TE=…;Time=…` (the time of day), and NIfTI header extensions (the tested
+  dcm2niix versions write none);
+* the original DICOM bytes in `DicomExtracted/` and in the canonical ZIPs;
+* hashes;
+* logs, where converter lines that look identifying are replaced before they
+  reach disk; this matches line patterns and can miss identifiers.
 
 ## Where to look
 
@@ -179,14 +277,32 @@ No timestamped report folder is created. Both commands print these paths:
 | Reports/latest_convert.log | Latest conversion details, including filtered converter diagnostics |
 | Reports/session_status.csv | All expected sessions plus explicit additional sessions; current prepare/conversion state |
 | Reports/issues.csv | Unresolved problems, with subject/session and relevant path |
-| Reports/run_history.csv | One compact row per completed/interrupted invocation |
-| Reports/.state | Internal persistent index and result journals; preserve it |
+| Reports/run_history.csv | One row per locked invocation, including terminated and aborted runs |
+| Reports/.state | Internal index (`index.json`, `index.json.bak`), result journals and open intents; preserve it |
 
-Start with pipeline.log, then issues.csv. Date mismatch warnings do not block
-conversion. Other unresolved problems produce exit status 2. Success is 0;
-an orderly keyboard interruption returns 130. `--dry-run` writes no project
-data or logs, hashes no archives, and performs no conversion. Normal report
-refreshes use cached metadata; they do not reopen all scans.
+`session_status.csv` columns: `subject_id`, `session`, `prepare_status`
+(`awaiting_upload`, `ready`, `held`, `failed`, `interrupted`),
+`dicom_instances`, `series`, `conversion_status` (`not_converted`,
+`converted`, `partial`, `failed`, `interrupted`, `needs_conversion`,
+`output_modified`), `converted_volumes`, `archive`, `nifti_folder`,
+`required_series`, `converted_series`, `excused_series` (semicolon-separated
+series keys), `last_attempt_status` and `last_attempt_folder`. A converted
+session with a non-empty `last_attempt_status` kept its complete folder after
+a failed reconversion.
+
+`run_history.csv` columns: `run_id`, `stage`, `outcome` (`ok`, `issues`,
+`interrupted`, `terminated`, `aborted`), `seconds`, `completed`, `cached`,
+`duplicate`, `failed`, `held`, `unresolved`, `reconciled` (operations left
+open by a crash and resolved at startup) and `notes`.
+
+Start with pipeline.log, then issues.csv. Header-date mismatches and missing
+canonical ZIPs do not block conversion. Other unresolved problems produce exit
+status 2. Success is 0; SIGTERM returns 143 and Ctrl+C returns 130. A report
+file held open by another program (for example Excel on Windows) does not stop
+a run; it is rewritten at the next report write. `--dry-run` writes no project
+data or logs and performs no conversion; it hashes files only when combined
+with `--audit`. Normal report refreshes use cached metadata; they do not
+reopen all scans.
 
 ## Legacy cluster data
 
@@ -216,18 +332,21 @@ python -m build
 ```
 
 Tests create synthetic DICOM archives and a simulated converter. They cover
-failure/recovery, configurable CSV schemas, command entry points, metadata,
-and a 1,000-session cache regression that forbids archive hashing, DICOM
-header reads, and converter calls on reruns. CI is configured for Linux and Windows
-with Python 3.10 and 3.12, and checks the built distribution contents.
+crash injection at every publication step, stop signals, locks, preparation
+holds, series coverage, configurable CSV schemas, command entry points,
+metadata, and a 1,000-session cache regression that forbids archive hashing,
+DICOM header reads, and converter calls on reruns. Smoke tests with the real
+dcm2niix run when `MRI_PIPELINE_DCM2NIIX` names its executable. CI runs the
+tests on Linux and Windows with Python 3.11 to 3.14, runs the real-converter
+tests against a pinned dcm2niix release (v1.0.20261029), and checks the built
+distribution contents.
 
 This is research workflow software. Review a small pilot on your target
 cluster before processing a full study: check advisory locking, real scanner
 coverage, conversion geometry, sequence classification, and resource use.
-The included tests use a simulated converter; target-system dcm2niix validation
-is still required. Outputs are not BIDS datasets or certified de-identified
-data. DICOMs retain their original headers and pixel data; selected metadata
-filtering does not remove identifiers burned into image pixels.
+Outputs are not BIDS datasets or certified de-identified data. DICOMs retain
+their original headers and pixel data; selected metadata filtering does not
+remove identifiers burned into image pixels.
 
 ## Repository and data separation
 
@@ -244,12 +363,12 @@ storage roots should live outside the source checkout or have their own
 ignore rules. Verify `git status --short --untracked-files=all` before each
 commit. Ignore rules do not remove files already tracked by Git.
 
-State schema version 2 uses `subject_id`, `.pipeline_complete.json` receipts,
-and `.mri_dicom_pipeline.lock`. Earlier schema versions are rejected before
-processing. Preserve old state and outputs; rebuilding them requires a
-deliberate migration. The commands refuse to overwrite session directories
-that lack the current ownership receipt. Cached state stores absolute paths,
-so moving a processed study also requires a planned cache/output migration.
+State schema version 3 uses `subject_id`, `.pipeline_complete.json` receipts,
+and a `.mri_dicom_pipeline.lock` file inside each storage folder. Any other
+state version is refused before processing, and nothing is written; start
+older projects with a new `--report-root`. The commands refuse to overwrite
+session directories that lack the current ownership receipt.
 
-Before public distribution, choose a repository license and add its LICENSE
-file and package metadata. No license has been selected on the owner's behalf.
+## License
+
+Apache License 2.0; see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).

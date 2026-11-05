@@ -1,7 +1,9 @@
 # mriDICOMpipeline Production Hardening: Behavior Contract and Phase 1 Plan
 
 *   **Author:** Levi Davis
-*   **Status:** Revised after review; awaiting the author's approval
+*   **Status:** Revised after review. Phase 1 implemented on 2026-11-05
+    (implementation steps 0-9, one commit each on `main`); details that
+    the implementation settled are recorded in the sections below.
 *   **Date:** 2026-11-04; revised 2026-11-05
 *   **Review:** EGM consolidated review of 2026-11-04
     ([`consolidated_review_report.md`](../reviews/2026-11-04-production-hardening/consolidated_review_report.md)).
@@ -2336,8 +2338,10 @@ as baseline §21 requires.
     asserts that a cached rerun reads no scan contents (Goal 5).
 *   **Site checks (only when runs start from more than one machine on shared
     storage)**: the runbook's two-node lock check on that filesystem.
-*   **Documentation**: a checklist that maps each changed README statement
-    to its test, reviewed before the phase 1 merge (Goal 7).
+*   **Documentation**: a checklist that maps each README guarantee to its
+    test, [`docs/readme-checklist.md`](../readme-checklist.md), reviewed
+    whenever the README changes (Goal 7). Operator procedures are in
+    [`docs/runbook.md`](../runbook.md).
 
 --------------------------------------------------------------------------------
 
