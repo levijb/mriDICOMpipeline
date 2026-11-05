@@ -790,10 +790,10 @@ is adopted only when both conditions hold:
     never on a cached rerun.
 
 The state record is rebuilt from the small JSON files, without reading
-images. The descriptor comes from `receipts.receipt_info`, and coverage is
-recomputed with `receipts.output_series_keys`. `n_volumes` is the number of
-NIfTI files in the inventory. Provenance and `run_id` are copied from the
-receipt.
+images. The descriptor comes from `receipts.receipt_info`. A conversion
+receipt carries `n_volumes`, `provenance`, and `coverage` from the moment it
+is written, so adoption copies them (`receipts.adopted_conversion`); no
+sidecar is read.
 
 **Consequences:**
 
@@ -1549,9 +1549,10 @@ function, so importing the module itself would clash with both.
         `coverage`.
     *   `receipt_id(root)`: the receipt ID in a folder, or `None`.
     *   `required_series(inventory) -> (required_keys, excused_keys)`.
-    *   `output_series_keys(output_root, inventory_files) -> set`: reads the
-        `.json` sidecars listed in a conversion inventory and returns their
-        `source_series_key` values. Used only by adoption.
+    *   `adopted_conversion(destination, source_sha256)`: the record for an
+        adopted conversion folder, with `n_volumes`, `provenance`, and
+        `coverage` copied from its receipt (step 7). This replaces the
+        `output_series_keys` helper planned earlier.
     *   `coverage(required, excused, converted) -> dict` with `required`,
         `converted`, `excused`, and `missing` (sorted lists).
     *   `adoptable(root, kind, expected_digest) -> bool`: the Q12 adoption
@@ -1821,7 +1822,8 @@ function, so importing the module itself would clash with both.
             compute `receipts.coverage`. Each missing required key adds the
             error "Missing required series: …".
         3.  Build `provenance`: package version, `run_id`, the resolved
-            converter path, the argument list after the executable, and the
+            converter path, the converter options (`CONVERTER_OPTIONS`,
+            without the per-run `-o` output and input folders), and the
             sorted set of sidecar `ConversionSoftwareVersion` values. It is
             written into the receipt together with `coverage`, `n_volumes`,
             and `run_id`.

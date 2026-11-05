@@ -128,6 +128,72 @@ def archive_objects(root, relative, objects):
     return p
 
 
+FAKE_CONVERTER = '''
+"""Fake dcm2niix for tests: one volume per input image series, named by its SeriesInstanceUID.
+
+Switches (environment variables):
+  FAKE_CONVERTER_EXIT     exit code (default 0)
+  FAKE_CONVERTER_SKIP     comma-separated SeriesInstanceUIDs to leave out
+  FAKE_CONVERTER_PRINTED  file to create after printing the identifying diagnostic line
+  FAKE_CONVERTER_SLEEP    seconds to sleep before exiting
+  FAKE_CONVERTER_CHILD    file to write the PID of a sleeping child process into
+  FAKE_CONVERTER_KEEP     folder to copy the raw .nii output into
+"""
+import json, os, pathlib, shutil, struct, subprocess, sys, time
+import pydicom
+
+args = sys.argv
+out, source = pathlib.Path(args[args.index('-o') + 1]), pathlib.Path(args[-1])
+skip = set(filter(None, os.environ.get('FAKE_CONVERTER_SKIP', '').split(',')))
+series = {}
+for path in sorted(source.iterdir()):
+    ds = pydicom.dcmread(path, stop_before_pixels=True, force=True)
+    if 'Rows' in ds and str(ds.get('SeriesInstanceUID', '')) not in skip:
+        series.setdefault(str(ds.SeriesInstanceUID), ds)
+for uid, ds in series.items():
+    stem = 'series_%s_%s_1' % (uid, ds.get('SeriesNumber', 1))
+    h = bytearray(352)
+    struct.pack_into('<i', h, 0, 348)
+    struct.pack_into('<8h', h, 40, 3, 2, 2, 1, 1, 1, 1, 1)
+    struct.pack_into('<h', h, 70, 4)
+    struct.pack_into('<h', h, 72, 16)
+    struct.pack_into('<f', h, 108, 352)
+    h[344:348] = b'n+1\\0'
+    h[148:165] = b'FAKE_PRIVATE_NAME'
+    h[228:243] = b'FAKE_PRIVATE_ID'
+    (out / (stem + '.nii')).write_bytes(bytes(h) + struct.pack('<4h', 1, 2, 3, 4))
+    sidecar = {'SeriesDescription': str(ds.get('SeriesDescription', '')), 'PatientName': 'FAKE_PRIVATE_NAME',
+               'PatientID': 'FAKE_PRIVATE_ID', 'AccessionNumber': 'FAKE_PRIVATE_ACCESSION',
+               'SeriesNumber': int(ds.get('SeriesNumber', 1)), 'EchoTime': 0.03,
+               'ConversionSoftware': 'fake', 'ConversionSoftwareVersion': 'fake-1.0'}
+    if 'ImageType' in ds:
+        sidecar['ImageType'] = list(ds.ImageType)
+    (out / (stem + '.json')).write_text(json.dumps(sidecar))
+    (out / (stem + '.bval')).write_text('0 1000')
+    (out / (stem + '.bvec')).write_text('0 1\\n0 0\\n0 0\\n')
+keep = os.environ.get('FAKE_CONVERTER_KEEP')
+if keep:
+    pathlib.Path(keep).mkdir(parents=True, exist_ok=True)
+    for path in out.glob('*.nii'):
+        shutil.copyfile(path, pathlib.Path(keep) / path.name)
+print('PatientName=FAKE_PRIVATE_NAME', flush=True)
+print('Conversion diagnostic: done', flush=True)
+if os.environ.get('FAKE_CONVERTER_PRINTED'):
+    pathlib.Path(os.environ['FAKE_CONVERTER_PRINTED']).write_text('')
+if os.environ.get('FAKE_CONVERTER_CHILD'):
+    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])
+    pathlib.Path(os.environ['FAKE_CONVERTER_CHILD']).write_text(str(child.pid))
+time.sleep(float(os.environ.get('FAKE_CONVERTER_SLEEP', '0')))
+sys.exit(int(os.environ.get('FAKE_CONVERTER_EXIT', '0')))
+'''
+
+
+def fake_converter_script(path):
+    """Write the fake dcm2niix (FAKE_CONVERTER) to path and return the path."""
+    Path(path).write_text(FAKE_CONVERTER)
+    return Path(path)
+
+
 def call(root, phase, *extra):
     return runner.main(phase, ['--project-root', str(root), '--workers', '2', *map(str, extra)])
 
@@ -158,13 +224,19 @@ CRASH_POINTS = {
 }
 
 
+def child_env(**extra):
+    """Environment for a child Python process: the package and test helpers first on PYTHONPATH."""
+    tests = Path(__file__).resolve().parent
+    paths = [str(tests.parent / 'src'), str(tests)] + [p for p in os.environ.get('PYTHONPATH', '').split(os.pathsep) if p]
+    return dict(os.environ, PYTHONPATH=os.pathsep.join(paths), **extra)
+
+
 def run_with_crash(root, phase, point, *extra):
     """Run a command in a child process that is killed at the named crash point.
 
     Returns the exit code: 137 when the crash point was reached.
     """
-    tests = Path(__file__).resolve().parent
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(tests.parent / 'src'), str(tests)]))
+    env = child_env()
     code = 'import sys, support; support._crash_child(sys.argv[1], sys.argv[2], sys.argv[3:])'
     args = [sys.executable, '-c', code, point, phase, '--project-root', str(root), '--workers', '1', *map(str, extra)]
     result = subprocess.run(args, env=env, capture_output=True, text=True)

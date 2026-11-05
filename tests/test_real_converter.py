@@ -6,6 +6,7 @@ prints the dcm2niix version and the exit code it observed, so a CI log records
 the evidence. Step 1 of the production-hardening plan checks dcm2niix's own
 behavior; step 7 adds the session-level assertions.
 """
+import gzip
 import json
 import struct
 import subprocess
@@ -13,7 +14,7 @@ import subprocess
 from pydicom.uid import generate_uid
 import pytest
 
-from support import (UNCONVERTIBLE_SYNTAXES, archive_objects, call, csa_non_image_bytes, mr_series,
+from support import (UNCONVERTIBLE_SYNTAXES, archive_objects, call, csa_non_image_bytes, mr_series, state,
                      unconvertible_series)
 
 # The arguments convert.convert_one passes to dcm2niix before -o.
@@ -58,35 +59,58 @@ def test_real_converter_names_outputs_by_series_uid(project, tmp_path, real_dcm2
     assert len(output_keys) == 2
 
 
-def test_real_converter_with_non_image_object_converts(tmp_path, real_dcm2niix, capsys):
-    """Q19 hypothesis: a non-image object in the input does not make dcm2niix exit nonzero."""
-    uid, image = mr_series(tmp_path, description='T1 MPRAGE', series_number=2)
-    result, output = run_converter(real_dcm2niix, image + [csa_non_image_bytes(tmp_path)], tmp_path)
+def session_conversion(project):
+    return state(project)['sessions']['S001/20260725']['conversion']
+
+
+def test_real_converter_with_non_image_object_converts(project, tmp_path, real_dcm2niix, capsys):
+    """Q19 hypothesis: a non-image object in the input does not make dcm2niix exit nonzero.
+
+    Session level (step 7): the pipeline converts the session and excuses the
+    non-image series.
+    """
+    study = generate_uid()
+    uid, image = mr_series(tmp_path, study=study, description='T1 MPRAGE', series_number=2)
+    non_image = csa_non_image_bytes(tmp_path, study=study)
+    result, output = run_converter(real_dcm2niix, image + [non_image], tmp_path)
     record(capsys, real_dcm2niix, 'image series plus a CSA Non-Image object', result.returncode)
     assert result.returncode == 0, ('dcm2niix exited nonzero with a non-image object present; '
                                     'Q19 must be reopened\n' + result.stdout + result.stderr)
     assert converted_uids(output) == {uid}
+    archive_objects(project, 'S001_20260725.zip', image + [non_image])
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
+    conversion = session_conversion(project)
+    assert conversion['status'] == 'converted' and len(conversion['coverage']['excused']) == 1
 
 
 @pytest.mark.parametrize('kind', sorted(UNCONVERTIBLE_SYNTAXES))
-def test_real_converter_unconvertible_series_makes_session_partial(tmp_path, real_dcm2niix, capsys, kind):
+def test_real_converter_unconvertible_series_makes_session_partial(project, tmp_path, real_dcm2niix, capsys, kind):
     """P1 evidence: dcm2niix converts the good series and skips the one it cannot decode.
 
     The exit code is recorded, not asserted. With dcm2niix v1.0.20261029 it is
     0 for 16-bit JPEG Baseline (a skipped series with a success code, as P1
     describes) and 8 ("converted some but not all") for undecodable RLE.
+    Session level (step 7): either way the session is partial, not converted.
     """
-    good, image = mr_series(tmp_path, description='T1 MPRAGE', series_number=2)
-    _, bad = unconvertible_series(tmp_path, kind, description='AX FLAIR', series_number=4)
+    study = generate_uid()
+    good, image = mr_series(tmp_path, study=study, description='T1 MPRAGE', series_number=2)
+    _, bad = unconvertible_series(tmp_path, kind, study=study, description='AX FLAIR', series_number=4)
     result, output = run_converter(real_dcm2niix, image + bad, tmp_path)
     record(capsys, real_dcm2niix, f'good series plus an unconvertible series ({kind})', result.returncode)
     assert converted_uids(output) == {good}
+    archive_objects(project, 'S001_20260725.zip', image + bad)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 2
+    conversion = session_conversion(project)
+    assert conversion['status'] == 'partial' and len(conversion['coverage']['missing']) == 1
 
 
-def test_real_converter_output_byte_identical(tmp_path, real_dcm2niix):
+def test_real_converter_output_byte_identical(project, tmp_path, real_dcm2niix):
     """Invariant 8: the tested dcm2niix writes no NIfTI header extensions.
 
-    Step 7 adds the byte-identity check against the published output (Q10).
+    Session level (step 7, Q10): the published .nii.gz decompresses to the
+    bytes dcm2niix writes for the same input.
     """
     _, image = mr_series(tmp_path, description='T1 MPRAGE', series_number=2)
     result, output = run_converter(real_dcm2niix, image, tmp_path)
@@ -97,3 +121,8 @@ def test_real_converter_output_byte_identical(tmp_path, real_dcm2niix):
         header = path.read_bytes()[:352]
         assert struct.unpack('<i', header[:4])[0] == 348, f'{path.name} is not a little-endian NIfTI-1 file'
         assert header[348] == 0, f'{path.name} carries a NIfTI header extension'
+    archive_objects(project, 'S001_20260725.zip', image)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
+    [published] = (project / 'Niftis/Subjects/S001/20260725').rglob('*.nii.gz')
+    assert gzip.decompress(published.read_bytes()) == volumes[0].read_bytes()

@@ -1,6 +1,5 @@
 """Synthetic integration tests. Never reads or modifies research archives."""
 import csv
-import gzip
 import json
 from pathlib import Path
 import sys
@@ -64,7 +63,7 @@ def test_dry_run_writes_nothing_and_bad_names_held(project, tmp_path):
     assert [p.name for p in (project/'DicomExtracted').glob('*')] == ['.mri_dicom_pipeline.lock']
 
 
-def test_conversion_privacy_companions_and_fast_rerun(project, tmp_path, converter, monkeypatch):
+def test_conversion_companions_and_fast_rerun(project, tmp_path, converter, monkeypatch):
     archive(project, 'S001_20260725_2.zip', dicom_bytes(tmp_path))
     assert call(project, 'prepare') == 0
     assert call(project, 'convert', '--dcm2niix-bin', converter) == 0
@@ -74,10 +73,10 @@ def test_conversion_privacy_companions_and_fast_rerun(project, tmp_path, convert
     assert len(list(output.rglob('*.bvec'))) == 1
     meta = json.loads(next((output/'ADC').glob('*.json')).read_text())
     assert meta['scan_type'] == 'ADC' and meta['session'] == '20260725_2'
+    # NIfTI header text passes through by design (Q10); test_conversion.py covers it.
     for p in output.rglob('*'):
-        if p.is_file():
-            content = gzip.open(p,'rb').read() if p.name.endswith('.nii.gz') else p.read_bytes()
-            assert b'FAKE_PRIVATE' not in content
+        if p.is_file() and not p.name.endswith('.nii.gz'):
+            assert b'FAKE_PRIVATE' not in p.read_bytes()
     assert 'FAKE_PRIVATE' not in (project/'Reports/latest_convert.log').read_text()
     monkeypatch.setattr(convert, 'convert_one', lambda *a: pytest.fail('Unchanged conversion ran'))
     monkeypatch.setattr(pydicom, 'dcmread', lambda *a, **k: pytest.fail('Cached conversion read headers'))
@@ -97,7 +96,7 @@ def test_partial_outputs_retained_and_retry(project, tmp_path, converter, monkey
     assert state(project)['sessions']['S001/20260725']['conversion']['status'] == 'converted'
 
 
-def test_deleted_dicom_and_nifti_detected(project, tmp_path, converter):
+def test_deleted_dicom_reextracted_and_deleted_nifti_flagged(project, tmp_path, converter):
     archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
     assert call(project, 'prepare') == 0
     next((project/'DicomExtracted').rglob('*.dcm')).unlink()
@@ -105,7 +104,10 @@ def test_deleted_dicom_and_nifti_detected(project, tmp_path, converter):
     assert list((project/'DicomExtracted').rglob('*.dcm'))
     assert call(project, 'convert', '--dcm2niix-bin', converter) == 0
     next((project/'Niftis/Subjects').rglob('*.nii.gz')).unlink()
-    assert call(project, 'convert', '--dcm2niix-bin', converter) == 0
+    # A complete session is flagged, never reconverted automatically (Q7).
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 2
+    assert not list((project/'Niftis/Subjects').rglob('*.nii.gz'))
+    assert 'output:S001/20260725' in state(project)['issues']
 
 
 def test_output_root_override_does_not_reuse_other_root(project, tmp_path, converter):
@@ -183,7 +185,7 @@ def test_sequence_categories_and_truncated_nifti(tmp_path):
     invalid = tmp_path/'invalid.nii'
     invalid.write_bytes(b'not an image')
     with pytest.raises(ValueError):
-        nifti.sanitized_nifti(invalid,tmp_path/'invalid.nii.gz')
+        nifti.validate_and_gzip(invalid,tmp_path/'invalid.nii.gz')
 
 
 def test_new_batch_only_processes_new_session(project, tmp_path, monkeypatch):

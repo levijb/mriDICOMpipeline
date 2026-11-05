@@ -2,8 +2,11 @@
 import _thread
 import csv
 import json
+import os
 from pathlib import Path
 import signal
+import subprocess
+import sys
 import textwrap
 import threading
 import time
@@ -11,7 +14,7 @@ import time
 import pytest
 
 from mri_dicom_pipeline.state import State
-from support import archive, call, dicom_bytes, run_with_crash
+from support import archive, call, child_env, dicom_bytes, run_with_crash
 from support import state as read_state
 
 KEY, OTHER = 'S001/20260725', 'S002/20260725'
@@ -274,3 +277,38 @@ def test_stop_signal_during_conversion(project, tmp_path, signum, code, outcome)
     assert list((project / '.work').glob('convert_*/converter.log'))
     with (project / 'Reports/run_history.csv').open(newline='') as f:
         assert list(csv.DictReader(f))[-1]['outcome'] == outcome
+
+
+def process_alive(pid):
+    """True while pid runs; a zombie waiting to be reaped counts as stopped (Linux /proc)."""
+    try:
+        return '\nState:\tZ' not in Path(f'/proc/{pid}/status').read_text()
+    except FileNotFoundError:
+        return False
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='process groups and real SIGTERM delivery are POSIX-only')
+def test_sigterm_stops_converter_group_and_exits_143(project, tmp_path, converter):
+    """R11: a real SIGTERM stops the converter and the process it started, and the run exits 143."""
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 0
+    child_file = tmp_path / 'child.pid'
+    env = child_env(FAKE_CONVERTER_CHILD=str(child_file), FAKE_CONVERTER_SLEEP='60')
+    code = 'import sys; from mri_dicom_pipeline import runner; sys.exit(runner.main("convert", sys.argv[1:]))'
+    run = subprocess.Popen([sys.executable, '-c', code, '--project-root', str(project),
+                            '--dcm2niix-bin', str(converter)], env=env)
+    try:
+        deadline = time.monotonic() + 60
+        while not (child_file.exists() and child_file.read_text().strip()) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        child = int(child_file.read_text())
+        run.send_signal(signal.SIGTERM)
+        assert run.wait(timeout=60) == 143
+    finally:
+        if run.poll() is None:
+            run.kill()
+    deadline = time.monotonic() + 10
+    while process_alive(child) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert not process_alive(child)
+    assert read_state(project)['sessions']['S001/20260725']['conversion']['status'] == 'interrupted'

@@ -1,15 +1,11 @@
 """Per-root lock tests (T10, local part; P6)."""
-import os
-from pathlib import Path
 import subprocess
 import sys
 
 import pytest
 
 from mri_dicom_pipeline import config, locks
-from support import call
-
-SRC = Path(__file__).resolve().parents[1] / 'src'
+from support import call, child_env
 
 # Takes the locks a `prepare` run with these options would take, then waits
 # until its standard input closes.
@@ -31,7 +27,7 @@ def test_shared_report_root_excludes_different_projects(project, tmp_path, capsy
     shared = tmp_path / 'SharedReports'
     holder = subprocess.Popen([sys.executable, '-c', HOLD, '--project-root', str(project), '--report-root', str(shared)],
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-                              env=dict(os.environ, PYTHONPATH=str(SRC)))
+                              env=child_env())
     try:
         assert holder.stdout.readline().strip() == 'locked'
         assert call(other, 'prepare', '--report-root', shared) == 2

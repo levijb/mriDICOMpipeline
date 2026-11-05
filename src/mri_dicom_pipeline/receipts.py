@@ -81,9 +81,40 @@ def prepared_entry(sid, date, label, canonical, digest, inventory, destination, 
             "conversion": conversion}
 
 
-def conversion_record(destination, status, n_volumes, source_sha256):
+def conversion_record(destination, status, n_volumes, source_sha256, provenance=None, coverage=None):
     """The state record for a conversion published at destination."""
     destination = Path(destination)
     record = receipt_info(destination, destination / RECEIPT, destination / INVENTORY)
     record.update(status=status, output=str(destination), n_volumes=n_volumes, source_sha256=source_sha256)
+    if provenance is not None:
+        record["provenance"] = provenance
+    if coverage is not None:
+        record["coverage"] = coverage
     return record
+
+
+def adopted_conversion(destination, source_sha256):
+    """The state record for an adopted conversion folder, rebuilt from its receipt and inventory."""
+    destination = Path(destination)
+    receipt = fsutil.read_json(destination / RECEIPT)
+    volumes = receipt.get("n_volumes")
+    if volumes is None:
+        volumes = sum(item["name"].endswith(".nii.gz") for item in fsutil.read_json(destination / INVENTORY)["files"])
+    return conversion_record(destination, "converted", volumes, source_sha256,
+                             receipt.get("provenance"), receipt.get("coverage"))
+
+
+def required_series(inventory):
+    """(required, excused) series keys of an extraction inventory (Q19).
+
+    A series is required when it holds an MR image object.
+    """
+    every = {row["series_key"] for row in inventory["series"]}
+    required = {row["series_key"] for row in inventory["series"] if row.get("required", True)}
+    return required, every - required
+
+
+def coverage(required, excused, converted):
+    """Series coverage of a conversion: sorted key lists, with the required keys it missed (Q6)."""
+    return {"required": sorted(required), "converted": sorted(converted & (required | excused)),
+            "excused": sorted(excused), "missing": sorted(required - converted)}

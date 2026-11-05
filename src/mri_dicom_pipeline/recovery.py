@@ -86,10 +86,9 @@ def _adoption_event(intent, state, destination):
                       "outcome": "prepared", "against": digest, "version": config.SCHEMA_VERSION}
             return {"key": key, "session": entry, "sources": [source]}
         entry = copy.deepcopy(state.data["sessions"][key])
-        files = fsutil.read_json(destination / receipts.INVENTORY)["files"]
-        volumes = sum(item["name"].endswith(".nii.gz") for item in files)
-        entry["conversion"] = receipts.conversion_record(destination, "converted", volumes, digest)
-        return {"key": key, "session": entry, "clear_issues": ["convert:" + key]}
+        entry["conversion"] = receipts.adopted_conversion(destination, digest)
+        entry.pop("last_attempt", None)
+        return {"key": key, "session": entry, "clear_issues": ["convert:" + key, "output:" + key]}
     except (OSError, ValueError, KeyError):
         return None
 
