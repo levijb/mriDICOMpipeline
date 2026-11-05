@@ -1,4 +1,4 @@
-"""Shared implementation for the study-agnostic DICOM commands (Python >= 3.10).
+"""Shared implementation for the study-agnostic DICOM commands (Python >= 3.11).
 
 Only the coordinator updates permanent state/reports. Workers own distinct
 subjects, staging directories and output sessions. No patient identity fields

@@ -1909,7 +1909,8 @@ function, so importing the module itself would clash with both.
 
 *   **Type / Scope**: Package metadata.
 *   **Proposed Changes**: `__version__ = "0.2.0"`, the minor bump for the
-    schema change (Q17 versioning).
+    schema change (Q17 versioning). It lands in step 3, with the schema
+    change, together with `pyproject.toml`'s `version`.
 
 #### 17. `Scripts/unzip_and_inventory_dicoms.py` and `Scripts/convert_dicoms_to_nifti.py` (Modify)
 
@@ -1921,13 +1922,17 @@ function, so importing the module itself would clash with both.
 
 *   **Type / Scope**: Build configuration.
 *   **Proposed Changes**:
-    *   `version = "0.2.0"` and `requires-python = ">=3.11"`.
+    *   `requires-python = ">=3.11"` (step 2). `version = "0.2.0"` lands in
+        step 3, with the schema change and `__init__.__version__`.
     *   `build-system.requires = ["setuptools>=77", "wheel"]`.
     *   `license = "Apache-2.0"` and
         `license-files = ["LICENSE", "NOTICE"]`.
     *   Classifiers: remove Python 3.10 and `OS Independent`; add Python
         3.13 and 3.14, `Operating System :: POSIX :: Linux`, and
         `Operating System :: Microsoft :: Windows`.
+    *   The `dev` extra raises its floor to `twine>=6.1,<7`. setuptools 77
+        writes Metadata-Version 2.4, which twine 5.1.1 rejects (checked
+        2026-11-05).
     *   Dependencies unchanged.
 
 #### 19. `LICENSE` and `NOTICE` (Create)
