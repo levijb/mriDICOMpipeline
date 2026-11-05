@@ -13,6 +13,7 @@ import time
 
 import pytest
 
+from mri_dicom_pipeline import fsutil
 from mri_dicom_pipeline.state import State
 from support import archive, call, child_env, dicom_bytes, run_with_crash
 from support import state as read_state
@@ -117,6 +118,40 @@ def test_both_index_files_corrupt_stops_run(project, capsys):
     assert 'index.json' in str(error.value) and 'index.json.bak' in str(error.value)
     assert call(project, 'prepare') == 2
     assert 'index.json.bak' in capsys.readouterr().err
+
+
+def lock_index(monkeypatch, times):
+    """Reading index.json fails with Access denied `times` times, as while a virus scanner has it open."""
+    original, refused = Path.read_text, []
+
+    def busy(self, *args, **kwargs):
+        if self.name == 'index.json' and len(refused) < times:
+            refused.append(self)
+            raise PermissionError(13, 'Access is denied')
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'read_text', busy)
+    return refused
+
+
+def test_briefly_locked_index_is_read_not_recovered(tmp_path, monkeypatch):
+    two_flushes_then_journal(tmp_path)
+    refused = lock_index(monkeypatch, 2)
+    loaded = State(tmp_path)
+    assert len(refused) == 2 and not loaded.recovered_from_backup
+    assert status(loaded) == 'v3'
+
+
+def test_locked_index_stops_instead_of_recovering(tmp_path, monkeypatch):
+    """Only unparsable contents count as corruption; an index that stays locked stops the run."""
+    index, backup = two_flushes_then_journal(tmp_path)
+    before = (index.read_bytes(), backup.read_bytes())
+    monkeypatch.setattr(fsutil, 'LOCKED_RETRY_SECONDS', 0.3)
+    lock_index(monkeypatch, 1000)
+    with pytest.raises(PermissionError):
+        State(tmp_path)
+    monkeypatch.undo()
+    assert (index.read_bytes(), backup.read_bytes()) == before
 
 
 def history_rows(project):

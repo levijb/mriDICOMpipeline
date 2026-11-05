@@ -3,6 +3,7 @@ from collections import namedtuple
 import csv
 import json
 import os
+from pathlib import Path
 import shutil
 import zipfile
 
@@ -219,6 +220,22 @@ def test_multi_study_held_until_accepted(project, tmp_path):
     assert call(project, 'prepare', '--accept-multi-study', KEY) == 0
     assert state(project)['sessions'][KEY]['accepted_multi_study'] is True
     assert call(project, 'prepare') == 0
+
+
+def test_access_denied_during_publish_is_retried(project, tmp_path, monkeypatch):
+    """Windows: a virus scanner still reading just-extracted files refuses the folder rename for a moment."""
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    original, refused = Path.rename, []
+
+    def scanner_busy(self, target):
+        if Path(target).name.startswith('.incoming_') and len(refused) < 2:
+            refused.append(target)
+            raise PermissionError(13, 'Access is denied')
+        return original(self, target)
+
+    monkeypatch.setattr(Path, 'rename', scanner_busy)
+    assert call(project, 'prepare') == 0
+    assert len(refused) == 2 and state(project)['sessions'][KEY]['status'] == 'ready'
 
 
 # ---- Dry run (P7) ---------------------------------------------------------------

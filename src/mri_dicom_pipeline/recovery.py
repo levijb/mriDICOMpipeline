@@ -125,7 +125,7 @@ def _resolve(intent, state, cfg, dry_run):
     elif aside.exists():
         action = "rolled back to the previous folder"
         if not dry_run:
-            aside.rename(destination)
+            fsutil.retry_locked(lambda: aside.rename(destination))
             fsutil.remove_tree(incoming, root)
     else:
         action = "removed the unfinished copy; the work will be redone"

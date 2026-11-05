@@ -8,7 +8,27 @@ import json
 import os
 from pathlib import Path
 import shutil
+import time
 import uuid
+
+# On Windows a virus scanner or the search indexer briefly opens files that
+# were just written. A rename, replace, delete or read of them, or of a folder
+# that holds them, then fails with Access denied or a sharing violation; both
+# are PermissionError. The operations below retry it for up to this long.
+LOCKED_RETRY_SECONDS = 30
+
+
+def retry_locked(action):
+    """Return action(), retrying while it raises PermissionError, for up to LOCKED_RETRY_SECONDS."""
+    deadline, delay = time.monotonic() + LOCKED_RETRY_SECONDS, 0.05
+    while True:
+        try:
+            return action()
+        except PermissionError:
+            if time.monotonic() + delay > deadline:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 1.0)
 
 
 def atomic_json(path, data):
@@ -20,13 +40,13 @@ def atomic_json(path, data):
             json.dump(data, f, ensure_ascii=True, separators=(",", ":"), allow_nan=False)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(temp, path)
+        retry_locked(lambda: os.replace(temp, path))
     finally:
         temp.unlink(missing_ok=True)
 
 
 def read_json(path):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    return json.loads(retry_locked(lambda: Path(path).read_text(encoding="utf-8")))
 
 
 def signature(path):
@@ -54,7 +74,7 @@ def owned(path, root):
 def remove_tree(path, root):
     path = owned(path, root)
     if path.exists():
-        shutil.rmtree(path)
+        retry_locked(lambda: shutil.rmtree(path))
 
 
 def swap_names(destination):
@@ -76,18 +96,18 @@ def publish_tree(stage, destination, ownership_root, incoming, previous):
     incoming, previous = Path(incoming), Path(previous)
     try:
         try:
-            Path(stage).rename(incoming)
+            retry_locked(lambda: Path(stage).rename(incoming))
         except OSError as e:
             if e.errno != errno.EXDEV and getattr(e, "winerror", None) != 17:
                 raise
             shutil.copytree(stage, incoming)
         if destination.exists():
-            destination.rename(previous)
+            retry_locked(lambda: destination.rename(previous))
         try:
-            incoming.rename(destination)
+            retry_locked(lambda: incoming.rename(destination))
         except BaseException:
             if previous.exists():
-                previous.rename(destination)
+                retry_locked(lambda: previous.rename(destination))
             raise
         remove_tree(previous, ownership_root)
     finally:

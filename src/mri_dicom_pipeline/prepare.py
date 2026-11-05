@@ -180,7 +180,7 @@ def move_archive(source, destination, cfg, fingerprint):
         raise FileExistsError("Canonical ZIP already exists; refusing to overwrite it")
     # Both locations are inside DicomUploads. Refuse cross-device moves rather
     # than silently copying/deleting sources on a differently mounted filesystem.
-    source.rename(destination)
+    fsutil.retry_locked(lambda: source.rename(destination))
 
 
 def prepare_one(candidate, previous, cfg, stop=None):

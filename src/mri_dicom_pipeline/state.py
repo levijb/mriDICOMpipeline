@@ -24,12 +24,16 @@ class StateError(ValueError):
 
 
 def _read_index(path):
-    """The parsed index at path, or _MISSING, or _UNREADABLE."""
+    """The parsed index at path, or _MISSING, or _UNREADABLE.
+
+    Only contents that cannot be parsed count as unreadable. Any other OSError,
+    such as a file still locked after the retries, stops the run.
+    """
     try:
         data = fsutil.read_json(path)
     except FileNotFoundError:
         return _MISSING
-    except (OSError, ValueError):
+    except ValueError:
         return _UNREADABLE
     return data if isinstance(data, dict) else _UNREADABLE
 
@@ -116,11 +120,11 @@ class State:
             if self._move_aside and self.path.exists():
                 # Never let an unreadable index replace the good backup.
                 suffix = self.run_id or str(int(time.time()))
-                os.replace(self.path, self.root / f"index.json.corrupt-{suffix}")
+                fsutil.retry_locked(lambda: os.replace(self.path, self.root / f"index.json.corrupt-{suffix}"))
             elif self.path.exists():
-                os.replace(self.path, self.backup)
+                fsutil.retry_locked(lambda: os.replace(self.path, self.backup))
                 self.backup_seq = self.saved_seq
-            os.replace(temp, self.path)
+            fsutil.retry_locked(lambda: os.replace(temp, self.path))
         finally:
             temp.unlink(missing_ok=True)
         self._move_aside = False

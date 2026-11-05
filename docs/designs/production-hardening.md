@@ -1205,11 +1205,21 @@ them is not enough. `dcm2niix` is supported over a tested range of versions.
     `COM0`–`COM9`, or `LPT0`–`LPT9`, in any letter case, are rejected on
     every platform. Current Windows documentation reserves `COM0` and `LPT0`
     as well.
-*   **Files in use during publication.** If a rename during publication
-    fails because a file in the destination is open (Windows refuses the
-    rename), the existing rollback in `publish_tree` keeps the old folder,
-    and the session fails with an issue. The existing
-    `test_publish_rolls_back_if_swap_fails` covers it.
+*   **Files in use.** A virus scanner or the search indexer briefly opens
+    files that were just written, and Windows then refuses a rename,
+    replace, delete, or read of them, or of a folder that holds them
+    (Access denied or a sharing violation, both `PermissionError`).
+    Publication renames, state and receipt writes, JSON reads, and folder
+    removal retry for up to 30 seconds (`fsutil.retry_locked`). If a file is
+    still in use after that, the existing rollback in `publish_tree` keeps
+    the old folder, and the session fails with an issue
+    (`test_publish_rolls_back_if_swap_fails`). A state index that stays
+    locked stops the run; only an index whose contents cannot be parsed is
+    recovered from `.bak`. Added 2026-11-05, after the first production run
+    failed one session this way. Tests:
+    `test_access_denied_during_publish_is_retried`,
+    `test_briefly_locked_index_is_read_not_recovered`,
+    `test_locked_index_stops_instead_of_recovering`.
 *   **Report files held open.** If a program such as Excel holds
     `session_status.csv`, `issues.csv`, or `run_history.csv` open, the failed
     write is logged and retried at the next report write, and the run

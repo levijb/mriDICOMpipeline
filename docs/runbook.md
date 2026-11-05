@@ -71,6 +71,12 @@ two machines (for example two cluster nodes) on the same storage:
   and upload the new ZIP as a new `_N` session.
 * **`prepare:` issue, "Not enough free space".** Free disk space (the ZIP's
   size plus a reserve of 5% of the filesystem, at most 50 GiB), then rerun.
+* **`prepare:` or `convert:` issue, "Access is denied" or "being used by
+  another process" (Windows).** Another program kept a file in the session's
+  folders open for more than 30 seconds, which the pipeline waits out. Common
+  causes are a virus scan, an Explorer window or terminal open inside the
+  folder, or a viewer with a scan loaded. Nothing was published. Close the
+  program, then rerun with `--retry-failed`.
 * **`missing:` issue (nonblocking).** A prepared session's canonical ZIP is
   gone from `SubjectsSorted/`. Conversion continues from the extracted copy.
   Put the ZIP back to clear the issue.
