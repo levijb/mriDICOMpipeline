@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import concurrent.futures as futures
 import copy
-import csv
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -106,6 +105,18 @@ def main(phase, argv=None):
 def run(cfg, phase, ids, pairs, roster_warnings, stopper):
     logger = reports.setup_log(cfg.reports, phase, cfg.dry_run)
     started = time.monotonic()
+    # Filled in as the run goes. A locked run that stops early still writes
+    # its history row, with outcome "aborted" (R16).
+    summary = {"run_id": cfg.run_id, "stage": phase, "outcome": "aborted", "reconciled": 0, "notes": ""}
+    try:
+        return _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summary)
+    finally:
+        if not cfg.dry_run:
+            summary["seconds"] = round(time.monotonic() - started, 2)
+            reports.append_history(cfg, summary, logger)
+
+
+def _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summary):
     run_id = cfg.run_id
     logger.info("RUN %s START stage=%s workers=%s dry_run=%s", run_id, phase, cfg.workers, cfg.dry_run)
     if not cfg.dry_run:
@@ -117,10 +128,11 @@ def run(cfg, phase, ids, pairs, roster_warnings, stopper):
     if state.recovered_from_backup:
         logger.error("State index %s could not be read; loaded %s and its journals instead. "
                      "The unreadable file is moved aside at the next save.", state.path, state.backup)
+        summary["notes"] = "state recovered from index.json.bak"
     refuse_moved_project(cfg, state)
-    reconciled = recovery.reconcile(cfg, phase, state, logger, cfg.dry_run)
-    if reconciled:
-        logger.info("Recovered %s operations left open by an interrupted run", reconciled)
+    summary["reconciled"] = recovery.reconcile(cfg, phase, state, logger, cfg.dry_run)
+    if summary["reconciled"]:
+        logger.info("Recovered %s operations left open by an interrupted run", summary["reconciled"])
     if phase == "prepare":
         if not cfg.import_legacy and (cfg.uploads / "Subjects").is_dir() and not state.data["sessions"]:
             logger.warning("Legacy DicomUploads/Subjects is not scanned by default. Preview migration with --import-legacy --dry-run.")
@@ -185,7 +197,7 @@ def run(cfg, phase, ids, pairs, roster_warnings, stopper):
                 logger.info("Progress: %s/%s work items finished; %ss elapsed", counts["completed"] + counts["duplicate"] + counts["failed"], pending, int(time.monotonic()-started))
                 last_progress = time.monotonic()
             if time.monotonic() - last_report >= 15:
-                reports.reports(state, cfg, pairs)
+                reports.reports(state, cfg, pairs, logger)
                 last_report = time.monotonic()
         for job in jobs:
             job.result()
@@ -197,22 +209,16 @@ def run(cfg, phase, ids, pairs, roster_warnings, stopper):
         # Attempted, not guaranteed: the journals already hold every result.
         try:
             state.flush()
-            reports.reports(state, cfg, pairs)
         except OSError as e:
             save_failed = True
-            logger.error("Could not save state or reports at the end of the run; the journals keep every result: %s", e)
+            logger.error("Could not save state at the end of the run; the journals keep every result: %s", e)
+        reports.reports(state, cfg, pairs, logger)
     terminated, interrupted = stopper.signum == signal.SIGTERM, stopper.signum is not None
     unresolved = reports.unresolved(state)
     outcome = ("terminated" if terminated else "interrupted" if interrupted
                else "issues" if unresolved or counts["failed"] or counts["held"] or save_failed else "ok")
     elapsed = round(time.monotonic()-started, 2)
-    history = cfg.reports / "run_history.csv"
-    fields = ["run_id", "stage", "outcome", "seconds", "completed", "cached", "duplicate", "failed", "held", "unresolved"]
-    with history.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
-        if f.tell() == 0:
-            writer.writeheader()
-        writer.writerow(dict(run_id=run_id, stage=phase, outcome=outcome, seconds=elapsed, unresolved=unresolved, **counts))
+    summary.update(counts, outcome=outcome, unresolved=unresolved)
     logger.info("RUN %s END outcome=%s completed=%s cached=%s duplicates=%s failed=%s held=%s unresolved=%s elapsed=%ss", run_id, outcome, counts["completed"], counts["cached"], counts["duplicate"], counts["failed"], counts["held"], unresolved, elapsed)
     logger.info("Read %s first; unresolved problems: %s", cfg.reports / "pipeline.log", cfg.reports / "issues.csv")
     return 143 if terminated else 130 if interrupted else 2 if outcome != "ok" else 0

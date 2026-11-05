@@ -1,5 +1,6 @@
 """Preparation tests (T03, T05, T06, T09; R05, R06, R07, R12, R18; P3, P7)."""
 from collections import namedtuple
+import csv
 import json
 import os
 import shutil
@@ -146,6 +147,9 @@ def test_canonical_conflict_blocks_conversion(project, tmp_path, converter, monk
     canonical = prepared(project, tmp_path)
     overwrite_with_other_export(canonical, tmp_path)
     assert call(project, 'prepare') == 2
+    with (project / 'Reports/session_status.csv').open(newline='') as f:
+        rows = [row for row in csv.DictReader(f) if (row['subject_id'], row['session']) == ('S001', '20260725')]
+    assert [row['prepare_status'] for row in rows] == ['held']
     monkeypatch.setattr(convert, 'convert_one', fail_if_called)
     assert call(project, 'convert', '--dcm2niix-bin', converter) == 2
 

@@ -1524,11 +1524,10 @@ function, so importing the module itself would clash with both.
         previous)`: today's algorithm, using the names the caller already
         recorded in its intent.
     *   `utc_now() -> float` (epoch seconds), used in intent and lock-owner
-        files.
-    *   `write_text_or_log(path, writer, logger) -> bool`: runs an atomic
-        report write. On `PermissionError` or another `OSError` it logs a
-        warning and returns `False` instead of raising (Q2, report files held
-        open).
+        files. (Not added: the intent and owner files call `time.time()`
+        directly.)
+    *   Report writes that may meet a file held open are handled in
+        `reports.py` (file 13), not here.
 
 #### 5. `src/mri_dicom_pipeline/receipts.py` (Create)
 
@@ -1894,14 +1893,16 @@ function, so importing the module itself would clash with both.
             open `output:<key>` issue.
         *   "Converted with a failed last attempt" shows as `converted`
             plus a non-empty `last_attempt_status`.
-        *   Every report and history write goes through
-            `fsutil.write_text_or_log`. A file held open (for example by
-            Excel) is logged and retried at the next report write, and the
-            run continues (Q2).
-    *   `append_history(cfg, row)`: columns are today's plus `reconciled`.
-        Outcomes: `ok`, `issues`, `interrupted` (Ctrl+C, exit 130),
-        `terminated` (SIGTERM, exit 143), and `aborted` (normal
-        finalization not reached).
+        *   A report file that cannot be replaced (for example because Excel
+            holds it open) is logged and rewritten at the next report write,
+            and the run continues (Q2).
+    *   `append_history(cfg, row, logger)`: columns are today's plus
+        `reconciled` and `notes` (for example "state recovered from
+        index.json.bak"). Outcomes: `ok`, `issues`, `interrupted` (Ctrl+C,
+        exit 130), `terminated` (SIGTERM, exit 143), and `aborted` (normal
+        finalization not reached). A failed append is logged with the row.
+        `runner.run` writes the row in a `finally`, so every locked run
+        writes one.
 
 #### 14. `src/mri_dicom_pipeline/runner.py` (Create)
 
@@ -2186,6 +2187,8 @@ function, so importing the module itself would clash with both.
         gone.
     *   **Other exits and faults:**
         `test_history_row_written_on_early_abort`,
+        `test_recovered_index_noted_in_history`,
+        `test_history_counts_reconciled_intents`,
         `test_enospc_during_publish_keeps_old_output` (a simulated `OSError`
         with `ENOSPC` on rename or copy).
 

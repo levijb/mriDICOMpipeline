@@ -1,7 +1,9 @@
-"""Conversion tests (T08, T11-T14, T18; P1, P4, P8, P10)."""
+"""Conversion and report tests (T08, T11-T14, T18; P1, P4, P8, P10)."""
+import csv
 import gzip
 import json
 import os
+from pathlib import Path
 import shutil
 import threading
 import time
@@ -198,7 +200,45 @@ def test_prepare_and_convert_labels_agree(project, tmp_path, converter):
     assert [p.name for p in folder.iterdir() if p.is_dir()] == ['GRE']
 
 
-# ---- Selection --------------------------------------------------------------------
+# ---- Selection and reports ----------------------------------------------------------
+
+def read_status(project):
+    with (project / 'Reports/session_status.csv').open(newline='') as f:
+        return {f"{row['subject_id']}/{row['session']}": row for row in csv.DictReader(f)}
+
+
+def test_status_columns_and_last_attempt_reported(project, tmp_path, converter, monkeypatch):
+    """T18: coverage, the last attempt, and output_modified appear in session_status.csv."""
+    folder = converted(project, tmp_path, converter)
+    row, series_key = read_status(project)[KEY], conversion(project)['coverage']['required'][0]
+    assert (row['required_series'], row['converted_series'], row['excused_series']) == (series_key, series_key, '')
+    monkeypatch.setenv('FAKE_CONVERTER_EXIT', '1')
+    assert call(project, 'convert', '--dcm2niix-bin', converter, '--force-reconvert') == 2
+    row = read_status(project)[KEY]
+    assert row['conversion_status'] == 'converted' and row['last_attempt_status'] == 'partial'
+    assert '.pending' in row['last_attempt_folder']
+    monkeypatch.delenv('FAKE_CONVERTER_EXIT')
+    (folder / 'ADC' / 'notes.txt').write_text('added')
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 2
+    assert read_status(project)[KEY]['conversion_status'] == 'output_modified'
+
+
+def test_report_file_held_open_does_not_stop_run(project, tmp_path, monkeypatch, caplog):
+    """Q2: a report file held open (for example by Excel) is logged and retried; the run continues."""
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    real_replace = os.replace
+
+    def locked(src, dst, *args, **kwargs):
+        if Path(dst).name == 'session_status.csv':
+            raise PermissionError(13, 'The file is being used by another process')
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(os, 'replace', locked)
+    assert call(project, 'prepare') == 0
+    assert 'session_status.csv' in caplog.text
+    assert state(project)['sessions'][KEY]['status'] == 'ready'
+    with (project / 'Reports/run_history.csv').open(newline='') as f:
+        assert list(csv.DictReader(f))[-1]['outcome'] == 'ok'
 
 def test_session_filter_limits_work(project, tmp_path, converter):
     archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))

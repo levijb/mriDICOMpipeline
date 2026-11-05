@@ -119,6 +119,30 @@ def test_both_index_files_corrupt_stops_run(project, capsys):
     assert 'index.json.bak' in capsys.readouterr().err
 
 
+def history_rows(project):
+    with (project / 'Reports/run_history.csv').open(newline='') as f:
+        return list(csv.DictReader(f))
+
+
+def test_history_row_written_on_early_abort(project):
+    """R16: a locked run that stops early still writes a history row, with outcome aborted."""
+    state_dir = project / 'Reports/.state'
+    state_dir.mkdir(parents=True)
+    (state_dir / 'index.json').write_text('not json')
+    (state_dir / 'index.json.bak').write_text('not json either')
+    assert call(project, 'prepare') == 2
+    assert history_rows(project)[-1]['outcome'] == 'aborted'
+
+
+def test_recovered_index_noted_in_history(project, tmp_path):
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 0
+    assert call(project, 'prepare') == 0  # the second save keeps index.json.bak
+    (project / 'Reports/.state/index.json').write_text('{"truncated')
+    assert call(project, 'prepare') == 0
+    assert 'recovered' in history_rows(project)[-1]['notes']
+
+
 # ---- Crash injection (Q12) ----------------------------------------------------
 
 def project_at(project, tmp_path, converter, start):
@@ -225,6 +249,36 @@ def test_dry_run_reports_reconciliation_without_acting(project, tmp_path, conver
     assert call(project, 'convert', '--dry-run', *options) == 0
     assert 'WOULD RECONCILE convert S001/20260725' in caplog.text
     assert before == {p: p.read_bytes() for p in project.rglob('*') if p.is_file()}
+
+
+def test_history_counts_reconciled_intents(project, tmp_path, converter):
+    project_at(project, tmp_path, converter, 'prepared')
+    options = ('--dcm2niix-bin', converter)
+    assert run_with_crash(project, 'convert', 'swapped', *options) == 137
+    assert call(project, 'convert', *options) == 0
+    assert history_rows(project)[-1]['reconciled'] == '1'
+
+
+def test_enospc_during_publish_keeps_old_output(project, tmp_path, converter, monkeypatch):
+    """T09: a full disk during publication leaves the complete folder and its record in place."""
+    import errno
+    project_at(project, tmp_path, converter, 'converted')
+    folder, options = published(project, 'convert'), ('--dcm2niix-bin', converter)
+    before = receipt_id(folder)
+    original_rename = Path.rename
+
+    def disk_full(self, target):
+        if Path(target).name.startswith('.incoming_'):
+            raise OSError(errno.ENOSPC, 'No space left on device (simulated)')
+        return original_rename(self, target)
+
+    monkeypatch.setattr(Path, 'rename', disk_full)
+    assert call(project, 'convert', *options, '--force-reconvert') == 2
+    monkeypatch.undo()
+    assert receipt_id(folder) == before
+    entry = read_state(project)['sessions']['S001/20260725']
+    assert entry['conversion']['receipt_id'] == before and entry['last_attempt']['status'] == 'failed'
+    assert not [p for p in folder.parent.iterdir() if p.name.startswith(('.incoming_', '.previous_'))]
 
 
 def test_reconcile_skips_other_commands_intents(project, tmp_path, converter):
