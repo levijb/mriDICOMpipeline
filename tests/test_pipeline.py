@@ -53,10 +53,11 @@ def test_duplicates_and_conflicts_are_cached(project, tmp_path, monkeypatch):
     assert call(project, 'prepare') == 2
 
 
-def test_dry_run_writes_nothing_and_bad_names_held(project, tmp_path):
+def test_dry_run_writes_nothing_and_bad_names_held(project, tmp_path, caplog):
     archive(project, 'S001_072526.zip', dicom_bytes(tmp_path))
     before = {p.relative_to(project) for p in project.rglob('*')}
     assert call(project, 'prepare', '--dry-run') == 2
+    assert '1 held for review' in caplog.text
     assert before == {p.relative_to(project) for p in project.rglob('*')}
     assert call(project, 'prepare') == 2
     # Only the root's lock file (Q13) may exist; nothing was extracted.

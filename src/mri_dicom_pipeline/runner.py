@@ -145,7 +145,7 @@ def _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summ
                 remaining -= len(limited[sid])
         tasks = limited
     pending = sum(len(items) for items in tasks.values())
-    logger.info("Plan: %s work items across %s subjects; %s cached; %s held. Cached checks did not read old DICOM headers.", pending, len(tasks), counts["cached"], counts["held"])
+    logger.info("Plan: %s work items across %s subjects; %s cached; %s held for review. Cached checks did not read old DICOM headers.", pending, len(tasks), counts["cached"], counts["held"])
     if cfg.dry_run:
         for sid, items in tasks.items():
             for item in items:
