@@ -60,7 +60,8 @@ def test_dry_run_writes_nothing_and_bad_names_held(project, tmp_path):
     assert call(project, 'prepare', '--dry-run') == 2
     assert before == {p.relative_to(project) for p in project.rglob('*')}
     assert call(project, 'prepare') == 2
-    assert not list((project/'DicomExtracted').glob('*'))
+    # Only the root's lock file (Q13) may exist; nothing was extracted.
+    assert [p.name for p in (project/'DicomExtracted').glob('*')] == ['.mri_dicom_pipeline.lock']
 
 
 def test_conversion_privacy_companions_and_fast_rerun(project, tmp_path, converter, monkeypatch):

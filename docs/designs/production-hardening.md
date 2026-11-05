@@ -1186,8 +1186,9 @@ them is not enough. `dcm2niix` is supported over a tested range of versions.
     letter case (`S001` and `s001`) are rejected while the roster is loaded,
     on every platform, so that behavior does not depend on the filesystem.
 *   **Reserved device names (R14).** IDs equal to `CON`, `PRN`, `AUX`, `NUL`,
-    `COM1`–`COM9`, or `LPT1`–`LPT9`, in any letter case, are rejected on
-    every platform.
+    `COM0`–`COM9`, or `LPT0`–`LPT9`, in any letter case, are rejected on
+    every platform. Current Windows documentation reserves `COM0` and `LPT0`
+    as well.
 *   **Files in use during publication.** If a rename during publication
     fails because a file in the destination is open (Windows refuses the
     rename), the existing rollback in `publish_tree` keeps the old folder,
@@ -1488,12 +1489,13 @@ function, so importing the module itself would clash with both.
 *   **Type / Scope**: Python module, identity grammar and roster (T01, T02).
 *   **Proposed Changes**:
     *   `NAME` and `SAFE_ID` regexes, moved. `RESERVED_NAMES` = `CON`,
-        `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, compared in upper
+        `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`, compared in upper
         case.
     *   `valid_id(text) -> bool`: `SAFE_ID` full match and not reserved.
     *   `parse_name(name, legacy=False) -> (sid, date, label)`, moved; an ID
         that is not valid raises `ValueError`, so the ZIP is held.
     *   `parse_key(text) -> (sid, label)` for `SUBJECT/SESSION` CLI values.
+        It lands in step 6, with `--session`, its first caller.
     *   `load_roster(...)`, moved. Invalid IDs (now including reserved names)
         keep today's "row ignored" warning. After reading, IDs are grouped
         by `casefold()`. Every group with more than one spelling has all its
@@ -2027,6 +2029,9 @@ function, so importing the module itself would clash with both.
         and must keep passing (Q7).
     *   `test_1000_cached_sessions_do_not_read_scan_contents` stays here,
         rebuilt on schema 3. It remains Goal 5's evidence.
+    *   `test_dry_run_writes_nothing_and_bad_names_held` (step 4): after the
+        non-dry run, `DicomExtracted/` may hold its lock file (Q13), and
+        nothing else.
 
 #### 24. `tests/test_project_configuration.py` (Modify)
 

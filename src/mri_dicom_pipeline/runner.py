@@ -18,8 +18,6 @@ import shutil
 import sys
 import threading
 import time
-import uuid
-from datetime import datetime
 
 from . import config, convert, identity, locks, prepare, reports
 from .state import State
@@ -45,10 +43,12 @@ def main(phase, argv=None):
     try:
         cfg = config.configure(args, phase)
         ids, pairs, roster_warnings = identity.load_roster(cfg.reference, cfg.subject_column, cfg.date_column)
-        # One lock shared by both commands, even if a custom report root is used.
+        # A lock on every root the command touches, so commands that share any
+        # root exclude each other whatever their project roots (Q13). Dry runs
+        # take no lock.
         if cfg.dry_run:
             return run(cfg, phase, ids, pairs, roster_warnings)
-        with locks.ProjectLock(cfg.project_root / ".mri_dicom_pipeline.lock"):
+        with locks.RootLocks(cfg.lock_roots, phase, cfg.run_id):
             return run(cfg, phase, ids, pairs, roster_warnings)
     except (ValueError, RuntimeError, OSError) as e:
         logger = logging.getLogger("mri_dicom_pipeline")
@@ -66,7 +66,7 @@ def main(phase, argv=None):
 def run(cfg, phase, ids, pairs, roster_warnings):
     logger = reports.setup_log(cfg.reports, phase, cfg.dry_run)
     started = time.monotonic()
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+    run_id = cfg.run_id
     logger.info("RUN %s START stage=%s workers=%s dry_run=%s", run_id, phase, cfg.workers, cfg.dry_run)
     if not cfg.dry_run:
         logger.info("Main log: %s | Details: %s", cfg.reports / "pipeline.log", cfg.reports / f"latest_{phase}.log")

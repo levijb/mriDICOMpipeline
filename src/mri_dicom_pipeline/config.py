@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import os
 from pathlib import Path
+import uuid
 
 from . import __version__
 
@@ -63,4 +65,8 @@ def configure(args, phase):
         raise ValueError("timeout must be positive")
     if "SLURM_CPUS_PER_TASK" in os.environ and args.workers > allocated:
         raise ValueError("workers exceeds SLURM_CPUS_PER_TASK")
+    # Every root the command touches is locked (Q13).
+    args.lock_roots = ([args.uploads, args.dicoms, args.reports, args.work] if phase == "prepare"
+                       else [args.dicoms, args.niftis, args.reports, args.work])
+    args.run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
     return args
