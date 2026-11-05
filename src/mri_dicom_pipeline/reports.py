@@ -63,3 +63,13 @@ def reports(state, cfg, pairs):
 
 def problem(key, phase, sid, label, reason, path=""):
     return {"key": key, "stage": phase, "subject": sid, "session": label, "reason": reason, "path": str(path)}
+
+
+# An issue is blocking when it counts toward the unresolved total that makes a
+# run exit with code 2. Nonblocking issues are reported only: header dates that
+# differ from the file name, and a canonical ZIP missing from SubjectsSorted.
+NONBLOCKING_PREFIXES = ("date:", "missing:")
+
+
+def unresolved(state):
+    return sum(not key.startswith(NONBLOCKING_PREFIXES) for key in state.data["issues"])

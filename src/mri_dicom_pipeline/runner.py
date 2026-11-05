@@ -40,6 +40,23 @@ class StopSignal:
             self.event.set()
 
 
+# Run-summary counter for each worker outcome; anything else counts as completed.
+OUTCOME_COUNTERS = {"duplicate": "duplicate", "failed": "failed", "interrupted": "failed",
+                    "held": "held", "refresh": "cached"}
+
+
+def refuse_moved_project(cfg, state):
+    """Refuse to run when no recorded canonical ZIP lies under the uploads root (Q23).
+
+    State keeps absolute paths, so a moved project would re-extract every
+    session and flag every conversion. The check compares strings only.
+    """
+    archives = [entry["archive"] for entry in state.data["sessions"].values() if entry.get("archive")]
+    if archives and not any(Path(archive).is_relative_to(cfg.uploads) for archive in archives):
+        raise ValueError(f"Project appears moved: no recorded ZIP lies under {cfg.uploads}. Moving a project is "
+                         "not supported yet; run from the original location")
+
+
 def process_subject(items, cfg, phase, session_state, events, stop):
     local_sessions = session_state
     for item in items:
@@ -100,6 +117,7 @@ def run(cfg, phase, ids, pairs, roster_warnings, stopper):
     if state.recovered_from_backup:
         logger.error("State index %s could not be read; loaded %s and its journals instead. "
                      "The unreadable file is moved aside at the next save.", state.path, state.backup)
+    refuse_moved_project(cfg, state)
     reconciled = recovery.reconcile(cfg, phase, state, logger, cfg.dry_run)
     if reconciled:
         logger.info("Recovered %s operations left open by an interrupted run", reconciled)
@@ -141,8 +159,9 @@ def run(cfg, phase, ids, pairs, roster_warnings, stopper):
         state.checkpoint(event)
         recovery.clear_intents(cfg.reports, event.get("intents", []))
         outcome = event["outcome"]
-        counts["duplicate" if outcome == "duplicate" else "failed" if outcome in ("failed", "interrupted") else "completed"] += 1
-        logger.log(logging.ERROR if outcome in ("failed", "interrupted") else logging.INFO, "%s %s: %s", outcome.upper(), event["key"], event.get("note", "identical archive/content; skipped"))
+        counts[OUTCOME_COUNTERS.get(outcome, "completed")] += 1
+        level = logging.ERROR if outcome in ("failed", "interrupted") else logging.WARNING if outcome == "held" else logging.INFO
+        logger.log(level, "%s %s: %s", outcome.upper(), event["key"], event.get("note", "identical archive/content; skipped"))
         if event.get("detail"):
             # Converter verbosity belongs only in the latest detailed log.
             for handler in logger.handlers:
@@ -183,7 +202,7 @@ def run(cfg, phase, ids, pairs, roster_warnings, stopper):
             save_failed = True
             logger.error("Could not save state or reports at the end of the run; the journals keep every result: %s", e)
     terminated, interrupted = stopper.signum == signal.SIGTERM, stopper.signum is not None
-    unresolved = sum(not k.startswith("date:") for k in state.data["issues"])
+    unresolved = reports.unresolved(state)
     outcome = ("terminated" if terminated else "interrupted" if interrupted
                else "issues" if unresolved or counts["failed"] or counts["held"] or save_failed else "ok")
     elapsed = round(time.monotonic()-started, 2)

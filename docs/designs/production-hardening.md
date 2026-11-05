@@ -1097,9 +1097,11 @@ nothing and name the file, and the operator starts with a new report root.
 #### Q23 Project relocation: refuse in phase 1, `relocate` on its trigger (decided 2026-11-04; trimmed after review 2026-11-05, D8)
 
 **Decision:** State keeps absolute paths. In phase 1, `prepare` and `convert`
-refuse to run when the index is not empty but none of the stored paths for a
-root kind (uploads, DICOM, NIfTI, reports) lies under the configured root.
-They print "project appears moved; moving a project is not supported yet".
+refuse to run when the index records canonical ZIPs but none of them lies
+under the configured uploads root. They print "Project appears moved …
+Moving a project is not supported yet". Only the uploads root is checked
+(simplified 2026-11-05, step 6): the DICOM and NIfTI roots can be overridden
+on purpose (`--output-root`), so a mismatch there is not evidence of a move.
 
 **Consequences:**
 
@@ -1706,9 +1708,9 @@ function, so importing the module itself would clash with both.
     *   **`HoldError(ValueError)`.** Produces outcome `held` with a blocking
         `prepare:<path>` issue. The ZIP stays where it is and no session
         entry changes.
-    *   **`Candidate`** (a named tuple): `source`, `sid`, `date`, `label`,
-        `fingerprint`, and `mode`, which is `"new"` (normal work) or
-        `"audit"` (re-hash a cached canonical ZIP only).
+    *   **Candidates** stay today's tuple `(source, sid, date, label,
+        fingerprint)`. The `--audit` re-hash runs in the planner (below), so
+        there is no separate audit candidate.
     *   **`discover(cfg)`**, moved.
     *   **`check_free_space(archive, stage_root, dicom_root)`.** Sums the
         `file_size` of every member that is not a directory. Raises
@@ -1718,8 +1720,8 @@ function, so importing the module itself would clash with both.
         different device, it checks that root too.
     *   **`extract_archive(source, stage, stop, accept_multi_study)`.**
         Keeps today's behavior, plus:
-        *   It calls `check_free_space` after opening the ZIP and before
-            writing anything.
+        *   `prepare_one` calls `check_free_space` just before it, so nothing
+            is written when the ZIP would not fit.
         *   It keeps a `sop_uid -> (sha256, size)` map. Each object is still
             hashed while it is written. A byte-identical repeat is then
             deleted again, left out of the inventory, and counted in
@@ -1737,9 +1739,7 @@ function, so importing the module itself would clash with both.
         unchanged.
     *   **`prepare_one(candidate, previous, cfg, stop)`.** Order of
         operations:
-        1.  Hash the ZIP. In `audit` mode, compare the hash with the recorded
-            `archive_sha256` and stop: a match changes nothing, and a
-            mismatch raises `HoldError`.
+        1.  Hash the ZIP.
         2.  Canonical-change rule (Q3): if the source is the previous
             canonical archive and the digest differs, raise `HoldError`
             ("accepted canonical ZIP changed"). If the digest matches but
@@ -1763,7 +1763,7 @@ function, so importing the module itself would clash with both.
         | Outcome | Counted as | Source record | Session entry | Issue |
         |---|---|---|---|---|
         | `prepared` | completed | `outcome: prepared`, signature | New entry | Clears `prepare:<path>` |
-        | `adopted` | completed | `outcome: prepared`, signature | Rebuilt by `receipts.adopted_record` | Clears `prepare:<path>` |
+        | `adopted` | completed | `outcome: prepared`, signature | Rebuilt by `receipts.prepared_entry` from the published inventory | Clears `prepare:<path>` |
         | `duplicate` | duplicate | `outcome: duplicate`, signature | Unchanged | Clears `prepare:<path>` |
         | `refresh` | cached | Signature updated | `archive_signature` updated | None |
         | `held` | held | `outcome: held`, signature; not hashed again until the signature changes | Unchanged; no entry is created for a new key | Blocking `prepare:<path>` |
@@ -1771,14 +1771,21 @@ function, so importing the module itself would clash with both.
 
     *   **`plan_prepare(cfg, state, ids, pairs, logger)`.** Today's rules,
         plus:
-        *   The `--session` filter.
-        *   The moved-project refusal (Q23), checked once before planning.
+        *   The `--session` filter (`convert` has the same filter).
+        *   The moved-project refusal (Q23) runs in `runner.run` for both
+            commands, before reconciliation and planning.
         *   A ready session whose canonical archive is missing from the
             discovered paths gets a nonblocking `missing:<key>` issue. The
             issue clears when the archive is listed again.
-        *   With `--audit`, each cached canonical ZIP becomes an `audit`
-            candidate. A dry run with `--audit` hashes it and writes nothing
-            (P7).
+        *   With `--audit`, each cached canonical ZIP is hashed during
+            planning, so a dry run hashes it too and writes nothing (P7). A
+            mismatch holds the ZIP; a match clears an earlier audit hold.
+        *   An unchanged ZIP whose source record says `held` is not hashed
+            again (its issue stays open), unless `--accept-multi-study`
+            names its session.
+        *   `accepted_multi_study` in the entry is true when the published
+            inventory holds more than one study, which only an explicit
+            acceptance allows.
 
 #### 12. `src/mri_dicom_pipeline/convert.py` (Create)
 
@@ -2086,7 +2093,8 @@ function, so importing the module itself would clash with both.
         patches `shutil.disk_usage`),
         `test_legacy_import_moves_zip_and_never_deletes_it` (CUJ 6),
         `test_empty_state_adopts_matching_extraction` (D6),
-        `test_moved_project_refused`.
+        `test_moved_project_refused`,
+        `test_session_filter_limits_prepare`.
     *   **Immutable canonical ZIPs:**
         `test_changed_canonical_zip_is_held_and_outputs_unchanged` (P3),
         `test_restored_canonical_zip_accepted_without_reextract`,

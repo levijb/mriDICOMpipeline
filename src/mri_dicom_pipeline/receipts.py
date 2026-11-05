@@ -75,6 +75,8 @@ def prepared_entry(sid, date, label, canonical, digest, inventory, destination, 
             "content_sha256": inventory["content_sha256"], "n_dicom": inventory["n_dicom"],
             "n_series": inventory["n_series"], "dicom_bytes": inventory["dicom_bytes"],
             "pixel_bytes": inventory["pixel_bytes"],
+            # A published ZIP with several studies was accepted explicitly (Q20).
+            "accepted_multi_study": inventory.get("study_count", 1) > 1,
             "extraction": receipt_info(destination, destination / RECEIPT, destination / INVENTORY),
             "conversion": conversion}
 

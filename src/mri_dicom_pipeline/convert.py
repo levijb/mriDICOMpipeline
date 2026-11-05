@@ -183,9 +183,11 @@ def convert_one(entry, cfg, stop):
 def plan_convert(cfg, state, ids, pairs, logger):
     tasks, counts = {}, {"cached": 0, "held": 0}
     blocked = {(i.get("subject"), i.get("session")) for k, i in state.data["issues"].items()
-               if i.get("stage") == "prepare" and not k.startswith("date:")}
+               if i.get("stage") == "prepare" and not k.startswith(reports.NONBLOCKING_PREFIXES)}
     recovering = recovery.blocked_keys(state)
     for key, entry in sorted(state.data["sessions"].items()):
+        if cfg.sessions is not None and key not in cfg.sessions:
+            continue
         if entry.get("status") != "ready":
             continue
         sid, label, date = entry["subject_id"], entry["label"], entry["date"]

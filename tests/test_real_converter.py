@@ -10,6 +10,7 @@ import json
 import struct
 import subprocess
 
+from pydicom.uid import generate_uid
 import pytest
 
 from support import (UNCONVERTIBLE_SYNTAXES, archive_objects, call, csa_non_image_bytes, mr_series,
@@ -44,8 +45,9 @@ def record(capsys, binary, case, returncode):
 
 def test_real_converter_names_outputs_by_series_uid(project, tmp_path, real_dcm2niix):
     """Output names carry the SeriesInstanceUID, so output keys equal inventory keys (Q6)."""
-    _, first = mr_series(tmp_path, description='T1 MPRAGE', series_number=2)
-    _, second = mr_series(tmp_path, description='AX FLAIR', series_number=4)
+    study = generate_uid()
+    _, first = mr_series(tmp_path, study=study, description='T1 MPRAGE', series_number=2)
+    _, second = mr_series(tmp_path, study=study, description='AX FLAIR', series_number=4)
     archive_objects(project, 'S001_20260725.zip', first + second)
     assert call(project, 'prepare') == 0
     assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0

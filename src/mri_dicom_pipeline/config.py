@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import uuid
 
-from . import __version__
+from . import __version__, identity
 
 
 SCHEMA_VERSION = 3
@@ -24,8 +24,9 @@ def config_parser(phase):
     p.add_argument("--report-root", type=Path)
     p.add_argument("--workers", type=int)
     p.add_argument("--limit", type=int, help="Maximum new/changed sessions to process, after cache checks")
-    p.add_argument("--dry-run", action="store_true", help="Read-only plan; writes no files and performs no hashes/conversions")
-    p.add_argument("--audit", action="store_true", help="Explicitly hash cached outputs; deliberately slower")
+    p.add_argument("--dry-run", action="store_true", help="Plan only: no project writes or converter calls; hashes files only when combined with --audit")
+    p.add_argument("--audit", action="store_true", help="Explicitly hash cached outputs; prepare also re-hashes canonical ZIPs; deliberately slower")
+    p.add_argument("--session", action="append", metavar="SUBJECT/SESSION", help="Limit work to this session; repeatable")
     p.add_argument("--retry-failed", action="store_true", help="Retry unchanged failed/partial work")
     p.add_argument("--allow-unlisted-dates", action="store_true", help="Allow known IDs with dates absent from the reference")
     if phase == "prepare":
@@ -33,6 +34,8 @@ def config_parser(phase):
         p.add_argument("--output-root", type=Path, help="DicomExtracted root")
         p.add_argument("--force-reextract", action="store_true")
         p.add_argument("--import-legacy", action="store_true", help="Also import DicomUploads/Subjects and accept validated six-digit dates there")
+        p.add_argument("--accept-multi-study", action="append", metavar="SUBJECT/SESSION",
+                       help="Accept this session's ZIP although it holds more than one study; repeatable")
     else:
         p.add_argument("--dicom-root", type=Path, help="DicomExtracted root")
         p.add_argument("--output-root", type=Path, help="Niftis root")
@@ -65,6 +68,8 @@ def configure(args, phase):
         raise ValueError("timeout must be positive")
     if "SLURM_CPUS_PER_TASK" in os.environ and args.workers > allocated:
         raise ValueError("workers exceeds SLURM_CPUS_PER_TASK")
+    args.sessions = {"/".join(identity.parse_key(v)) for v in args.session} if args.session else None
+    args.accept_multi_study = {"/".join(identity.parse_key(v)) for v in getattr(args, "accept_multi_study", None) or []}
     # Every root the command touches is locked (Q13).
     args.lock_roots = ([args.uploads, args.dicoms, args.reports, args.work] if phase == "prepare"
                        else [args.dicoms, args.niftis, args.reports, args.work])

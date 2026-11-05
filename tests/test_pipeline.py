@@ -135,7 +135,10 @@ def test_path_traversal_member_cannot_escape(project, tmp_path):
         z.writestr('../../escape.dcm', data)
     assert call(project, 'prepare') == 0
     assert not (project/'escape.dcm').exists()
-    assert state(project)['sessions']['S001/20260725']['n_dicom'] == 2
+    # The extra member repeats the first object byte for byte, so it is stored once (Q20).
+    assert state(project)['sessions']['S001/20260725']['n_dicom'] == 1
+    inventory = json.loads((project/'DicomExtracted/Subjects/S001/20260725/.inventory.json').read_text())
+    assert inventory['repeated_identical'] == 1
 
 
 def test_failed_archive_not_retried_until_requested(project, monkeypatch):

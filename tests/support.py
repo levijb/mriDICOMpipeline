@@ -19,7 +19,7 @@ CSA_NON_IMAGE_STORAGE = '1.3.12.2.1107.5.9.1'
 
 
 def dicom_bytes(tmp_path, value=1, study=None, series=None, description='AX Diffusion_ADC',
-                series_number=3, slice_index=None, rows=2, columns=2, pixel_count=None):
+                series_number=3, slice_index=None, rows=2, columns=2, pixel_count=None, sop_uid=None):
     """One synthetic MR Image Storage object.
 
     With ``slice_index`` set, the object also carries the slice geometry and
@@ -29,7 +29,7 @@ def dicom_bytes(tmp_path, value=1, study=None, series=None, description='AX Diff
     meta = FileMetaDataset()
     meta.TransferSyntaxUID = ExplicitVRLittleEndian
     meta.MediaStorageSOPClassUID = MRImageStorage
-    meta.MediaStorageSOPInstanceUID = generate_uid()
+    meta.MediaStorageSOPInstanceUID = sop_uid or generate_uid()
     ds = FileDataset(None, {}, file_meta=meta, preamble=b'\0' * 128)
     ds.SOPClassUID, ds.SOPInstanceUID = MRImageStorage, meta.MediaStorageSOPInstanceUID
     ds.StudyInstanceUID, ds.SeriesInstanceUID = study or generate_uid(), series or generate_uid()
@@ -53,8 +53,12 @@ def dicom_bytes(tmp_path, value=1, study=None, series=None, description='AX Diff
 
 
 def mr_series(tmp_path, slices=3, study=None, **kwargs):
-    """A stackable synthetic MR series: (SeriesInstanceUID, list of object bytes)."""
-    series = generate_uid()
+    """A stackable synthetic MR series in one study: (SeriesInstanceUID, list of object bytes).
+
+    Pass the same ``study`` to series that share a ZIP, or preparation holds
+    the ZIP as a multi-study export (Q20).
+    """
+    series, study = generate_uid(), study or generate_uid()
     return series, [dicom_bytes(tmp_path, value=i + 1, study=study, series=series, slice_index=i, **kwargs)
                     for i in range(slices)]
 

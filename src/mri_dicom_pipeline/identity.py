@@ -38,6 +38,20 @@ def parse_name(name, legacy=False):
     return m["id"], m["date"], label
 
 
+def parse_key(text):
+    """(subject, session label) from a SUBJECT/SESSION value such as S001/20260725_2."""
+    sid, slash, label = str(text).partition("/")
+    try:
+        if not slash:
+            raise ValueError("expected SUBJECT/SESSION, for example S001/20260725")
+        parsed_sid, _, parsed_label = parse_name(f"{sid}_{label}.zip")
+        if (parsed_sid, parsed_label) != (sid, label):
+            raise ValueError("ambiguous subject ID")
+    except ValueError as e:
+        raise ValueError(f"Invalid session key {text!r}: {e}") from None
+    return sid, label
+
+
 def load_roster(path, subject_column="subject_id", date_column="scan_date"):
     pairs, ids, warnings, first_row = set(), set(), [], {}
     with Path(path).open(newline="", encoding="utf-8-sig") as f:
