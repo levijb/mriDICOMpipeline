@@ -775,7 +775,10 @@ Every deduplicated stage finding maps to at least one action item.
 
 ## Report files
 
-All in `docs/reviews/2026-11-04-production-hardening/`:
+This file is the final review output. The five stage reports it cites by
+finding ID (ZO, CO, CR, ZZ, IR) were working files. They were removed on
+2026-11-05 and remain in git history at commit `90b5d83`
+(`git show 90b5d83:docs/reviews/2026-11-04-production-hardening/<name>`):
 
 * `zoom_out_report.md` (Stage 5)
 * `comprehension_report.md` (Stage 6, with the paraphrase)
@@ -783,7 +786,6 @@ All in `docs/reviews/2026-11-04-production-hardening/`:
 * `intermediate_zoom_out_report.md` (Stage 8, with the Adopt / Shrink /
   Reject table for every earlier recommendation)
 * `implementation_readiness_report.md` (Stage 9)
-* `consolidated_review_report.md` (this file)
 
 Line numbers in these reports refer to the pre-review design and the 0.1.0
 `pipeline.py`, both kept in git history.
