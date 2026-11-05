@@ -10,7 +10,7 @@ establishes it. Review this list whenever the README changes.
 | Windows device names are rejected as IDs | `test_identity.py::test_reserved_device_names_rejected` |
 | `_N` suffix rules | `test_identity.py::test_session_key_grammar` |
 | A partly copied ZIP fails and is retried when complete | `test_inputs.py::test_truncated_upload_fails_then_prepares_when_complete` |
-| ZIPs are moved, never modified or deleted; unaccepted ZIPs stay | `test_inputs.py::test_legacy_import_moves_zip_and_never_deletes_it`, `test_pipeline.py::test_duplicates_and_conflicts_are_cached` |
+| ZIPs are moved (or prepared in place in SubjectsSorted), never modified or deleted; unaccepted ZIPs stay | `test_inputs.py::test_sorted_zips_are_prepared_in_place_and_never_deleted`, `test_pipeline.py::test_duplicates_and_conflicts_are_cached` |
 | An accepted canonical ZIP is immutable; outputs stay unchanged | `test_inputs.py::test_changed_canonical_zip_is_held_and_outputs_unchanged`, `test_canonical_conflict_blocks_conversion` |
 | A restored canonical ZIP is accepted without extracting again | `test_inputs.py::test_restored_canonical_zip_accepted_without_reextract` |
 | `--force-reextract` never accepts changed bytes | `test_inputs.py::test_force_reextract_refuses_changed_bytes` |

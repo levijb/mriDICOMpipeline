@@ -134,8 +134,6 @@ def _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summ
     if summary["reconciled"]:
         logger.info("Recovered %s operations left open by an interrupted run", summary["reconciled"])
     if phase == "prepare":
-        if not cfg.import_legacy and (cfg.uploads / "Subjects").is_dir() and not state.data["sessions"]:
-            logger.warning("Legacy DicomUploads/Subjects is not scanned by default. Preview migration with --import-legacy --dry-run.")
         tasks, counts = prepare.plan_prepare(cfg, state, ids, pairs, logger)
     else:
         tasks, counts = convert.plan_convert(cfg, state, ids, pairs, logger)

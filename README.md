@@ -17,7 +17,10 @@ python -m pip install .
 
 Keep study data separate from the code checkout when starting a new project.
 Create `sessions.csv` in your study directory using the synthetic example in
-`examples/sessions.csv`. Place incoming archives in `DicomUploads/Uploads`.
+`examples/sessions.csv`. Place incoming archives in `DicomUploads/Uploads`;
+ZIPs that already have their final name (`S001_20260725.zip`) can also go
+directly into `DicomUploads/SubjectsSorted/S001/`, where they are prepared in
+place.
 Keep a copy of every ZIP outside the project before the first run.
 Run from that study directory, optionally inside one Slurm compute allocation:
 
@@ -303,24 +306,6 @@ a run; it is rewritten at the next report write. `--dry-run` writes no project
 data or logs and performs no conversion; it hashes files only when combined
 with `--audit`. Normal report refreshes use cached metadata; they do not
 reopen all scans.
-
-## Legacy cluster data
-
-The old scripts/state and outputs are not trusted as new completion records.
-For ZIPs still in DicomUploads/Subjects, explicitly preview and import:
-
-```bash
-mri-dicom-pipeline prepare --import-legacy --dry-run
-mri-dicom-pipeline prepare --import-legacy
-```
-
-Only this legacy location accepts old ID_MMDDYY ZIP names, interpreted as
-20YY and validated against the reference before normalization. Successful
-imports move to SubjectsSorted using YYYYMMDD and build the new cache once.
-Legacy extracted/NIfTI directories are left in place. Normal repeated runs
-after that initial import use the fast path. Old report directories, saved
-tree listings and historical specifications are not read by the new scripts
-and should stay outside a public repository.
 
 ## Development and validation
 

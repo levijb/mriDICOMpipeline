@@ -69,17 +69,21 @@ def test_free_space_check_refuses_extraction_and_keeps_zip(project, tmp_path, mo
     assert 'Not enough free space' in json.dumps(state(project)['issues'])
 
 
-def test_legacy_import_moves_zip_and_never_deletes_it(project, tmp_path):
-    """CUJ 6: legacy ZIPs are moved unchanged; a ZIP that cannot be accepted stays."""
-    legacy = project / 'DicomUploads/Subjects/S001/S001_20260725.zip'
-    legacy.parent.mkdir(parents=True)
-    with zipfile.ZipFile(legacy, 'w') as z:
+def test_sorted_zips_are_prepared_in_place_and_never_deleted(project, tmp_path):
+    """CUJ 6: ZIPs placed directly in SubjectsSorted/<id>/ stay where they are, unchanged.
+
+    A ZIP there that cannot be accepted stays too, with an issue.
+    """
+    canonical = project / CANONICAL
+    canonical.parent.mkdir(parents=True)
+    with zipfile.ZipFile(canonical, 'w') as z:
         z.writestr('exam/1', dicom_bytes(tmp_path))
-    unaccepted = legacy.with_name('S001_badname.zip')
+    unaccepted = canonical.with_name('S001_badname.zip')
     unaccepted.write_bytes(b'not a session file name')
-    digest = fsutil.sha256(legacy)
-    assert call(project, 'prepare', '--import-legacy') == 2
-    assert not legacy.exists() and fsutil.sha256(project / CANONICAL) == digest
+    digest = fsutil.sha256(canonical)
+    assert call(project, 'prepare') == 2
+    assert fsutil.sha256(canonical) == digest
+    assert state(project)['sessions'][KEY]['status'] == 'ready'
     assert unaccepted.read_bytes() == b'not a session file name'
 
 

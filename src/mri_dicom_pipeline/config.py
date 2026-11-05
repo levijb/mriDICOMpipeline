@@ -33,7 +33,6 @@ def config_parser(phase):
         p.add_argument("--input-root", type=Path, help="DicomUploads root (contains Uploads and SubjectsSorted)")
         p.add_argument("--output-root", type=Path, help="DicomExtracted root")
         p.add_argument("--force-reextract", action="store_true")
-        p.add_argument("--import-legacy", action="store_true", help="Also import DicomUploads/Subjects and accept validated six-digit dates there")
         p.add_argument("--accept-multi-study", action="append", metavar="SUBJECT/SESSION",
                        help="Accept this session's ZIP although it holds more than one study; repeatable")
     else:

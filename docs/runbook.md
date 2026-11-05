@@ -17,12 +17,13 @@ mean the run was stopped by SIGTERM or Ctrl+C.
     them, but a separate copy protects against mistakes outside the pipeline.
 2.  Put `sessions.csv` in the project folder and check that every subject ID
     and scan date is listed.
-3.  Preview: `mri-dicom-pipeline prepare --dry-run`. Add `--import-legacy`
-    when the ZIPs sit in `DicomUploads/Subjects/<id>/`. The dry run lists
-    what it would do and writes nothing.
-4.  Run `mri-dicom-pipeline prepare` (with `--import-legacy` if needed), then
-    `mri-dicom-pipeline convert`.
-5.  Read `Reports/session_status.csv`. A session with
+3.  Put the ZIPs in `DicomUploads/Uploads/`, or, if they already have their
+    final names, in `DicomUploads/SubjectsSorted/<id>/<id>_<YYYYMMDD>.zip`,
+    where they are prepared in place.
+4.  Preview: `mri-dicom-pipeline prepare --dry-run`. The dry run lists what
+    it would do and writes nothing.
+5.  Run `mri-dicom-pipeline prepare`, then `mri-dicom-pipeline convert`.
+6.  Read `Reports/session_status.csv`. A session with
     `conversion_status = converted` has every required series. Look at
     `excused_series` for series that were not converted by design.
 

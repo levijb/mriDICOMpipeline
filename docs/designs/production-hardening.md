@@ -337,16 +337,19 @@ section:
 
 ### CUJ 6: First production run
 
-*   **Given**: A new project with no state. Session ZIPs sit in
-    `DicomUploads/Subjects/<id>/` (the legacy location) or in `Uploads/`.
-*   **When**: The operator runs `prepare --dry-run` (adding
-    `--import-legacy` for the legacy location), reviews the plan, then runs
-    `prepare` and `convert`.
+*   **Given**: A new project with no state. Session ZIPs sit in `Uploads/`,
+    or, already named, in `DicomUploads/SubjectsSorted/<id>/`.
+*   **When**: The operator runs `prepare --dry-run`, reviews the plan, then
+    runs `prepare` and `convert`.
 *   **Then**: The dry run lists the planned work and writes nothing.
-    `prepare` moves each accepted ZIP to
-    `DicomUploads/SubjectsSorted/<id>/` and extracts it. It never modifies or
-    deletes a ZIP. A ZIP it cannot accept stays where it was, with an issue.
-    `convert` converts every prepared session.
+    `prepare` moves each accepted upload to
+    `DicomUploads/SubjectsSorted/<id>/` (a ZIP already there stays in place)
+    and extracts it. It never modifies or deletes a ZIP. A ZIP it cannot
+    accept stays where it was, with an issue. `convert` converts every
+    prepared session.
+*   The `--import-legacy` option, which read the old `DicomUploads/Subjects/`
+    layout, was removed on 2026-11-05 at the author's request: that layout
+    was renamed to `SubjectsSorted/` and is no longer used.
 
 ## Technical Plan (Architecture)
 
@@ -436,6 +439,7 @@ default, so adding one needs no migration (Q1).
 | Exit code 143 after SIGTERM | 1 |
 | `session_status.csv` adds `required_series`, `converted_series`, `excused_series`, `last_attempt_status`, `last_attempt_folder`; new status values listed in invariant 10 | 1 |
 | `run_history.csv` gains outcomes `terminated` and `aborted` and a `reconciled` count | 1 |
+| `--import-legacy` removed: the old `DicomUploads/Subjects` layout is no longer used (2026-11-05) | 1 |
 
 ### Phase map
 
@@ -1378,8 +1382,7 @@ options were presented.
     checked by `test_1000_cached_sessions_do_not_read_scan_contents`. Scale
     budgets wait for phase 3 (Q18).
 *   **Rollout:** Install phase 1 from the repository. Keep a copy of every
-    ZIP outside the project before the first run. Run `prepare --dry-run`
-    (with `--import-legacy` when ZIPs sit in `DicomUploads/Subjects/`),
+    ZIP outside the project before the first run. Run `prepare --dry-run`,
     review the plan, then run `prepare` and `convert` (CUJ 6). No migration
     is needed (Q22).
 *   **Rollback:** Reinstall 0.1.0 and give it a new, empty report root,
@@ -1504,8 +1507,9 @@ function, so importing the module itself would clash with both.
         `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`, compared in upper
         case.
     *   `valid_id(text) -> bool`: `SAFE_ID` full match and not reserved.
-    *   `parse_name(name, legacy=False) -> (sid, date, label)`, moved; an ID
-        that is not valid raises `ValueError`, so the ZIP is held.
+    *   `parse_name(name) -> (sid, date, label)`, moved; an ID that is not
+        valid raises `ValueError`, so the ZIP is held. (Its `legacy` mode for
+        six-digit dates was removed with `--import-legacy`.)
     *   `parse_key(text) -> (sid, label)` for `SUBJECT/SESSION` CLI values.
         It lands in step 6, with `--session`, its first caller.
     *   `load_roster(...)`, moved. Invalid IDs (now including reserved names)
@@ -2096,7 +2100,7 @@ function, so importing the module itself would clash with both.
         `test_truncated_upload_fails_then_prepares_when_complete` (Q4),
         `test_free_space_check_refuses_extraction_and_keeps_zip` (Q15;
         patches `shutil.disk_usage`),
-        `test_legacy_import_moves_zip_and_never_deletes_it` (CUJ 6),
+        `test_sorted_zips_are_prepared_in_place_and_never_deleted` (CUJ 6),
         `test_empty_state_adopts_matching_extraction` (D6),
         `test_moved_project_refused`,
         `test_session_filter_limits_prepare`.

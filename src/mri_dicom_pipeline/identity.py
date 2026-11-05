@@ -18,13 +18,7 @@ def valid_id(text):
     return bool(SAFE_ID.fullmatch(text)) and text.upper() not in RESERVED_NAMES
 
 
-def parse_name(name, legacy=False):
-    if legacy:
-        m = re.fullmatch(r"(.+)_([0-9]{6})\.zip", name, re.I)
-        if m:
-            old = m[2]
-            d = datetime(2000 + int(old[4:]), int(old[:2]), int(old[2:4]))
-            name = f"{m[1]}_{d:%Y%m%d}.zip"
+def parse_name(name):
     m = NAME.fullmatch(name)
     if not m:
         raise ValueError("Expected ID_YYYYMMDD.zip or ID_YYYYMMDD_2.zip")

@@ -34,16 +34,14 @@ class HoldError(ValueError):
 
 
 def discover(cfg):
+    """ZIP paths under SubjectsSorted (accepted, canonical) and Uploads (incoming)."""
     result = []
-    roots = [(cfg.uploads / "SubjectsSorted", False), (cfg.uploads / "Uploads", False)]
-    if cfg.import_legacy:
-        roots.append((cfg.uploads / "Subjects", True))
-    for root, legacy in roots:
+    for root in (cfg.uploads / "SubjectsSorted", cfg.uploads / "Uploads"):
         for folder, dirs, files in os.walk(root, followlinks=False):
             dirs[:] = sorted(d for d in dirs if not d.startswith(".") and not (Path(folder) / d).is_symlink())
             for name in sorted(files):
                 if name.lower().endswith(".zip"):
-                    result.append((Path(folder) / name, legacy))
+                    result.append(Path(folder) / name)
     return result
 
 
@@ -289,13 +287,13 @@ def plan_prepare(cfg, state, ids, pairs, logger):
     tasks, counts = {}, {"cached": 0, "held": 0}
     recovering = recovery.blocked_keys(state)
     discovered = discover(cfg)
-    for source, legacy in discovered:
+    for source in discovered:
         issue_key = "prepare:" + str(source)
         sid = label = ""
         try:
             if source.is_symlink():
                 raise ValueError("Symbolic-link ZIPs are not accepted")
-            sid, date, label = identity.parse_name(source.name, legacy)
+            sid, date, label = identity.parse_name(source.name)
             key = f"{sid}/{label}"
             if cfg.sessions is not None and key not in cfg.sessions:
                 continue
@@ -340,7 +338,7 @@ def plan_prepare(cfg, state, ids, pairs, logger):
         # Removed/renamed incoming conflicts must not remain permanently unresolved.
         stale = [k for k, v in state.data["issues"].items() if k.startswith("prepare:") and v.get("path") and not Path(v["path"]).exists()]
         # R18: a prepared session whose canonical ZIP is not listed gets a nonblocking issue.
-        listed, missing = {str(path) for path, _ in discovered}, []
+        listed, missing = {str(path) for path in discovered}, []
         for key, entry in state.data["sessions"].items():
             issue = "missing:" + key
             if entry.get("status") != "ready" or not entry.get("archive"):
