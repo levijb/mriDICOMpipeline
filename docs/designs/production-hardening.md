@@ -143,7 +143,8 @@ matched their SHA-256 values.
 | P8 | Reproduced | The unredacted sentinel line was readable in the staging `converter.log` while the converter ran, and absent from the final report log |
 | P10 | Reproduced | A file added to a complete output folder was deleted by the next `convert`, which exited 0 |
 | P11 | Reproduced with forced order | Natural NTFS order: no rollback. Newest-first deletion followed by a kill: the index held `v2`, and after reload the session was `v1` |
-| P1 (`dcm2niix` exit behavior) | Not run | `dcm2niix` is not installed here; covered by the phase 1 real-converter tests |
+| P1 (`dcm2niix` exit behavior) | Reproduced (2026-11-05, step 1) | `dcm2niix` v1.0.20261029 on synthetic data skipped a 16-bit JPEG Baseline series and still exited 0. The pipeline (0.1.0 logic after step 0) then reported the session `converted` with 1 of its 2 series. A series with undecodable RLE pixel data gave exit code 8 ("converted some but not all"). Evidence: `test_real_converter.py` |
+| Q19 (non-image objects) | Hypothesis holds (2026-11-05, step 1) | `dcm2niix` v1.0.20261029 ignored a synthetic Siemens CSA Non-Image object, converted the image series, and exited 0 |
 | P9 | Inspection only | No commits, no CI run, no license file (not reproducible as a test) |
 | Classifier (Q11) | Reproduced | The mislabels in the Q11 table came from running `classify()` |
 | Existing suite (30 cases) | **Not run** | The global `pytest` cannot be imported (missing `pygments`), and the sandbox blocked package downloads. Re-run after `python -m pip install pygments` or in a fresh environment |
@@ -627,7 +628,9 @@ MR Spectroscopy Storage (`1.2.840.10008.5.1.4.1.1.4.2`) is not on the list.
 *   Non-image objects stay in the `dcm2niix` input folder, as today. The
     real-converter smoke tests (T03, T11) must confirm that their presence
     does not make `dcm2niix` exit nonzero. This is a hypothesis to test. The
-    tests run right after the move-only step. If `dcm2niix` exits nonzero,
+    tests run right after the move-only step. *Result (2026-11-05):* the
+    hypothesis held for `dcm2niix` v1.0.20261029 with a synthetic CSA
+    Non-Image object (exit code 0). If `dcm2niix` exits nonzero,
     this decision is reopened before preparation changes are built (for
     example, running `dcm2niix` per series, or moving non-image objects to a
     sibling folder).
@@ -1946,15 +1949,16 @@ function, so importing the module itself would clash with both.
     *   **New `real-converter` job:** OS `[ubuntu-latest, windows-latest]`
         × `dcm2niix` `[OLDEST, NEWEST]`, Python 3.12. It downloads the
         release archive for the OS from
-        `github.com/rordenlab/dcm2niix/releases` (the tags are set in the
-        workflow `env`, and the asset names are checked when the job is
-        written), sets `MRI_PIPELINE_DCM2NIIX`, and runs
-        `pytest tests/test_real_converter.py`.
+        `github.com/rordenlab/dcm2niix/releases`. Each matrix entry pins the
+        tag, the asset name, and the archive's SHA-256. The job checks the
+        checksum and the reported version, sets `MRI_PIPELINE_DCM2NIIX`, and
+        runs `pytest tests/test_real_converter.py`.
         *   `NEWEST` is the newest release on the day this step is
-            implemented.
+            implemented: v1.0.20261029 (implemented 2026-11-05).
         *   `OLDEST` is the version the target cluster's module provides
             (Q2); if that cannot be determined, `OLDEST = NEWEST`, and the
-            README lists a single version.
+            README lists a single version. It is not known yet, so the job
+            runs v1.0.20261029 only.
     *   **`package` job:** unchanged.
 
 #### 21. `tests/support.py` (Create)

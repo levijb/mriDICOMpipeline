@@ -1,8 +1,18 @@
 """Shared pytest fixtures."""
 import csv
+import os
 import textwrap
 
 import pytest
+
+
+@pytest.fixture
+def real_dcm2niix():
+    """Path of a real dcm2niix executable; the test is skipped unless one is configured."""
+    path = os.environ.get('MRI_PIPELINE_DCM2NIIX')
+    if not path:
+        pytest.skip('set MRI_PIPELINE_DCM2NIIX to a dcm2niix executable to run real-converter tests')
+    return path
 
 
 @pytest.fixture

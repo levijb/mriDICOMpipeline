@@ -20,6 +20,54 @@ jobs:
       - run: python -m pip install -e ".[test]"
       - run: python -m pytest
 
+  real-converter:
+    name: real-converter (${{ matrix.os }}, dcm2niix ${{ matrix.version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest and newest supported dcm2niix releases (Q2). The target
+        # cluster's module version is not known yet, so oldest = newest.
+        include:
+          - os: ubuntu-latest
+            version: v1.0.20261029
+            asset: dcm2niix_lnx.zip
+            sha256: decc03fe9c08e696700876bd0e28fbc1dda5be11979905dfa5a5e01063cdf758
+          - os: windows-latest
+            version: v1.0.20261029
+            asset: dcm2niix_win.zip
+            sha256: 71ab03724075c2bf95841588a12efa64c89aff5cc52a36b04d40ac378e9c31fd
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e ".[test]"
+      - name: Download dcm2niix ${{ matrix.version }}
+        shell: python
+        run: |
+          import hashlib, os, stat, subprocess, urllib.request, zipfile
+          url = 'https://github.com/rordenlab/dcm2niix/releases/download/${{ matrix.version }}/${{ matrix.asset }}'
+          temp = os.environ['RUNNER_TEMP']
+          archive = os.path.join(temp, 'dcm2niix.zip')
+          urllib.request.urlretrieve(url, archive)
+          with open(archive, 'rb') as f:
+              digest = hashlib.sha256(f.read()).hexdigest()
+          if digest != '${{ matrix.sha256 }}':
+              raise SystemExit(f'dcm2niix archive checksum mismatch: {digest}')
+          target = os.path.join(temp, 'dcm2niix')
+          with zipfile.ZipFile(archive) as z:
+              z.extractall(target)
+          exe = os.path.join(target, 'dcm2niix.exe' if os.name == 'nt' else 'dcm2niix')
+          os.chmod(exe, os.stat(exe).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+          # Fail here rather than let the smoke tests skip silently.
+          version = subprocess.run([exe, '-v'], capture_output=True, text=True).stdout
+          if '${{ matrix.version }}' not in version:
+              raise SystemExit(f'unexpected dcm2niix version output: {version!r}')
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'MRI_PIPELINE_DCM2NIIX={exe}\n')
+      - run: python -m pytest tests/test_real_converter.py -rs
+
   package:
     runs-on: ubuntu-latest
     steps:
