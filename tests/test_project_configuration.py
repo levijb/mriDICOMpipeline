@@ -8,9 +8,10 @@ import sys
 import pytest
 
 from mri_dicom_pipeline import __version__
-from mri_dicom_pipeline import pipeline as sp
+from mri_dicom_pipeline import config, fsutil, identity
+from mri_dicom_pipeline.state import State
 from mri_dicom_pipeline.cli import main
-from test_pipeline import archive, dicom_bytes, converter
+from support import archive, dicom_bytes
 
 
 @pytest.mark.parametrize('raw', ['20260725', '2026-07-25', '7/25/2026'])
@@ -18,7 +19,7 @@ def test_custom_roster_schema_preserves_ids(tmp_path, raw):
     roster = tmp_path / 'visits.csv'
     with roster.open('w', newline='', encoding='utf-8-sig') as f:
         csv.writer(f).writerows([['participant', 'acquired'], ['site-A_001', raw], ['0007', raw]])
-    ids, pairs, warnings = sp.load_roster(roster, 'participant', 'acquired')
+    ids, pairs, warnings = identity.load_roster(roster, 'participant', 'acquired')
     assert ids == {'site-A_001', '0007'}
     assert pairs == {('site-A_001', '20260725'), ('0007', '20260725')}
     assert not warnings
@@ -45,7 +46,7 @@ def test_custom_schema_used_in_both_stages(tmp_path, converter):
 
 def test_default_project_is_working_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    cfg = sp.configure(sp.config_parser('prepare').parse_args([]), 'prepare')
+    cfg = config.configure(config.config_parser('prepare').parse_args([]), 'prepare')
     assert cfg.project_root == tmp_path
     assert cfg.reference == tmp_path / 'sessions.csv'
 
@@ -67,7 +68,7 @@ def test_publish_rolls_back_if_swap_fails(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, 'rename', fail_final_swap)
     with pytest.raises(OSError, match='simulated publish failure'):
-        sp.publish_tree(stage, destination, root)
+        fsutil.publish_tree(stage, destination, root)
     assert (destination / 'image').read_text() == 'previous'
     assert not list(destination.parent.glob('.incoming_*'))
     assert not list(destination.parent.glob('.previous_*'))
@@ -78,7 +79,7 @@ def test_ambiguous_or_missing_columns_rejected(tmp_path, header):
     roster = tmp_path / 'sessions.csv'
     roster.write_text(header + '\nS001,20260725\n')
     with pytest.raises(ValueError):
-        sp.load_roster(roster)
+        identity.load_roster(roster)
 
 
 def test_old_state_rejected_without_writes(tmp_path):
@@ -87,7 +88,7 @@ def test_old_state_rejected_without_writes(tmp_path):
     original = '{"version":1,"sessions":{},"sources":{},"issues":{}}'
     index.write_text(original)
     with pytest.raises(ValueError, match='Unsupported state version'):
-        sp.State(tmp_path)
+        State(tmp_path)
     assert index.read_text() == original
 
 

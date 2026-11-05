@@ -5,7 +5,7 @@ import sys
 
 # Keep source-checkout scripts usable before package installation.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from mri_dicom_pipeline.pipeline import main
+from mri_dicom_pipeline.runner import main
 
 if __name__ == "__main__":
     raise SystemExit(main("convert"))

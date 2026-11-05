@@ -3,7 +3,7 @@ import argparse
 import sys
 
 from . import __version__
-from .pipeline import main as run_phase
+from .runner import main as run_phase
 
 
 def main(argv=None):
