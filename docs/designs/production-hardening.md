@@ -1,8 +1,13 @@
 # mriDICOMpipeline Production Hardening: Behavior Contract and Phase 1 Plan
 
 *   **Author:** Levi Davis
-*   **Status:** Proposed
-*   **Date:** 2026-11-04
+*   **Status:** Revised after review; awaiting the author's approval
+*   **Date:** 2026-11-04; revised 2026-11-05
+*   **Review:** EGM consolidated review of 2026-11-04
+    ([`consolidated_review_report.md`](../reviews/2026-11-04-production-hardening/consolidated_review_report.md)).
+    Its decisions D1–D8 were applied on 2026-11-05; see
+    [Open Questions](#open-questions). The pre-review text is in this file's
+    git history.
 *   **Baseline:** `mri-dicom-pipeline` 0.1.0, state schema 2,
     `src/mri_dicom_pipeline/pipeline.py` SHA-256 `5667d1c1…38735a6`. All 19
     files listed in [`current-source-manifest.json`](./current-source-manifest.json)
@@ -23,7 +28,9 @@ the external `dcm2niix` program. Operators run the same two commands, `prepare`
 and `convert`, each time a new batch arrives. Sessions that are already finished
 are skipped without re-reading their images.
 
-Version 0.1.0 passes its synthetic tests. It does not yet state what it
+Version 0.1.0's synthetic test suite is reported to pass; it was not re-run
+for this document (see [Baseline verification](#baseline-verification)).
+Version 0.1.0 does not yet state what it
 guarantees, and some code paths can report success, reuse old results, or
 replace data in ways an operator would not expect from the documentation (see
 [The Problem](#the-problem)).
@@ -37,8 +44,13 @@ This document does three things:
     product question and assigns every item in the baseline spec's risk
     register (R01–R20) and stress-test matrix (T01–T18) to a delivery phase.
 3.  **Phase 1 plan.** It gives a file-level implementation plan for phase 1
-    only. Each later phase gets its own design document, which must follow this
-    contract.
+    only. Phase 1 is the lab's production version: production data is
+    processed as soon as it is done. Each later phase starts only when a named
+    trigger occurs (see the [Phase map](#phase-map)) and then gets its own
+    design document, which must follow this contract.
+
+No project has been processed by 0.1.0, and no 0.1.0 output has to be kept
+(author, 2026-11-05). This document therefore plans no migration.
 
 The eight review areas are:
 
@@ -71,8 +83,8 @@ operators running commands at once, and slow network filesystems are routine.
 
 ### What is wrong today
 
-Each claim below was first checked by reading `pipeline.py` during this
-drafting session ("code trace"). Most were then reproduced against the
+Each claim below was first checked by reading `pipeline.py` on 2026-11-04
+("code trace"). Most were then reproduced against the
 unchanged baseline; see [Baseline verification](#baseline-verification). An
 item marked "hypothesis" depends on behavior outside this code, such as
 `dcm2niix`, and needs a test to confirm it.
@@ -95,7 +107,7 @@ The severity scale was approved by the author at brief reconciliation:
 | P5 | High | **Abrupt termination leaves undefined states.** Archive move, directory swap, and state checkpoint are separate filesystem steps. Only a caught exception during the final rename is tested. There is no SIGTERM handler; a Slurm time limit sends SIGTERM and then SIGKILL, which skips the orderly shutdown path. Leftover `.incoming_*` and `.previous_*` directories are never cleaned up or reported. | `publish_tree`, `prepare_one`, `run` | Code trace; same as baseline R01 and R11. |
 | P6 | High | **The lock does not cover shared storage roots.** The lock file sits under `--project-root`. Two commands with different project roots but the same `--report-root` or `--output-root` both get a lock and can write the same index and outputs. | `main`, `ProjectLock` | Code trace; same as baseline R02. |
 | P7 | Low | **`--dry-run` can hash files.** The help text says a dry run "performs no hashes". With `--audit`, planning hashes every inventoried file in cached sessions. | `config_parser`, `plan_prepare`, `plan_convert`, `fast_valid` | Code trace; same as baseline R10. |
-| P8 | Medium | **Unredacted converter output reaches disk.** The converter log is written raw while `dcm2niix` runs and is redacted only afterwards. A crash in between leaves the raw log in the staging directory. The redaction itself matches line patterns and can miss identifiers. | `convert_one`, `redact_diagnostic` | Code trace; same as baseline R08. |
+| P8 | Critical | **Unredacted converter output reaches disk.** This is a sensitive-data disclosure channel, so it is Critical on the scale above (relabeled from Medium after review). The converter log is written raw while `dcm2niix` runs and is redacted only afterwards. A crash in between leaves the raw log in the staging directory. The redaction itself matches line patterns and can miss identifiers. | `convert_one`, `redact_diagnostic` | Code trace; same as baseline R08. |
 | P9 | Medium | **No support claim has evidence behind it.** CI is configured, but the repository has no commits and no recorded CI run. No test uses the real `dcm2niix`. No license is declared. Python 3.11 is listed in the classifiers but is not tested. | `.github/workflows/ci.yml`, `pyproject.toml` | Direct inspection; same as baseline R19 and R20. |
 | P10 | Critical | **A modified output folder is reconverted and replaced automatically.** The conversion cache check compares stored directory mtimes. Adding, removing, or renaming any file under `Niftis/Subjects/<id>/<session>/` fails the check; unzipping a `.nii.gz` in place is one example. The next `convert` run then reconverts the session. If the reconversion succeeds, `publish_tree` replaces the folder and deletes any files people added along with the old tree. | `plan_convert`, `fast_valid`, `publish_tree` | Code trace. The baseline tests detection of deleted outputs (`test_deleted_dicom_and_nifti_detected`), not the loss of added files. |
 | P11 | High | **A crash while journals are being deleted can roll sessions back.** `State.flush` writes the index, then deletes the pending journals one by one in whatever order `Path.glob` returns, which is not sorted. If the process is killed partway, the next start replays the journals that remain on top of an index that already includes newer events. A session whose latest journal was deleted but whose earlier journal survived reverts to the earlier state, for example losing its conversion record; deleted issues can also come back. On NTFS the listing is alphabetical, so the oldest journals are deleted first and the replay is harmless. On filesystems whose listing order is not sorted (ext4, network filesystems), the rollback can happen. | `State.flush`, `State.__init__` | Reproduced with a forced newest-first order; not reproduced with the natural NTFS order (see Baseline verification). The baseline (§14) expects replay to "tolerate repetition"; that holds only when the surviving journals are the newest ones. |
@@ -161,10 +173,15 @@ A goal counts as met only when the listed evidence exists.
 3.  **The whole register is traced.** Every R01–R20 item and every T01–T18
     group is assigned to a phase or marked out of scope with a reason.
     *Evidence:* a mapping table with no unassigned rows.
-4.  **Phase 1 removes the most severe risks first.** As the brief requires,
-    phase 1 addresses problems that can cause false success, image corruption,
-    identity reassignment, input loss, unrecoverable state, or sensitive-data
-    disclosure before any work on performance, packaging, or reporting. Which
+4.  **Phase 1 makes the pipeline safe for production data.** As the brief
+    requires, phase 1 addresses problems that can cause false success, image
+    corruption, identity reassignment, input loss, unrecoverable state, or
+    sensitive-data disclosure. It also carries every change to the output
+    layout or the state format (classifier revision 2, state schema 3), so
+    production data is converted under one layout from its first run. Other
+    performance, packaging, and reporting work waits for a later phase. The
+    exceptions are the CI matrix and the license files, which the P9 evidence
+    needs, and the report and history changes the new statuses need. Which
     P-items and register items fall in phase 1 is decided in the Technical Plan
     (Q1).
     *Evidence:* each phase 1 item has a regression test that fails on the
@@ -173,14 +190,14 @@ A goal counts as met only when the listed evidence exists.
     completed sessions performs no archive hashing, no DICOM header reads, and
     no converter calls, as today.
     *Evidence:* `test_1000_cached_sessions_do_not_read_scan_contents` still
-    passes after every phase. Numeric budgets (Q18) are set in the Technical
-    Plan, not promised here.
-6.  **Existing studies upgrade without loss.** A phase that changes the state
-    schema ships a migration that first runs as a preview, keeps the schema-2
-    index and all inputs and outputs, and either completes or refuses with the
-    project unchanged.
-    *Evidence:* a migration test on a synthetic schema-2 project, including an
-    interrupted migration (baseline T17).
+    passes after every phase. Numeric scale budgets wait for phase 3 (Q18).
+6.  **No migration is needed.** No project has been processed by 0.1.0
+    (author, 2026-11-05). Phase 1 refuses an older state index, without
+    writing anything, instead of upgrading it. A later phase that adds state
+    fields adds optional ones, and readers treat a missing optional field as
+    its default, so no migration is needed then either.
+    *Evidence:* `test_old_state_rejected_without_writes`, run for state
+    versions 1 and 2.
 7.  **Documentation matches tested behavior.** The README and CLI help make no
     claim that lacks a test or a documented deployment check.
     *Evidence:* a checklist that maps each README guarantee to a test ID.
@@ -204,27 +221,54 @@ A goal counts as met only when the listed evidence exists.
 *   Choosing the best acquisition, registration, motion or distortion
     correction, or segmentation.
 *   File-level implementation plans for phases after phase 1.
+*   Upgrading 0.1.0 projects. None exist (author, 2026-11-05).
+*   Containing hostile archives, such as decompression bombs or parser
+    exploits. Archives are assumed to come from the lab's own scanner exports
+    (Q14). Phase 2 takes this up only if archives start coming from outside
+    the lab.
 *   Using real participant data during design or review. Fixtures are synthetic
     or explicitly approved de-identified data. The private `sessions.csv`,
     `DicomUploads/`, and `DicomExtracted/` in the repository root are not read.
 
 ## Open Questions
 
-The author answered all 23 product questions (Q1–Q23) on 2026-11-04; see the
-[Decision Log](#decision-log). References below point to the baseline spec
-(R = review register, T = stress-test group, G = release gate) or to the
-problems above.
+No product question is open. The author answered all 23 product questions
+(Q1–Q23) on 2026-11-04; see the [Decision Log](#decision-log). References
+below point to the baseline spec (R = review register, T = stress-test group,
+G = release gate) or to the problems above.
+
+**Revised after review on 2026-11-05.** The author asked for the simplest
+design that is safe for production data once phase 1 is done. The author also
+handed the phase placement of each item to the reviewer. Decision D2 is the
+author's own; the reviewer made the others under that direction, and the
+author can override any of them:
+
+*   **D1:** phase 1 runs on production data. Of the Q15 limits, only a
+    free-space check before extraction moves into phase 1.
+*   **D2:** crash recovery never rolls a copied folder forward. It rolls back,
+    redoes the work, or adopts a folder whose files all check out (Q12).
+*   **D3:** upload marker files are dropped. The existing size, mtime, and ZIP
+    integrity checks cover partial uploads (Q4).
+*   **D4:** optional fields that a later phase adds need no migration. Phase
+    1 drops geometry-tag capture and the fields that nothing in phase 1 reads
+    (Q1, Q9).
+*   **D5:** no 0.1.0 project exists, so `migrate` is dropped (Q22).
+*   **D6:** nothing guards against empty state with full roots. The adoption
+    rule rebuilds state from the receipts at the cost of one hash per ZIP
+    (Q21).
+*   **D7:** there is no override for series that `dcm2niix` cannot convert
+    until the real-converter tests have run (Q6).
+*   **D8:** phases 2–4 keep only their guarantees, triggers, and open
+    questions. Their mechanisms leave this document (Q2, Q14, Q15, Q18, Q23).
 
 **Approved with the Technical Plan on 2026-11-04.** These items were proposed
 while recording the author's decisions, and the author approved them with the
 section:
 
-*   Q15 numeric limit defaults (phase 2).
-*   Q17 versioning, deprecation, security-report, and support proposals.
+*   Q17 versioning, deprecation, security-report, and support proposals
+    (they apply from the first public release, phase 4).
 *   Q2: Python 3.11 and later.
 *   Q3: an open canonical-ZIP conflict blocks conversion of that session.
-*   Q4: `waiting for marker` is nonblocking; `--import-legacy` is exempt from
-    markers.
 *   Q7: a repeatable `--session SUBJECT/SESSION` filter; explicit
     reconversion refuses folders that hold files not in their inventory.
 *   Q11: T2* sequences map to the existing `GRE` label.
@@ -242,22 +286,24 @@ section:
 
 ### CUJ 1: New batch on a large, finished project
 
-*   **Given**: 1,000 converted sessions, and three new ZIPs in `Uploads/`,
-    each with a `.zip.done` or `.zip.sha256` marker.
+*   **Given**: 1,000 converted sessions, and three new ZIPs in `Uploads/`
+    whose copies have finished.
 *   **When**: The operator runs `prepare`, then `convert`.
 *   **Then**: Only the three new sessions are hashed, extracted, and
-    converted. The other 1,000 cause no content reads and at most 20 metadata
-    calls each. Both commands exit 0.
+    converted. The other 1,000 cause no content reads. Both commands exit 0.
 
 ### CUJ 2: Slurm time limit during conversion
 
 *   **Given**: `convert` running with four workers inside a Slurm job.
 *   **When**: Slurm sends SIGTERM, then SIGKILL 30 s later.
-*   **Then**: Within 20 s of SIGTERM, every converter process group is
-    stopped, completed events are checkpointed, and reports are written; the
-    exit code is 143. The next run reconciles open intents: it adopts any
-    folder that was published but not yet recorded and retries interrupted
-    sessions. No session reverts to an older state.
+*   **Then**: The run sets its stop flag and stops every converter. On Linux
+    it stops each converter's whole process group. Sessions still running are
+    recorded as `interrupted` and keep their stages; nothing more is
+    organized or published. Completed events are already checkpointed. The
+    final flush and the report rewrite are attempted, and the exit code is
+    143. The next run reconciles open intents: it adopts a folder that was
+    fully published but not yet recorded, rolls back a half-finished swap,
+    and redoes interrupted sessions. No session reverts to an older state.
 
 ### CUJ 3: Corrected re-export for an existing session
 
@@ -266,7 +312,7 @@ section:
     `SubjectsSorted/S001/S001_20260725.zip`, or drops it into `Uploads/`.
 *   **Then**: `prepare` holds the session as a conflict. The extraction and
     the NIfTI folder stay unchanged. The operator uploads the export as
-    `S001_20260725_2.zip` with a marker, and it becomes a separate session.
+    `S001_20260725_2.zip`, and it becomes a separate session.
 
 ### CUJ 4: A researcher modifies an output folder
 
@@ -286,16 +332,18 @@ section:
     the issue names the missing series key. Any earlier complete folder
     stays in place and stays recorded as last-good.
 
-### CUJ 6: Upgrading a 0.1.0 project
+### CUJ 6: First production run
 
-*   **Given**: A schema-2 project.
-*   **When**: The operator runs `migrate --dry-run`, then `migrate`.
-*   **Then**: The preview lists every planned change. The schema-3 index is
-    written, and `index.v2.json` is kept. Sessions that contain non-image
-    series may show as `partial`, a known false result. They clear without
-    reconversion through `prepare --session KEY --force-reextract`. Every
-    other command refuses to run on a schema-2 project and points to
-    `migrate`.
+*   **Given**: A new project with no state. Session ZIPs sit in
+    `DicomUploads/Subjects/<id>/` (the legacy location) or in `Uploads/`.
+*   **When**: The operator runs `prepare --dry-run` (adding
+    `--import-legacy` for the legacy location), reviews the plan, then runs
+    `prepare` and `convert`.
+*   **Then**: The dry run lists the planned work and writes nothing.
+    `prepare` moves each accepted ZIP to
+    `DicomUploads/SubjectsSorted/<id>/` and extracts it. It never modifies or
+    deletes a ZIP. A ZIP it cannot accept stays where it was, with an issue.
+    `convert` converts every prepared session.
 
 ## Technical Plan (Architecture)
 
@@ -310,23 +358,24 @@ command start
   │
   ├─ parse options; resolve roots (pairwise disjoint, as today)
   ├─ load roster ── reject IDs that differ only by case, and reserved names (Q2)
-  ├─ take locks on every root the command touches + legacy project lock (Q13)   [non-dry]
-  ├─ load index.json (fall back to .bak) ── replay journals with seq > loaded seq (Q21)
-  ├─ refuse if schema 2 (→ migrate) or stored paths are outside the roots (→ relocate, Q23)
-  ├─ reconcile open intents (Q12)                                              [non-dry]
+  ├─ install the stop handler for SIGTERM and Ctrl+C (Q12)
+  ├─ take locks on every root the command touches (Q13)                       [non-dry]
+  ├─ load index.json (decision table in Q21) ── replay journals with seq > loaded seq
+  ├─ refuse if the schema is not 3 (Q22) or the project appears moved (Q23)
+  ├─ reconcile open intents on the locked roots (Q12)                         [non-dry]
   ├─ plan
-  │    prepare: discover ZIPs ─ marker present? (Q4) ─ signature / cache ─ canonical
-  │             changed? → hash; same digest → accept; different → hold (Q3)
+  │    prepare: discover ZIPs ─ signature / cache ─ canonical changed? → hash;
+  │             same digest → accept; different → hold (Q3)
   │    convert: ready sessions ─ complete folder? never auto (Q7) ─ receipt
   │             invalid → `output modified` issue
   ├─ subject workers (one thread per subject, as today)
-  │    write intent ─ stage ─ hash / extract (dedupe, multi-study hold, Q20)
-  │    ─ move ZIP + marker ─ publish ─ result event
+  │    prepare: stage ─ free-space check (Q15) ─ hash / extract (dedupe,
+  │    multi-study hold, Q20) ─ move ZIP ─ write intent ─ publish ─ result event
   │    convert: converter in its own process group; output piped through
   │    redaction before it reaches disk (P8); validate + gzip, no byte
-  │    changes (Q10); series coverage check (Q6/Q19)
+  │    changes (Q10); series coverage check (Q6/Q19) ─ write intent ─ publish
   └─ coordinator (single state writer)
-       journal(seq) ─ apply ─ clear intent ─ flush at most every 5 min (Q21)
+       journal(seq) ─ apply ─ clear intent ─ flush every 10 s, as today (Q21)
        ─ reports ─ run_history row on every exit path ─ exit 0 / 2 / 130 / 143
 ```
 
@@ -339,89 +388,115 @@ functions are named in the Detailed Implementation Plan.
 | # | Invariant | Guarantee | Stated exceptions | Evidence | Phase |
 |---|---|---|---|---|---|
 | 1 | Identity | Subject and session come only from authorized filenames. IDs that differ only by case, or that equal a Windows reserved name, are rejected. A ZIP with more than one study or conflicting repeated instances is held unless accepted. | Operators assign `_N` suffixes. `--allow-unlisted-dates` admits known IDs. `--accept-multi-study` overrides the study hold. | T01, T02, T05 | 1 |
-| 2 | Input preservation | ZIP bytes are never modified. An accepted canonical ZIP is never replaced, and changed bytes are never extracted. Uploads move only after a marker and a hash check. | The pipeline cannot stop others from overwriting files. Detection relies on size and mtime unless `--audit` is used. Skipped non-DICOM members exist only in the ZIP. | T03, T05, T06 | 1 |
-| 3 | No false completion | `converted` means the converter exited 0, every required series has at least one valid volume, there are no organization errors, and there are no unexpected files. | Series outside the MR image SOP classes are excused and listed. Whether the conversion itself is correct is up to `dcm2niix` (Q9). Migrated sessions can be false `partial`, never false `converted`. | T08, T11, T18 | 1 |
+| 2 | Input preservation | ZIP bytes are never modified, and ZIPs are never deleted. An accepted canonical ZIP is never replaced, and changed bytes are never extracted. An upload moves only after a hash check, with its size and mtime unchanged through hashing and extraction. | The pipeline cannot stop others from overwriting files. Detection relies on size and mtime unless `--audit` is used. Skipped non-DICOM members exist only in the ZIP. Partial-upload detection depends on the copy tool writing the file in order (Q4). | T03, T05, T06 | 1 |
+| 3 | No false completion | `converted` means the converter exited 0, every required series has at least one valid volume, there are no organization errors, and there are no unexpected files. | Series outside the MR image SOP classes are excused and listed. Whether the conversion itself is correct is up to `dcm2niix` (Q9). A series `dcm2niix` cannot convert leaves its session `partial`, with no override yet (Q6). | T08, T11, T18 | 1 |
 | 4 | Isolation | Deletion and publication stay inside the configured roots. Two commands that share a root cannot run at the same time on supported storage. Files people add are never deleted. | Storage whose locks only work within one node is unsupported. Processes that do not cooperate with the lock are out of scope. | T10 + site check | 1 |
-| 5 | Recoverability | After an abrupt stop at any persistence step, the next run either returns to the last valid state or adopts the completed result. No session rolls back. A corrupt index is recovered from `.bak` plus journals. | If both index files are corrupt, the run stops and names them. A stage on a lost node is replanned. | T07, T09 | 1 |
-| 6 | Incrementality | A cached rerun makes no content reads and at most 20 metadata calls per session. A complete session is never reconverted automatically. | `--audit`, `--force-*`, and `migrate` (one sidecar read per volume, once). | T06, T15 | 1 (budget measured at scale in 3) |
-| 7 | Provenance | Each conversion records package version, run ID, converter path, argument list, converter version or versions, and algorithm revisions. Each preparation records archive hash and run ID. | No comparison and no "outdated" flag (Q8). The converter binary is not hashed. | T18 | 1 |
-| 8 | Privacy honesty | The README lists every channel that carries identifiers or dates: paths, sidecar fields, NIfTI header text (time of day in `descrip`), original DICOM bytes in `DicomExtracted/` and the canonical ZIPs, hashes, and heuristically redacted logs. Unredacted converter output is never written to disk. | No de-identification claim. Redaction matches line patterns. | T14 | 1 (full README contract in 4) |
+| 5 | Recoverability | After an abrupt stop at any persistence step, the next run either returns to the last valid state, redoes the interrupted work, or adopts a published result whose inventory files are all present at their recorded sizes. No session rolls back. An unreadable index is recovered from `.bak` plus journals. | If neither index file can be read, the run stops and names them. A stage on a lost node is replanned. Power loss (unflushed disk caches) is out of scope. | T07, T09 | 1 |
+| 6 | Incrementality | A cached rerun makes no content reads. A complete session is never reconverted automatically. | `--audit` and `--force-*`. | T06 | 1 |
+| 7 | Provenance | Each conversion records package version, run ID, converter path, argument list, and converter version or versions. The package version identifies the classifier, sanitizer, and SOP-class list in use. Each preparation records archive hash and run ID. | No comparison and no "outdated" flag (Q8). The converter binary is not hashed. | T18 | 1 |
+| 8 | Privacy honesty | The README lists every channel that carries identifiers or dates: paths, sidecar fields, NIfTI header text (time of day in `descrip`) and NIfTI header extensions, original DICOM bytes in `DicomExtracted/` and the canonical ZIPs, hashes, and heuristically redacted logs. Unredacted converter output is never written to disk. | No de-identification claim. Redaction matches line patterns. | T14 | 1 (full README contract in 4) |
 | 9 | Pipeline integrity (narrowed, Q9) | Each published NIfTI decompresses to exactly the converter's bytes. Companions are byte-identical. Required series are accounted for. | Orientation, slice order, spacing, dimensions, scaling, and voxel values are `dcm2niix`'s responsibility. Diffusion companions get the finite-number check only. | T11, T12 | 1 |
-| 10 | Operational clarity | Distinct statuses for awaiting upload, waiting for marker, held, ready, converted, converted with a failed last attempt, partial (with reason), failed, interrupted, and output modified. Every locked invocation writes a history row. | Local time without offset is ambiguous for one hour per year (Q16). | T18 | 1 |
-| — | Containment | Each archive is parsed in a child process with memory, CPU, and size caps, on Linux and Windows. | Parser bugs that stay inside the caps. | T04, T08 | 2 |
-| — | Bounded retention | Failure material for resolved sessions is deleted after N days. | Unresolved sessions keep everything. | T09, T16 | 2 |
+| 10 | Operational clarity | Distinct statuses for awaiting upload, held, ready, converted, converted with a failed last attempt, partial (with reason), failed, interrupted, and output modified. Every locked invocation writes a history row. | Local time without offset is ambiguous for one hour per year (Q16). | T18 | 1 |
+
+Containment of hostile archives and automatic retention cleanup are not
+guaranteed. They are phase 2 items that start only on their triggers (Phase
+map).
 
 ### State schema 3
 
-Phase 1 introduces every schema change, including the fields later phases
-need, so there is a single migration (Q1, Q22).
+Phase 1 writes schema 3 and carries only the fields phase 1 reads. A later
+phase may add optional fields. Readers treat a missing optional field as its
+default, so adding one needs no migration (Q1).
 
 | Element | Change |
 |---|---|
 | Index top level | `version: 3`; `last_seq` (the highest journal sequence number included) |
 | Journal file | Name `<seq:016x>_<random>.json`; body carries `seq` |
 | `index.json.bak` | Previous index, kept at every flush |
-| Session entry | Adds `accepted_multi_study` (bool) and `last_attempt` (`status`, `output`, `created_utc`, `run_id`, `reason`, `diagnostics_removed`). `conversion` becomes the last-good record and gains `provenance` and `coverage` (`required`, `converted`, `excused` series keys) |
-| Receipt descriptors | Directory-mtime map keys are relative to the receipt's `root`; `root` stays absolute |
-| Preparation inventory | Series rows add `sop_classes` and `required`. File rows add `series_key`, `ipp`, `iop`, `pixel_spacing`, `slice_thickness`, `rows`, `cols`, and `frames` (Q9 tag capture; nothing compares them in phase 1). The top level adds `repeated_identical`. `content_sha256` counts byte-identical repeats once |
-| Receipt files | Preparation: adds `run_id`. Conversion: adds `run_id` and `provenance` |
-| `Reports/.state/intents/` | New. One file per in-flight multi-step operation |
-| `run_history.csv` | `migrate` rotates the old file to `run_history.v2.csv` because the columns change |
+| Session entry | Adds `accepted_multi_study` (bool) and `last_attempt` (`status`, `output`, `run_id`, `reason`). `conversion` becomes the last-good record and gains `provenance` and `coverage` (`required`, `converted`, `excused` series keys) |
+| Receipt descriptors | `version: 3`; adds `receipt_id`, copied from the receipt, so reconciliation can tell which receipt state records. Paths and directory-mtime keys stay absolute |
+| Source records | `version: 3`; otherwise unchanged |
+| Preparation inventory | Series rows add `sop_classes` and `required`. The top level adds `repeated_identical`. `content_sha256` counts byte-identical repeats once |
+| Receipt files | Preparation: adds `run_id`. Conversion: adds `run_id`, `provenance`, and `coverage` |
+| `Reports/.state/intents/` | New. One file per in-flight folder publication |
 
 ### Interface changes
 
 | Change | Phase |
 |---|---|
-| New command `migrate [--dry-run]` | 1 |
 | New repeatable option `--session SUBJECT/SESSION` (both commands) | 1 |
 | New repeatable option `--accept-multi-study SUBJECT/SESSION` (`prepare`) | 1 |
 | `--force-reconvert` refuses folders with files not in their inventory | 1 |
-| `--dry-run` help text: "no writes or converter calls; hashes only with `--audit`" | 1 |
+| `convert --audit --session KEY` revalidates a restored complete folder (Q7) | 1 |
+| `--dry-run` help text: "Plan only: no project writes or converter calls; hashes files only when combined with --audit" | 1 |
 | `prepare --audit` also re-hashes canonical ZIPs | 1 |
-| Upload marker files `<name>.zip.done` or `<name>.zip.sha256` required for new ZIPs | 1 |
 | Exit code 143 after SIGTERM | 1 |
 | `session_status.csv` adds `required_series`, `converted_series`, `excused_series`, `last_attempt_status`, `last_attempt_folder`; new status values listed in invariant 10 | 1 |
-| `run_history.csv` gains outcome `aborted` and a `reconciled` count | 1 |
-| Limit options for the Q15 defaults; `--retention-days N` | 2 |
-| New command `relocate --from OLD --to NEW [--dry-run]` | 3 |
+| `run_history.csv` gains outcomes `terminated` and `aborted` and a `reconciled` count | 1 |
 
 ### Phase map
 
-**Phase 1, safety core and schema 3:** Q3, Q4, Q6, Q7, Q8, Q9 (integrity
-checks and geometry-tag capture), Q10, Q11, Q12 (including SIGTERM and Linux
-process groups), Q13, Q19, Q20, Q21 (sequence numbers, `.bak`, 5-minute
-flush), Q22, the Q2 ID rules, P7, P8, real-converter smoke tests, a CI matrix
-on Python 3.11 and later, and `LICENSE`/`NOTICE`.
+**The rule (decided 2026-11-05):** phase 1 holds the safety fixes plus every
+change to the output layout or the state format, so production data is
+converted under one layout from its first run. Every other item waits for a
+named trigger. A later phase starts, with its own short design document, only
+when its trigger occurs. If the trigger never occurs, the phase is never
+built.
 
-**Phase 2, containment and platform:** Q14 child-process parsing with caps,
-Windows Job Objects for the parser and the converter, Q15 limits and
-retention cleanup, Windows path-length holds, and files-in-use tests.
+**Phase 1, the lab's production version** (installed from the repository;
+not a public release):
 
-**Phase 3, scale and relocation:** Q18 (subject index, report cadence, T15
-benchmarks at 1k/10k/20k sessions and on site storage) and Q23 `relocate`.
+*   Q3, Q6, Q7, Q8 (record only), Q9 (integrity checks), Q10, Q11, Q12
+    (including SIGTERM and Linux process groups), Q13, Q19, Q20, and the Q2
+    ID rules.
+*   Q4 (the existing size, mtime, and ZIP integrity checks; no markers).
+*   Q14 and Q15, reduced to the free-space check before extraction.
+*   Q21, reduced to sequence numbers, `.bak`, and the load decision table.
+*   Q22, reduced to refusing other state schemas. Q23, reduced to refusing a
+    moved project.
+*   P7 and P8.
+*   Report files held open on Windows do not stop a run (Q2).
+*   Real-converter smoke tests right after the move-only step.
+*   A CI matrix on Python 3.11 and later, and `LICENSE`/`NOTICE`.
+*   A README and runbook that describe phase 1 behavior.
 
-**Phase 4, release:** the README contract rewrite (Goal 7), `SECURITY.md`,
-the support table, and the first release.
+**Phase 2, operations.** Each item starts only on its trigger:
+
+| Item | Trigger | Until then |
+|---|---|---|
+| Windows whole-tree converter stop | Leftover converter processes are seen on Windows | Stopping a run on Windows stops the converter, not processes it started |
+| Cleanup of retained `.pending/` attempts and failed stages (Q15) | They use too much disk | Manual cleanup, as the runbook describes |
+| Windows path-length holds | A path longer than Windows allows causes a failure | That session fails with a reported error and publishes nothing |
+| Archive caps and per-archive process isolation (Q14) | Archives start coming from outside the lab | Archives are parsed in-process, as today, after the free-space check |
+
+**Phase 3, scale.** Starts only when runs are measured as too slow: Q18 (the
+20,000-session targets, subject index, report cadence, index size, flush
+interval, and T15 benchmarks). Q23 `relocate` starts when a project has to
+move.
+
+**Phase 4, public release.** Starts only when the package is published: the
+README contract rewrite (Goal 7), `SECURITY.md`, the support table, the
+distribution checks, the Q17 versioning policy, and the first release.
 
 | Register item | Phase | | Test group | Phase |
 |---|---|---|---|---|
 | R01 Crash consistency | 1 | | T01 Identity grammar | 1 |
-| R02 Locks on shared roots | 1 + site check | | T02 CSV robustness | 1 (very large rosters in 3) |
+| R02 Locks on shared roots | 1 (+ site check if runs start from more than one machine) | | T02 CSV robustness | 1 (very large rosters in 3) |
 | R03 NIfTI correctness, sanitizer | 1 (narrowed to integrity by Q9/Q10) | | T03 Archive eligibility | 1 (encrypted members in 2) |
-| R04 Cache provenance | 1 (record only, Q8) | | T04 Archive integrity, resources | 2 |
+| R04 Cache provenance | 1 (record only, Q8) | | T04 Archive integrity, resources | 1 (free-space check); 2 if archives come from outside the lab |
 | R05 Canonical replacement | 1 | | T05 Duplicate/conflict matrix | 1 |
-| R06 Partial transfer | 1 | | T06 Fast cache and audit | 1 |
-| R07 Archive resource abuse | 2 | | T07 Crash injection | 1 |
-| R08 Privacy channels | 1 (README contract in 4) | | T08 Process control | 1 (Windows in 2) |
-| R09 Corruption, migration, relocation | 1 (`.bak`, `migrate`); 3 (`relocate`) | | T09 Filesystem faults | 1 (disk reserve in 2) |
-| R10 Audit and dry-run | 1 | | T10 Concurrent operations | 1 + site check |
-| R11 Termination, descendants | 1 (Linux); 2 (Windows) | | T11 Scientific geometry | 1 (narrowed to integrity; geometry tags captured for a later check) |
+| R06 Partial transfer | 1 (existing size, mtime, and ZIP integrity checks, Q4) | | T06 Fast cache and audit | 1 |
+| R07 Archive resource abuse | 1 (free-space check); 2 if archives come from outside the lab | | T07 Crash injection | 1 |
+| R08 Privacy channels | 1 (README contract in 4) | | T08 Process control | 1 (Windows whole-tree stop in 2, on its trigger) |
+| R09 Corruption, migration, relocation | 1 (`.bak`; no migration needed, Q22); 3 (`relocate`, on its trigger) | | T09 Filesystem faults | 1 (including the free-space check) |
+| R10 Audit and dry-run | 1 | | T10 Concurrent operations | 1 (+ site check if runs start from more than one machine) |
+| R11 Termination, descendants | 1 (Linux); 2 (Windows, on its trigger) | | T11 Scientific geometry | 1 (narrowed to integrity) |
 | R12 Non-image, multi-study, duplicates | 1 | | T12 Diffusion | 1 (narrowed to integrity) |
 | R13 Diffusion and labels | 1 | | T13 Classification | 1 |
-| R14 Paths, case, reserved names | 1 (case, reserved); 2 (path length). Symlink races inside project storage: out of scope, because storage is trusted (Q14) | | T14 Privacy | 1 |
-| R15 Scale | 3 (flush policy in 1) | | T15 Scale | 3 |
-| R16 Reporting completeness, retention | 1 (history row); 2 (retention) | | T16 Packaging/release | 1 (CI, license); 4 (release) |
-| R17 Receipt trust | Accepted and documented (Q14) | | T17 Migration | 1 (`migrate`); 3 (`relocate`) |
+| R14 Paths, case, reserved names | 1 (case, reserved); 2 (path length, on its trigger). Symlink races inside project storage: out of scope, because storage is trusted (Q14) | | T14 Privacy | 1 |
+| R15 Scale | 3, when runs are measured as too slow | | T15 Scale | 3, on its trigger |
+| R16 Reporting completeness, retention | 1 (history row); 2 (retention, on its trigger) | | T16 Packaging/release | 1 (CI, license); 4 (release) |
+| R17 Receipt trust | Accepted and documented (Q14) | | T17 Migration | Out of scope: no 0.1.0 project exists (Q22); 3 (`relocate`, on its trigger) |
 | R18 Missing canonical archives | 1 | | T18 Observability | 1 |
 | R19 Claimed versus observed support | 1 (CI, smoke tests); 4 (support table) | | | |
 | R20 Release, license, security | 1 (license); 4 (security, release) | | | |
@@ -429,19 +504,20 @@ the support table, and the first release.
 ### Release gates
 
 These restate the baseline spec's gates G01–G08 with objective pass
-conditions; the author approved them at brief reconciliation. The first
-release (phase 4) requires every gate to pass. A gate's evidence is produced
-in the phase listed and must stay green afterwards.
+conditions; the author approved them at brief reconciliation. Before phase 1
+processes production data, every condition marked phase 1 must pass. The
+first public release (phase 4) requires every gate to pass. A gate's evidence
+is produced in the phase listed and must stay green afterwards.
 
 | Gate | Pass condition | Evidence phase |
 |---|---|---|
-| G01 Product contract | The README support table matches the CI matrix plus the site checks that have passed. Every contract guarantee cites a test or a check. | 1, 4 |
-| G02 Safety and recovery | The T07 crash matrix (`test_recovery.py`) is green. The runbook covers every reconciliation outcome. The two-node lock check has passed for each storage type listed as supported. | 1 + site |
+| G01 Product contract | Every contract guarantee cites a test or a check (phase 1). The README support table matches the CI matrix plus the site checks that have passed (phase 4). | 1, 4 |
+| G02 Safety and recovery | The T07 crash matrix (`test_recovery.py`) is green. The runbook covers every reconciliation outcome. If runs will start from more than one machine on shared storage, the two-node lock check has passed for that storage. | 1 (+ site, if needed) |
 | G03 Scientific integrity (narrowed, Q9) | The integrity tests (byte-identical output, series coverage, companions) and the real-converter smoke tests are green on the oldest and newest supported `dcm2niix`. The README states that conversion correctness is `dcm2niix`'s responsibility. | 1 |
-| G04 Cache and provenance | The provenance and migration tests are green. The absence of an "outdated" flag is documented (Q8). | 1 |
-| G05 Privacy and security | The T14 channel tests are green. The containment-cap tests are green (phase 2). `SECURITY.md` is published (phase 4). | 1, 2, 4 |
-| G06 Performance | The per-session budget test is green (phase 1). 20,000 sessions take at most 5 min and use at most 2 GB, measured on site storage (phase 3). | 1, 3 |
-| G07 Compatibility and release | Every CI job is green. The sdist and wheel install cleanly. `LICENSE` and `NOTICE` are in both artifacts. The versioning and deprecation policy is published. | 1, 4 |
+| G04 Cache and provenance | The provenance tests are green. The absence of an "outdated" flag is documented (Q8). | 1 |
+| G05 Privacy and security | The T14 channel tests are green (phase 1). `SECURITY.md` is published (phase 4). | 1, 4 |
+| G06 Performance | `test_1000_cached_sessions_do_not_read_scan_contents` is green (phase 1). Scale budgets are measured only if phase 3 is triggered. | 1 (3 if triggered) |
+| G07 Compatibility and release | Every CI job is green and `LICENSE` and `NOTICE` exist (phase 1). The sdist and wheel pass `twine check` and `tests/check_distribution.py`, both contain `LICENSE` and `NOTICE`, and the versioning and deprecation policy is published (phase 4). | 1, 4 |
 | G08 Operations and documentation | The runbook covers the procedures listed in the Detailed Implementation Plan. The README checklist (Goal 7) is complete. | 1, 4 |
 
 ### Departures from the brief
@@ -451,14 +527,15 @@ The draft was compared with [`concepts_brief.md`](./concepts_brief.md) on
 
 | # | Brief | Resolution |
 |---|---|---|
-| 1 | Priority 6, "Scientific correctness of converted images" | **Departure, decided after reopening Q9:** the author briefly chose a runtime geometry cross-check, then reverted to pipeline integrity only because of implementation time. Conversion correctness is `dcm2niix`'s responsibility. Geometry tags are captured at preparation so a later phase can add the check (Future Improvements). |
+| 1 | Priority 6, "Scientific correctness of converted images" | **Departure, decided after reopening Q9:** the author briefly chose a runtime geometry cross-check, then reverted to pipeline integrity only because of implementation time. Conversion correctness is `dcm2niix`'s responsibility. Geometry tags are not captured (D4, 2026-11-05); a later check would read headers again (Future Improvements). |
 | 2 | "First verify the descriptive baseline against the source"; a discrepancy report with reproducible tests | Resolved: the [Baseline verification](#baseline-verification) section reproduces P1–P8 and P10, and P11 under forced listing order. **Remaining departure:** the existing 30-case suite was not re-run, because `pytest` is broken in this environment, and the reproduction scripts are throwaway. The phase 1 regression tests become the lasting evidence. |
 | 3 | "Impact/severity" for every finding | Resolved: severity column and scale added to the problem table. |
 | 4 | "Objective release gates" | Resolved: [Release gates](#release-gates) added. |
 | 5 | Converter, tool, and configuration changes missing from cache identity (a limitation to challenge) | **Departure, reconfirmed:** Q8 records provenance but reports nothing as outdated, so P2 stays open in practice. An "outdated" report is listed under Future Improvements. |
 | A1 | Not raised: code structure | **Addition, approved:** `pipeline.py` is split into modules in phase 1, with a move-only step 0. |
 | A2 | CI on "Python 3.10/3.12" | **Addition, approved:** Python 3.11 or later (3.10 is end of life) and `setuptools>=77`. |
-| A3 | Not raised: new CLI surface | **Additions, approved:** `migrate`, `relocate` (phase 3), `--session`, `--accept-multi-study`, required upload markers (Q4 reconfirmed), exit code 143, and new report columns. |
+| A3 | Not raised: new CLI surface | **Additions, approved:** `--session`, `--accept-multi-study`, exit code 143, and new report columns. `migrate` and required upload markers were dropped after review (D5, D3). |
+| 6 | Area 4, "untrusted-input boundaries" | **Departure, decided after review (D1):** archives are assumed to come from the lab's own scanner exports and are parsed in-process, after a free-space check. Containment waits for phase 2 and starts only if archives come from outside the lab. |
 
 ### Decision Log
 
@@ -511,8 +588,10 @@ session that misses any series is `partial`.
     except DICOMDIR. Under this rule, every non-image series that reaches the
     inventory would leave its session `partial` permanently. Which objects
     reach the inventory is therefore decided separately in Q19.
-*   How sessions already marked `converted` under the old rule are re-checked
-    is decided with Q8 (provenance) and Q22 (migration).
+*   Known failure mode, accepted until the real-converter smoke tests have
+    run (D7): a required series that `dcm2niix` cannot convert leaves its
+    session `partial`, and there is no operator override. Whether one is
+    needed is decided from the smoke-test results.
 
 #### Q19 DICOM eligibility: extract all, require MR images (decided 2026-11-04)
 
@@ -542,14 +621,16 @@ MR Spectroscopy Storage (`1.2.840.10008.5.1.4.1.1.4.2`) is not on the list.
     (a vendor private image class or secondary-capture maps) is excused from
     the strict rule. It can be missing from the outputs without the session
     becoming `partial`. Listing excused series per session keeps this visible.
-    The list is a versioned constant and part of the conversion cache identity
-    (Q8).
-*   Existing schema-2 inventories do not record SOP class. Migrating them
-    needs one header-only read (`stop_before_pixels`) per prepared object, or
-    some other rule for unknown classes. Decided under Q22.
+    The list is a constant in the code. Changing it changes no cache key
+    (Q8); the package version in the provenance record identifies the list in
+    use.
 *   Non-image objects stay in the `dcm2niix` input folder, as today. The
-    real-converter fixtures (T03, T11) must confirm that their presence does
-    not make `dcm2niix` exit nonzero. This is a hypothesis to test.
+    real-converter smoke tests (T03, T11) must confirm that their presence
+    does not make `dcm2niix` exit nonzero. This is a hypothesis to test. The
+    tests run right after the move-only step. If `dcm2niix` exits nonzero,
+    this decision is reopened before preparation changes are built (for
+    example, running `dcm2niix` per series, or moving non-image objects to a
+    sibling folder).
 
 #### Q20 Repeated instances and several studies: hold for review (decided 2026-11-04)
 
@@ -568,42 +649,51 @@ that one session explicitly.
 *   `extract_archive` tracks SOP Instance UID → (SHA-256, size) for each
     accepted object. An object without a SOP Instance UID fails the archive,
     the same way a missing SeriesInstanceUID does today.
-*   The explicit accept is a repeatable `prepare` option naming one session key
-    (proposed: `--accept-multi-study SUBJECT/SESSION`). It applies to that run
-    only. The acceptance is recorded in the session's state entry, so later
-    runs do not hold the session again. A conflict between repeated instances
-    with different bytes cannot be accepted; the ZIP must be split or replaced
-    by a new `_N` upload.
-*   Writing byte-identical repeats only once changes `content_sha256` for new
-    preparations of ZIPs that contain repeats. A schema-2 session with repeats
-    and a new copy of the same ZIP would then compare as a conflict, not a
-    duplicate. The migration (Q22) must recompute such digests from the stored
-    file hashes; it needs no image reads.
-*   Existing sessions: `study_count > 1` and repeated file hashes can be found
-    from stored inventories without reading images. Repeated UIDs with
-    different bytes cannot be found without a header read. Handled under Q22.
+*   The explicit accept is a repeatable `prepare` option naming one session key,
+    `--accept-multi-study SUBJECT/SESSION`. It applies to that run only. The
+    acceptance is recorded in the session's state entry, so later runs do not
+    hold the session again. A conflict between repeated instances with
+    different bytes cannot be accepted; the ZIP must be split or replaced by
+    a new `_N` upload.
+*   Extraction hashes each object while writing it. A byte-identical repeat is
+    therefore written, recognized, and deleted again, and it is left out of
+    the inventory. File names come from the inventory length, so numbering
+    stays continuous.
 
 #### Q7 Reconversion of complete sessions: only on explicit command (decided 2026-11-04)
 
 **Decision:** A session with a complete NIfTI folder is never reconverted
 automatically. When its folder fails the cache check, the session is flagged
-in `issues.csv` and left as it is. Converter or algorithm changes (Q8) are
-reported only. A complete session is reconverted only when the operator runs
-`--force-reconvert`.
+in `issues.csv` and left as it is. Converter or algorithm changes are
+recorded, not reported (Q8). A complete session is reconverted only when the
+operator runs `--force-reconvert`.
+
+A session is *complete* when its state `conversion` record has status
+`converted` and its folder lies under the configured NIfTI root.
 
 **Consequences:**
 
 *   This fixes P10. `plan_convert` no longer selects a `converted` session
     whose receipt check fails. It records an `output modified` issue instead.
     The issue counts as unresolved, so the run exits with code 2 until the
-    operator restores the folder or reconverts it.
+    operator revalidates the folder or reconverts it.
+*   Revalidation: restoring a folder from a backup changes its directory
+    mtimes, so it fails the metadata check even when every file is intact.
+    `convert --audit --session KEY` revalidates such a folder. If every
+    inventory file hashes to its recorded value and the folder holds no
+    files outside its inventory, it records the new mtimes and clears the
+    issue. No new option is needed.
 *   The same rule covers a complete folder that has disappeared or that
     `--audit` finds changed. Known failure mode: a damaged folder stays damaged
     until someone acts on `issues.csv`.
+*   A conversion record whose folder lies under a different NIfTI root is
+    not complete at the configured root. `convert --output-root OTHER`
+    therefore converts the session into `OTHER`, as today
+    (`test_output_root_override_does_not_reuse_other_root`).
 *   `--force-reconvert` must be able to target single sessions. Without that,
-    the only route is reconverting the whole study. Proposed: a repeatable
+    the only route is reconverting the whole study. A repeatable
     `--session SUBJECT/SESSION` filter for both commands, applied before
-    `--limit`.
+    `--limit`, provides this.
 *   An explicit reconversion refuses to replace a folder that contains files
     not listed in its inventory. The issue names those files. This extends the
     current refusal to replace folders without a receipt, so files people
@@ -616,10 +706,8 @@ reported only. A complete session is reconverted only when the operator runs
     latest-attempt state model.
 *   An interrupted explicit reconversion is not retried automatically. Failed,
     partial, and interrupted sessions *without* a complete folder keep today's
-    retry behavior.
-*   Sessions already `converted` under the old completion rule (Q6) are not
-    reconverted by the upgrade. How their series coverage is checked and
-    reported is decided under Q22.
+    retry behavior. `--retry-failed` never replaces a complete folder or its
+    record.
 
 #### Q8 Conversion provenance: record only, no comparison (decided 2026-11-04; reconfirmed at brief reconciliation)
 
@@ -628,11 +716,12 @@ the session's state entry. The pipeline never compares that record with the
 current environment and never reports a session as "outdated".
 
 **Recorded fields:** package version; run ID; resolved converter path; the
-converter argument list; the converter version string or strings, taken from
-the outputs' `ConversionSoftwareVersion` sidecar field; and revision numbers
-for the classifier, the NIfTI sanitizer, and the MR SOP class list (Q19). No
-field needs an extra file read or a converter call. The converter
-executable's hash is not recorded.
+converter argument list; and the converter version string or strings, taken
+from the outputs' `ConversionSoftwareVersion` sidecar field. The package
+version identifies the classifier, the NIfTI handling, and the MR SOP class
+list (Q19) in use, so no separate revision numbers are kept. No field needs
+an extra file read or a converter call. The converter executable's hash is
+not recorded.
 
 **Consequences:**
 
@@ -645,35 +734,70 @@ executable's hash is not recorded.
     reconversion procedure (Q7).
 *   The conversion cache key is unchanged: prepared content digest, output
     root, and receipt check, plus the Q7 rule.
-*   Existing 0.1.0 outputs can have their record rebuilt from their sidecars
-    plus the fixed 0.1.0 argument list, with revision 1 for every algorithm.
-    Whether the migration does this is decided under Q22.
 
-#### Q12 Crash recovery: automatic reconciliation at startup (decided 2026-11-04)
+#### Q12 Crash recovery: automatic reconciliation at startup (decided 2026-11-04; roll-forward removed after review 2026-11-05, D2)
 
-**Decision:** Before each multi-step filesystem operation, the worker writes
-an intent file. The coordinator removes the file once the operation's result
-is checkpointed in state. Every non-dry run, once it holds the lock and before
-planning, finishes or rolls back each open intent. A dry run only reports what
-it would do.
+**Decision:** Before publishing a folder, the worker writes an intent file.
+The coordinator removes the file once the publication's result is
+checkpointed in state. Every non-dry run, once it holds its locks and before
+planning, resolves each open intent on the roots it has locked. It rolls the
+publication back, redoes the work, or adopts a folder that passes the
+adoption rule below. Recovery never rolls a copied `.incoming_*` folder
+forward. A dry run only reports what it would do.
 
-**Intent types and reconciliation rules:**
+The ZIP move needs no intent. It is one rename inside `DicomUploads/`, where
+cross-device moves are refused. After a crash, the ZIP sits at exactly one of
+the two paths, and the planner handles either case as ordinary work.
 
-| Intent | Found on restart | Action |
+**Reconciliation rules for a publish intent** (stage → `.incoming_*` →
+destination, old destination → `.previous_*`). The intent records the
+`receipt_id` of the receipt it is publishing, and the digest the folder must
+match (`archive_sha256` for an extraction, `content_sha256` for a
+conversion), so reconciliation never has to hash a ZIP.
+
+| Destination | Destination's receipt | Action |
 |---|---|---|
-| ZIP move (upload → canonical) | Only the canonical path exists | Clear the intent; the planner picks up the canonical ZIP as new work |
-| | Only the upload path exists | Move never happened; clear the intent |
-| | Both or neither exist | Touch nothing; raise an issue |
-| Folder publish (stage → `.incoming_*` → destination, old → `.previous_*`) | Destination present, no swap folders | Done; clear the intent |
-| | Destination missing, `.previous_*` present | Roll back: rename `.previous_*` to the destination; remove `.incoming_*` |
-| | Destination missing, no `.previous_*`, `.incoming_*` has its receipt | Roll forward: rename `.incoming_*` to the destination |
-| | Destination present and `.previous_*` present | Remove `.previous_*` only if state or the adopted receipt refers to the destination |
-| Published folder with no state record | Receipt and inventory present; source digest matches the prepared content | Adopt: rebuild the receipt metadata and write the state record from the small JSON files, without reading images |
-| | Digest mismatch or receipt missing | Touch nothing; raise an issue |
-| Stage directory | Named by an open intent and not referenced by any issue | Remove it |
+| Present | The receipt that state records | The swap either finished and was recorded, or never started. Remove `.incoming_*` and `.previous_*`, and clear the intent |
+| Present | The intent's own receipt, not recorded in state | Apply the adoption rule. If it passes, record the folder, remove `.previous_*` and `.incoming_*`, and clear the intent. If it fails, touch nothing and raise an issue |
+| Missing | — (`.previous_*` present) | Roll back: rename `.previous_*` to the destination, remove `.incoming_*`, and clear the intent |
+| Missing | — (no `.previous_*`) | Remove `.incoming_*` and clear the intent. The planner redoes the work |
+| Present | Any other receipt, or none | Touch nothing; raise an issue |
+
+A stage directory named by an open intent, and not referenced by any issue, is
+removed.
+
+**Adoption rule.** Reconciliation, `prepare`, and `convert` all use this one
+rule whenever a folder holds a receipt that state does not record. A folder
+is adopted only when both conditions hold:
+
+1.  Its receipt matches the prepared content. For an extraction, the
+    receipt's `archive_sha256` equals the canonical ZIP's hash. For a
+    conversion, the receipt says `complete` and its `source_sha256` equals
+    the session's `content_sha256`.
+2.  Every file listed in its inventory exists at its recorded size. This
+    costs one `stat` call per file and runs only in these recovery cases,
+    never on a cached rerun.
+
+The state record is rebuilt from the small JSON files, without reading
+images. The descriptor comes from `receipts.receipt_info`, and coverage is
+recomputed with `receipts.output_series_keys`. `n_volumes` is the number of
+NIfTI files in the inventory. Provenance and `run_id` are copied from the
+receipt.
 
 **Consequences:**
 
+*   This removes the defect the review rated Blocker. A cross-device publish
+    fills `.incoming_*` with `copytree`, which can copy the receipt before the
+    volumes. A kill partway through the copy used to leave an incomplete
+    folder that the roll-forward rule would publish as `converted`. Now
+    `.incoming_*` is always discarded, and the destination is only ever
+    replaced by renaming a fully copied `.incoming_*`.
+*   Known cost, accepted: a crash during a first publication redoes that
+    session's work, up to one converter run (14,400 s timeout). This is
+    acceptable while crashes are rare.
+*   A command reconciles only intents whose `ownership_root` it has locked.
+    `prepare` resolves extraction publications and `convert` resolves
+    conversion publications.
 *   Intent files live on shared storage under `Reports/.state/intents/`, never
     on node-local staging, so they survive the loss of a node. Each worker
     writes only its own files, with unique names, through `atomic_json`.
@@ -684,14 +808,24 @@ it would do.
     of a complete extraction or output, never touches a path outside the
     configured roots, and is idempotent, so a crash during reconciliation is
     itself recoverable. Every row of the table above needs a crash-injection
-    test (T07), including a crash in the middle of reconciliation.
-*   Retained failure stages and `.pending/` attempts are not removed here;
-    their retention is decided in Q15.
+    test (T07), including a crash in the middle of reconciliation, a kill
+    during a cross-device copy, and a refused adoption of a folder with a
+    deleted volume.
+*   Retained failure stages and `.pending/` attempts are not removed here.
+    Cleanup stays manual until phase 2 (Q15).
 *   A stage on node-local staging from a lost node no longer exists. Its
     intent is cleared and the session is replanned.
-*   SIGTERM handling (P5) is separate: SIGTERM takes the same orderly stop
-    path as Ctrl+C, and the converter runs in its own process group so the
-    whole group can be stopped. Shutdown time limits are set in Q15.
+*   **Stopping (P5):** SIGTERM and Ctrl+C go to one handler, installed at the
+    start of the run, that only sets a stop flag; later signals are ignored
+    until the run ends. Workers stop their converters: on Linux the whole
+    process group, on Windows the converter process only (Q2). They keep the
+    stage and record `interrupted`; nothing is organized, gzipped, hashed, or
+    published after a stop. A session counts as `interrupted` only when the
+    stop flag is set or the converter died from SIGTERM or SIGKILL. Slurm
+    signals `dcm2niix` directly, and any other cause, such as SIGSEGV, stays
+    `failed`. The final flush and the report rewrite are attempted but may
+    fail. No shutdown time is promised. The runbook shows how to have Slurm
+    signal the pipeline ahead of the time limit.
 *   Missing canonical ZIP (R18, left open by Q3): `prepare` already lists every
     ZIP under `SubjectsSorted/`. A prepared session whose canonical ZIP is
     missing from that listing gets a nonblocking `canonical archive missing`
@@ -719,46 +853,41 @@ the holder.
     whatever their `--project-root`. Locks are taken on files inside the
     roots, so two different mount paths to the same storage meet at the same
     file.
-*   The old project-root lock is also kept, so a 0.1.0 process and an
-    upgraded one cannot run on the same project at the same time during the
-    changeover.
+*   The old project-root lock is removed. It protected nothing the root locks
+    miss, and no 0.1.0 process will run against these projects.
 *   Dry runs still take no lock, as today.
 *   Known failure mode, accepted: on mounts where OS locks only work within
     one node (for example Lustre mounted with `localflock`) or do not work at
     all, two runs on different nodes both get every lock and nothing is
-    protected. The contract therefore lists a storage type as supported only
-    after a two-node lock check has passed at the site (T10). The runbook
-    gives that check as a procedure.
+    protected. If runs will start from more than one machine on the same
+    storage, the storage counts as supported only after a two-node lock check
+    has passed at the site (T10). The runbook gives that check as a
+    procedure. Runs from a single machine need no site check.
 
-#### Q4 Upload readiness: marker file required (decided 2026-11-04; reconfirmed at brief reconciliation)
+#### Q4 Upload readiness: existing checks, no marker files (decided 2026-11-04; markers dropped after review 2026-11-05, D3)
 
-**Decision:** A ZIP that is not yet in state is eligible for preparation only
-when a marker file sits next to it: either `<name>.zip.done`, or
-`<name>.zip.sha256`. When the `.sha256` file is present, the ZIP's SHA-256
-must match it before acceptance.
+**Decision:** No marker files are used. A ZIP is prepared once it opens as a
+valid ZIP and its size and mtime stay unchanged through hashing and
+extraction, as in 0.1.0.
 
 **Consequences:**
 
-*   This applies to new ZIPs in `Uploads/` and to new ZIPs placed directly in
-    `SubjectsSorted/`. Canonical ZIPs that are already in state need no
-    marker. `--import-legacy` is exempt, because it imports files already at
-    rest; the README says so.
-*   No extra read: `prepare_one` already hashes the whole ZIP, and the
-    checksum comparison uses that hash. The `.sha256` file is read in the
-    `sha256sum` format (`<hex>  <filename>`). If it names a file, the name
-    must match.
-*   A ZIP without a marker gets a nonblocking `waiting for marker` issue and
-    is counted in the run summary. It does not make the run exit with code 2,
-    so normal in-flight uploads are not reported as failures. Known failure
-    mode: a forgotten marker leaves the ZIP waiting indefinitely, visible only
-    in `issues.csv` and the summary.
-*   A checksum mismatch is a blocking failure, and the ZIP stays in place.
-*   On acceptance, the marker moves with the ZIP to `SubjectsSorted/`. A held
-    ZIP keeps its marker beside it.
-*   The size and mtime checks stay as a second safeguard against a marker
-    created before the transfer finished.
-*   Upgrade note: ZIPs left in `Uploads/` from before the upgrade (held,
-    failed, or duplicate) need markers before they are reconsidered.
+*   These existing checks catch a partly copied ZIP:
+    *   A ZIP's directory is stored at its end and written last, so a partial
+        copy has none and fails to open.
+    *   Reading each member checks its CRC-32 (`pipeline.py:420-421`).
+    *   The size and mtime signature is compared before and after hashing
+        and extraction (`pipeline.py:522-531`).
+    *   A failed ZIP is retried once its size or mtime changes, which
+        happens when the copy finishes (`pipeline.py:596-606`).
+*   The review found that markers added work for every uploader, stalled
+    any ZIP whose marker was forgotten, and added a crash window when the
+    marker moved with the ZIP. They gave little over the checks above.
+*   Known failure mode, accepted: on Linux, a copy tool that writes the end
+    of the file before the middle could produce a ZIP that opens before the
+    copy finishes. Common copy tools write in order. The README advises not
+    to run `prepare` while copies into `Uploads/` are in progress, or to copy
+    under a temporary name and rename it when the copy is done.
 
 #### Q5 Partial overlap: settled by Q3 (recorded 2026-11-04)
 
@@ -768,86 +897,66 @@ overlap) is held as a conflict, as today. The prepared session is never
 extended or merged. A re-export that adds missing series arrives as a new
 `_N` session. Reopening this would mean reversing part of Q3.
 
-#### Q14 Trust model: untrusted archives, trusted storage (decided 2026-11-04)
+#### Q14 Trust model: archives from the lab's scanners, trusted storage (decided 2026-11-04; revised after review 2026-11-05, D1)
 
-**Decision:** ZIP archives and their contents are untrusted input. Each
-archive is extracted and parsed in a child process with memory and time caps
-and the size limits below. Encrypted members and malformed ZIP structures are
-rejected explicitly. The roster CSV, state, receipts, and inventories are
-trusted. Anyone with write access to project storage can change what the
-pipeline believes, and the contract says so.
+**Decision:** Archives are assumed to come from the lab's own scanner
+exports. Phase 1 parses them in-process, as 0.1.0 does. It has two
+protections: ZIP member names never become output paths (existing), and
+extraction does not start when the archive would not fit in free space
+(Q15). The roster CSV, state, receipts, and inventories are trusted. Anyone
+with write access to project storage can change what the pipeline believes,
+and the contract says so.
 
 **Consequences:**
 
-*   `extract_archive` runs in a child Python process started per archive by
-    the subject's worker thread. The child writes the stage and returns the
-    inventory as JSON. The parent enforces a wall-clock limit and kills the
-    child when it is exceeded. On Linux the child also sets memory
-    (`RLIMIT_AS`) and CPU-time (`RLIMIT_CPU`) caps on itself before importing
-    `pydicom`. On Windows only the wall-clock limit applies. The contract
-    states this weaker containment.
-*   `dcm2niix` parses the same untrusted objects, so on Linux it gets the
-    same kind of memory cap, set by a small launcher before it starts. Python
-    `preexec_fn` is not used, because it is unsafe with threads.
-*   Side benefit: header parsing leaves the coordinator process, so CPU-heavy
-    preparation is no longer limited by Python's global interpreter lock.
-    This bears on baseline R15.
-*   Cost: one process start and `pydicom` import per new archive, roughly
-    under a second (estimate, to be measured in T15). Cached reruns start no
-    child processes, so Goal 5 holds.
+*   Known failure mode, accepted: a hostile or malformed archive, such as a
+    decompression bomb or a file that triggers a parser bug, can exhaust
+    memory or crash a run. It cannot write outside the staging directory.
+*   Trigger for phase 2: archives start coming from outside the lab. Phase 2
+    then designs containment in its own document: caps on members and sizes,
+    and parsing in a separate process. The 2026-11-04 design for this
+    (Alternatives Considered) is a starting point, not a commitment.
 *   Ownership receipts are still trusted when present (R17), and this is
     documented, not changed.
 
-#### Q15 Resource limits: proposed defaults (pending author confirmation)
+#### Q15 Resource limits: free-space check only (proposed 2026-11-04; reduced after review 2026-11-05, D1)
 
-These numbers are configurable defaults that do not change the architecture.
-They are proposed here for review at the section gate.
-
-| Limit | Proposed default | Applies to | Basis |
-|---|---|---|---|
-| Members per ZIP | 200,000 | prepare | Large sessions hold about 20k objects; 10× headroom |
-| Uncompressed size of one accepted member | 4 GiB | prepare | Large enhanced multi-frame objects are 1–2 GiB |
-| Total extracted bytes per ZIP | 200 GiB, and never more than free space on the DICOM root minus the reserve | prepare | Bounds a decompression bomb without a ratio rule; a per-member compression-ratio rule would reject legitimate blank images |
-| Free-space reserve | The smaller of 5% of the filesystem or 50 GiB | prepare, convert | Keeps a shared filesystem from being filled |
-| Child parser memory / CPU time (Linux) | 4 GiB / 2 h per archive | prepare | `pydicom` header reads with `stop_before_pixels` stay small |
-| Converter memory cap (Linux) | 16 GiB per process; when Slurm reports the job's memory, `workers × cap` must fit inside it | convert | 4D series load in full |
-| Converter timeout | 14,400 s (unchanged) | convert | Existing default |
-| Converter log kept per session | 10 MiB (first and last 5 MiB) | convert | Bounds runaway diagnostics |
-| Shutdown after SIGTERM or Ctrl+C | Stop converters, checkpoint, and write reports within 20 s | both | Slurm's default gap between SIGTERM and SIGKILL (`KillWait`) is 30 s |
-| `run_history.csv` | Rotate at 10 MB with 3 backups, like `pipeline.log` | both | Unbounded today |
-
-Known gap: `shutil.disk_usage` reports filesystem free space, not user or
-group quotas. On quota-managed cluster storage the free-space checks can
-pass while the quota is exhausted. Quota exhaustion is therefore handled as a
-write failure that publishes nothing and leaves inputs in place (T09), and
-the runbook tells operators to check quotas.
-
-#### Q15 Retention: automatic by age, resolved sessions only (decided 2026-11-04)
-
-**Decision:** Each non-dry `convert` run, after reconciliation (Q12) and
-before planning, deletes retained failure material that is older than N days
-(default 30), but only for sessions with no open `convert:` issue. Sessions
-with an open issue keep every attempt.
+**Decision:** Before extracting, `prepare` adds up the declared uncompressed
+sizes of the ZIP's members. It refuses to extract when that total plus a
+reserve exceeds the free space on the staging root, or on the DICOM root
+when that root is on a different filesystem. The reserve is the smaller of 5%
+of the filesystem or 50 GiB. A refusal is an ordinary preparation failure:
+the ZIP stays where it is, and an issue names the shortfall. `convert` keeps
+its existing free-space check (`pipeline.py:773-775`) and its 14,400 s
+converter timeout.
 
 **Consequences:**
 
-*   "Failure material" means `.work/convert_*` stages and
-    `Niftis/.pending/<id>/<session>/<attempt>/` folders that the pipeline
-    created. Each deletion goes through the existing `owned()` check.
-*   Age is measured from the creation time recorded in the attempt's state
-    record, not from directory mtime, which other tools can change. When an
-    attempt is removed, its state record is kept and marked
-    `diagnostics removed`.
-*   A new option `--retention-days N` sets N; `0` turns deletion off. A dry
-    run lists what would be deleted. The run summary and `run_history.csv`
-    report the bytes freed.
-*   Known failure modes, accepted: diagnostics someone wanted past N days are
-    lost once the issue is resolved. An unresolved session that is retried
-    many times keeps accumulating attempts.
-*   Node-local staging: a run cleans only the staging root it can see. Stages
-    left on another node's local disk are outside its reach. The runbook says
-    so.
-*   Preparation keeps no failure stages today, so nothing changes there.
+*   No other limits exist in phase 1. Member-count and member-size caps,
+    converter memory caps, a cap on converter log size, a shutdown time
+    budget, and `run_history.csv` rotation are not built. Phase 2 decides
+    them only if its trigger occurs.
+*   Known gap: `shutil.disk_usage` reports filesystem free space, not user or
+    group quotas. On quota-managed cluster storage the free-space check can
+    pass while the quota is exhausted. Quota exhaustion is therefore handled
+    as a write failure that publishes nothing and leaves inputs in place
+    (T09), and the runbook tells operators to check quotas.
+
+#### Q15 Retention: manual cleanup until phase 2 (decided 2026-11-04; deferred after review 2026-11-05, D8)
+
+**Decision:** Phase 1 deletes no failure material automatically. Failed
+stages (`.work/convert_*`) and `Niftis/.pending/` attempts stay until an
+operator removes them. The runbook says which ones are safe to delete: those
+for sessions with no open `convert:` issue.
+
+**Consequences:**
+
+*   Trigger for phase 2: retained failure material uses too much disk. The
+    2026-11-04 decision is the starting point for that phase's design. That
+    decision deleted material older than N days, for resolved sessions only,
+    with a `--retention-days N` option.
+*   Node-local staging: a run sees only its own node's staging root. The
+    runbook says so.
 
 #### Q10 NIfTI sanitization: none (decided 2026-11-04)
 
@@ -867,10 +976,9 @@ extension-area cap) still run, but they never change bytes.
     in the header, even though the JSON sidecar filter still removes
     acquisition time. The privacy contract lists these channels. The session
     date is already in every path and sidecar, so the added exposure is the
-    time of day.
-*   Mixed studies: outputs made by 0.1.0 stay sanitized and are not
-    reconverted (Q7). Their provenance record carries sanitizer revision 1;
-    new outputs carry revision 2, "pass-through".
+    time of day. Invariant 8 names NIfTI header extensions as a channel too.
+    The real-converter byte-identity smoke test asserts that the tested
+    `dcm2niix` versions write no extensions. No detection code is added.
 *   `sanitized_nifti` becomes a validate-and-gzip function. The gzip settings
     (empty file name, `mtime=0`, level 6) stay, so output bytes remain
     repeatable for the same converter output.
@@ -881,8 +989,8 @@ extension-area cap) still run, but they never change bytes.
 being compared with the brief's priority 6, the author reopened Q9 and chose a
 runtime geometry cross-check. The author then reverted to integrity only,
 because implementing and testing the geometry comparison would take too
-long. Geometry-tag capture at preparation was kept, so a later phase can add
-the check.*
+long. Geometry-tag capture at preparation was kept at first, then dropped
+after review (D4, 2026-11-05) because nothing in phase 1 reads it.*
 
 **Decision:** The package verifies its own handling:
 
@@ -901,13 +1009,8 @@ responsibility. Supported converter versions are listed by version only.
     the oldest and newest supported `dcm2niix`, and the responsibility
     boundary is documented. This is a recorded departure from the brief's
     priority 6.
-*   **Geometry tags are captured, not compared:** preparation stores
-    `ImagePositionPatient`, `ImageOrientationPatient`, `PixelSpacing`, and
-    `SliceThickness` per object in the preparation inventory. They come from
-    the same header-only read, with no extra I/O, and stay out of the index
-    (Q18 unchanged). Nothing compares them in phase 1. A runtime cross-check
-    is listed under Future Improvements, and it could check every session
-    prepared from phase 1 onward without re-preparing it.
+*   **No geometry tags are captured** (D4). A later geometry check (Future
+    Improvements) would read DICOM headers again.
 *   Known failure mode, accepted: a `dcm2niix` regression or a
     scanner-specific conversion bug goes unnoticed by the package.
 *   Smoke tests with the real converter on *synthetic* DICOM objects
@@ -915,7 +1018,8 @@ responsibility. Supported converter versions are listed by version only.
     assumptions about `dcm2niix`: the `series_%j_…` output naming used by
     the Q6 series check, exit codes when a series is skipped (P1), and
     behavior with non-image objects in the input (Q19). They need no
-    approved data.
+    approved data. They run right after the move-only step, before Q6 and
+    Q19 are built on these assumptions.
 *   **Diffusion (former half of Q11), settled by this decision:** `.bval` and
     `.bvec` files are copied byte for byte, and the existing finite-number
     check stays. No checks on shape, count, or orientation are added. A
@@ -927,10 +1031,15 @@ responsibility. Supported converter versions are listed by version only.
 **Decision:** The classifier is rewritten to match whole tokens, with
 specific patterns ordered ahead of general ones. Preparation also passes
 `ImageType`, so both stages assign the same label. The label set and the
-`<scan_type>/` folder layout stay the same. The result is recorded as
-classifier revision 2 (Q8) and is still documented as an unverified hint.
+`<scan_type>/` folder layout stay the same. The label is still documented as
+an unverified hint. The package version in each provenance record identifies
+the classifier used (Q8).
 
-**Behavior observed in this session** (`classify()` run on synthetic
+**Phase placement:** classifier revision 2 stays in phase 1 because it
+changes which folder a series lands in. Landing it before production data is
+converted means every production session uses one layout (Goal 4).
+
+**Behavior observed on 2026-11-04** (`classify()` run on synthetic
 description strings; no study data):
 
 | Description | Revision 1 (today) | Revision 2 (required) |
@@ -955,119 +1064,63 @@ description strings; no study data):
     vendor styles, with expected labels and a human review of the table. A
     confusion matrix built from real scanner descriptions would need study
     data and is not required (Q9).
-*   Known failure modes, accepted: mixed layouts within a study, because new
-    conversions of a sequence can land in a different folder than old outputs
-    of the same sequence (no reconversion, Q7); and naming conventions not in
-    the table can still be mislabeled.
+*   Known failure mode, accepted: naming conventions not in the table can
+    still be mislabeled.
 
-#### Q22 Schema-2 migration: metadata only, strict (decided 2026-11-04)
+#### Q22 Migration: none (decided 2026-11-04; dropped after review 2026-11-05, D5)
 
-**Decision:** A new `migrate` command upgrades a schema-2 project without
-reading any DICOM object. Series in old inventories get SOP class `unknown`
-and count as required under the Q6 rule. Each old `converted` session's
-series coverage is checked from its output JSON sidecars.
-
-**Steps, in order:**
-
-1.  Take all root locks (Q13). Replay pending schema-2 journals.
-2.  Per session: mark every series's SOP class as `unknown` (required).
-    Recompute `content_sha256` from the stored file hashes with byte-identical
-    repeats counted once (Q20). Update the conversion record's
-    `source_sha256` in the same step, so the digest change does not make the
-    session look stale.
-3.  Per old `converted` session: read the `.json` files listed in the output
-    inventory, collect their `source_series_key` values, and compare them
-    with the inventory series keys. If a key is missing, the session becomes
-    `partial`, with an issue that lists the missing keys. The complete
-    folder stays where it is (Q7).
-4.  Sessions with `study_count > 1` get the Q20 multi-study issue. They can
-    be cleared with `--accept-multi-study`.
-5.  Rebuild provenance records (Q8) from the sidecars' converter version
-    plus the fixed 0.1.0 argument list, with revision 1 for classifier and
-    sanitizer.
-6.  Write the schema-3 index atomically. Keep the schema-2 file as
-    `.state/index.v2.json`.
+**Decision:** No project has been processed by 0.1.0, and no 0.1.0 output has
+to be kept (author, 2026-11-05). Phase 1 has no `migrate` command. `prepare`
+and `convert` refuse to run on an index whose schema is not 3. They write
+nothing and name the file, and the operator starts with a new report root.
 
 **Consequences:**
 
-*   `migrate --dry-run` prints the full plan: sessions that will become
-    `partial`, multi-study sessions, and digest changes. It writes nothing.
-    The schema-2 index is not changed until step 6, so an interrupted
-    migration can simply be run again (Goal 6, T17).
-*   Every other command refuses to run on a schema-2 project and points to
-    `migrate`. This is today's version check, with a clearer message.
-*   Known failure mode, accepted: false `partial` results for every old
-    session that contains non-image objects, such as reports or Siemens CSA
-    Non-Image.
-*   Clearing a false `partial`: `prepare --session KEY --force-reextract`
-    re-extracts from the unchanged canonical ZIP (Q3), which records real SOP
-    classes. Whenever preparation refreshes the inventory of a session that
-    already has a conversion, series coverage is re-evaluated from the
-    existing output sidecars, without reconverting. Non-image series then
-    stop counting, and the session returns to `converted` if nothing
-    required is missing.
-*   Cost: one small JSON read per published volume. No image or DICOM reads.
+*   This removes the upgrade journey, `migrate.py`, its tests and test
+    helper, the rollback copy of the old index, and every rule for migrated
+    sessions.
+*   The 2026-11-04 design (a metadata-only migration) applies only if a
+    0.1.0 project turns up later. That project would then need its own
+    design.
 
-#### Q23 Project relocation: absolute paths plus a `relocate` command (decided 2026-11-04)
+#### Q23 Project relocation: refuse in phase 1, `relocate` on its trigger (decided 2026-11-04; trimmed after review 2026-11-05, D8)
 
-**Decision:** State keeps absolute paths. A new command,
-`relocate --from OLD --to NEW` (repeatable, one pair per moved prefix),
-rewrites stored path prefixes after a move. It runs as a preview first, then
-applies. `prepare` and `convert` refuse to run when the index is not empty but
-none of the stored paths for a root kind lie under the configured root. In
-that case they print "project appears moved; run relocate".
+**Decision:** State keeps absolute paths. In phase 1, `prepare` and `convert`
+refuse to run when the index is not empty but none of the stored paths for a
+root kind (uploads, DICOM, NIfTI, reports) lies under the configured root.
+They print "project appears moved; moving a project is not supported yet".
 
 **Consequences:**
 
-*   `relocate` takes all root locks and refuses while intent files are open,
-    so reconciliation (Q12) must have run first. It rewrites session paths,
-    receipt and inventory paths, directory-mtime maps, source-record keys,
-    and issue paths. It then checks every receipt at its new location using
-    metadata only, as `fast_valid` does.
-*   Sessions whose receipts fail at the new location are listed. This happens
-    when the move tool did not preserve directory mtimes; `rsync -a`,
-    `cp -a`, and `mv` preserve them. Without that list, the next `prepare`
-    would re-extract those sessions and conversion would flag them (Q7). The
-    report lets the operator fix the move first.
-*   The refusal check is per root kind (uploads, DICOM, NIfTI, reports), so
-    moving only one root is covered too. It compares strings in memory and
-    adds no filesystem calls.
-*   Copying a project is not relocation. A copy keeps absolute paths that
-    point to the original, and the refusal check stops runs on the copy until
-    `relocate` is run there.
+*   The check compares strings in memory and adds no filesystem calls. It is
+    skipped for an empty index.
+*   Without the check, a moved project would re-extract every session, and
+    conversion would flag every session as `output modified` (Q7).
+*   Trigger for phase 3: a project has to move. That phase designs a
+    `relocate` command. The 2026-11-04 design is its starting point: rewrite
+    the stored path prefixes, then check every receipt at the new location
+    using metadata only.
 
-#### Q18 Scale target: up to ~20,000 sessions per project (decided 2026-11-04)
+#### Q18 Scale: measure before tuning (decided 2026-11-04; deferred after review 2026-11-05, D8)
 
-**Decision:** A project of up to about 20,000 sessions must meet these
-budgets.
-
-| Budget | Value | How it is checked |
-|---|---|---|
-| Content opens per cached session (archive, DICOM, NIfTI, sidecar) | 0 | Counted in a synthetic test that instruments file opens (extends `test_1000_cached_sessions_do_not_read_scan_contents`) |
-| Filesystem metadata calls per cached session, per command | ≤ 20 | Counted in the same test; today's estimate is about 5 for `prepare` and about 16 for `convert` |
-| Cached rerun at 20,000 sessions | ≤ 5 min | Measured on the site's target storage (T15); a deployment check, not a CI promise |
-| Coordinator peak memory at 20,000 sessions | ≤ 2 GB | Measured in T15 with synthetic metadata sessions |
+**Decision:** Phase 1 keeps today's scale behavior. Its only performance
+promise is Goal 5: a cached rerun makes no content reads.
 
 **Consequences:**
 
-*   Rewriting a single JSON index of about 60 MB every 10 seconds does not
-    fit these budgets on network storage. State storage is decided in Q21.
-*   `session_status.csv` (about 3 MB at 20,000 rows) is rewritten every 60
-    seconds instead of every 15, plus once at the end of the run.
-*   Scale defect found by code trace: `run` builds each subject's state copy
-    by scanning every session key (`k.startswith(sid + "/")`). That costs
-    subjects × sessions string checks on a large first run, about 400
-    million at 20,000 single-session subjects. Sessions get indexed by subject
-    once per run instead.
-*   T15 runs at 1k, 10k, and 20k synthetic sessions, both "many subjects"
-    and "few subjects with many sessions", locally in CI and once on site
-    storage before release.
+*   Trigger for phase 3: runs are measured as too slow. The starting point
+    for that phase is the 2026-11-04 work:
+    *   targets of up to about 20,000 sessions, a cached rerun of at most
+        5 minutes, and coordinator memory of at most 2 GB;
+    *   defects found by code trace: building each subject's state copy
+        scans every session key, the 15-second report rewrite, and an index
+        estimated at 30–60 MB at 20,000 sessions.
 
-#### Q21 Index storage: single JSON index, rare flushes (decided 2026-11-04)
+#### Q21 Index storage: single JSON index with sequence numbers and a backup (decided 2026-11-04; trimmed after review 2026-11-05)
 
 **Decision:** State stays in one `index.json` with one backup copy,
-`index.json.bak`. The index is flushed every 5 minutes while events arrive,
-at the end of each run, and after reconciliation, migration, or relocation.
+`index.json.bak`. The flush cadence stays as today: at most every 10 seconds
+while events arrive, after reconciliation, and at the end of each run.
 Per-event journals cover the time between flushes.
 
 **Consequences:**
@@ -1076,29 +1129,32 @@ Per-event journals cover the time between flushes.
     increases. The index and the backup each record the last number they
     include. Startup replays only journals with higher numbers than the file
     it loaded, so a partial deletion cannot roll a session back.
-*   Flush order: write a temporary file and `fsync` it, then rename
-    `index.json` to `index.json.bak`, then rename the temporary file to
-    `index.json`. Journals are deleted only up to the backup's sequence
-    number, so the backup plus the remaining journals can always rebuild the
-    current state.
-*   Corruption recovery (R09): if `index.json` is missing or does not parse,
-    startup loads `index.json.bak` and replays the journals that follow it.
-    This happens automatically, consistent with Q12, and it raises an issue
-    and a prominent log line. If both files exist and neither parses, the
-    run stops and names both paths. If neither file exists, the project is
-    treated as new. In that case `convert` adopts existing complete folders
-    whose receipt matches the prepared content and never replaces them (see
-    the Detailed Implementation Plan, `convert.py`).
-*   Size reduction: inside each receipt's directory-mtime map, keys are
-    stored relative to that receipt's (absolute) root, which roughly halves
-    the estimated index size. Q23's absolute paths are unchanged at every
-    other level.
-*   Known limits, accepted: every run parses the whole index (about 30–60 MB
-    at 20,000 sessions, estimated). Crash recovery replays up to about 5
-    minutes of journal files. The contract names 20,000 sessions as the
-    tested limit, and growing past it needs another design.
-*   Measured in T15: parse time and memory at 20,000 sessions, which must
-    fit the Q18 budgets.
+*   Flush order: write a temporary file and `fsync` it; replace
+    `index.json.bak` with the current `index.json` (`os.replace`); replace
+    `index.json` with the temporary file (`os.replace`). `os.replace`
+    overwrites on Windows, where a plain rename fails when the target
+    exists. Journals are deleted only up to the backup's sequence number, so
+    the backup plus the remaining journals can always rebuild the current
+    state.
+*   **Load decision table (R09):**
+
+    | `index.json` | `index.json.bak` | Action |
+    |---|---|---|
+    | Parses | Any | Use `index.json` |
+    | Missing | Parses | Use `.bak` silently. A crash between the two replaces leaves this state |
+    | Does not parse | Parses | Move the bad file aside to `index.json.corrupt-<run_id>`, use `.bak`, log at error level, and note it in the history row. No persistent issue is raised |
+    | Missing or does not parse | Missing or does not parse, with at least one of the two present | Stop with exit 2 and name both files |
+    | Missing | Missing | New project. The adoption rule (Q12) rebuilds state from receipts as `prepare` and `convert` meet existing folders |
+
+    After loading, journals with a higher sequence number than the loaded
+    file's `last_seq` are replayed. The next flush uses the in-memory
+    `last_seq`, so it never writes the corrupt file over a good `.bak`.
+*   Empty state with full roots (D6): if the report root is mistyped or its
+    state is lost, the next runs hash each canonical ZIP once and adopt the
+    existing folders. No data is lost and nothing is republished. The cost is
+    time, which is accepted. The runbook says so.
+*   Known limit, accepted: every run parses the whole index. Scale work waits
+    for phase 3 (Q18).
 
 #### Q2 Supported environments: Linux and Windows for production (decided 2026-11-04)
 
@@ -1109,38 +1165,43 @@ them is not enough. `dcm2niix` is supported over a tested range of versions.
 | Dimension | Supported | Evidence |
 |---|---|---|
 | Operating system | Linux, Windows; macOS not supported | Full CI suite on `ubuntu-latest` and `windows-latest` |
-| Python | 3.11 and later, limited to versions still supported upstream (3.10 reached end of life in October 2026); proposed, confirm at section review | CI on 3.11, 3.12, 3.13, 3.14 on both operating systems |
+| Python | 3.11 and later, limited to versions still supported upstream (3.10 reached end of life in October 2026); approved 2026-11-04 | CI on 3.11, 3.12, 3.13, 3.14 on both operating systems |
 | `dcm2niix` | The oldest and newest release versions that pass the real-converter smoke tests (Q9), listed in the README | CI downloads both release binaries for Linux and Windows and runs the smoke tests |
-| Storage | Local disk, plus any shared filesystem that passes the site's two-node lock check (Q13) | Site deployment check (T10) |
+| Storage | Local disk. A shared filesystem used from more than one machine is supported once it passes the site's two-node lock check (Q13) | Site deployment check (T10), only when needed |
 | Scanners | No scanner-specific claims (Q9) | Not applicable |
 
-**Windows items that must be fixed (not only documented):**
+**Windows behavior in phase 1:**
 
-*   **Child-process containment (Q14) and process-tree termination (R11).**
-    The archive parser and `dcm2niix` run inside a Windows Job Object, created
-    through `ctypes` with no new dependency. The job has memory and CPU
-    limits, and closing it kills the whole process tree. This gives Windows
-    the same caps as Linux.
-*   **Path length.** Planning computes the longest path a session will
-    create. On Windows, when long-path support is not enabled, a session
-    whose path would exceed 259 characters is held with an issue rather than
-    failing partway through.
+*   **Process-tree termination (R11).** On Windows, stopping a run stops the
+    converter but not processes the converter started. This is the only
+    statement of Windows containment in this document. Trigger for phase 2:
+    leftover converter processes are seen on Windows.
+*   **Path length.** A path longer than Windows allows fails that session
+    with a reported error, and nothing is published. Trigger for phase 2 (a
+    hold at planning time): such failures are seen.
 *   **Case-insensitive collisions (R14).** Roster IDs that differ only by
     letter case (`S001` and `s001`) are rejected while the roster is loaded,
     on every platform, so that behavior does not depend on the filesystem.
 *   **Reserved device names (R14).** IDs equal to `CON`, `PRN`, `AUX`, `NUL`,
     `COM1`–`COM9`, or `LPT1`–`LPT9`, in any letter case, are rejected on
     every platform.
-*   **Files in use.** If a rename during publication fails because a file in
-    the destination is open (Windows refuses the rename), the existing
-    rollback in `publish_tree` keeps the old folder, and the session fails
-    with a `destination in use` issue. Explicit test.
+*   **Files in use during publication.** If a rename during publication
+    fails because a file in the destination is open (Windows refuses the
+    rename), the existing rollback in `publish_tree` keeps the old folder,
+    and the session fails with an issue. The existing
+    `test_publish_rolls_back_if_swap_fails` covers it.
+*   **Report files held open.** If a program such as Excel holds
+    `session_status.csv`, `issues.csv`, or `run_history.csv` open, the failed
+    write is logged and retried at the next report write, and the run
+    continues. Today such a failure ends the run with no history row.
+    Explicit test.
 
 **Consequences:**
 
 *   `requires-python` becomes `>=3.11`, and the classifiers and CI matrix
-    follow. The CI matrix grows to 8 test jobs plus packaging and two
-    real-converter jobs.
+    follow. CI runs 8 test jobs (2 operating systems × 4 Python versions),
+    the existing package job, and up to 4 real-converter jobs (2 operating
+    systems × 2 `dcm2niix` versions).
 *   On Linux the converter runs in its own session (`start_new_session`) and
     is stopped with a signal to the whole process group.
 *   The initial `dcm2niix` range is set during implementation: the newest
@@ -1158,19 +1219,20 @@ offset, as today.
     daylight-saving fall-back change, log lines and run IDs are ambiguous.
     Nodes set to different time zones produce timestamps that cannot be
     compared. The README says so.
-*   Internal timestamps that drive behavior, such as attempt creation times
-    for Q15 retention, are stored as UTC epoch seconds. Clock-display choices
-    therefore never change what the pipeline deletes.
+*   No phase 1 behavior depends on a timestamp. A later phase that uses
+    timestamps to decide what to delete (Q15 retention) stores them as UTC
+    epoch seconds, so clock-display choices never change what is deleted.
 
-#### Q17 Release policy: Apache-2.0 (license decided 2026-11-04; other parts proposed)
+#### Q17 Release policy: Apache-2.0 (decided 2026-11-04)
 
 **Decision (author):** The package is licensed under Apache-2.0.
 
-**Proposed with it, to confirm at the section gate:**
+**Approved with it on 2026-11-04; these apply from the first public release
+(phase 4):**
 
-| Topic | Proposal |
+| Topic | Policy |
 |---|---|
-| Versioning | Semantic versioning. Any state schema change ships with `migrate` (Q22) and at least a minor-version bump. |
+| Versioning | Semantic versioning. A state schema change that is not additive (Q1) ships with a migration and at least a minor-version bump. |
 | Deprecation | A deprecated CLI option keeps working, with a warning, for at least one minor release before removal. |
 | Security reports | `SECURITY.md` pointing to GitHub private vulnerability reporting. |
 | Support | Best effort by the maintainer, with no response-time commitment. Only the latest minor release is supported. |
@@ -1181,31 +1243,33 @@ offset, as today.
     uses the SPDX expression `license = "Apache-2.0"` with
     `license-files = ["LICENSE", "NOTICE"]`, which needs `setuptools>=77`.
     No license classifier is added, because the SPDX field replaces it.
-*   `MANIFEST.in` and `tests/check_distribution.py` must include and check
-    both files in the wheel and the sdist.
+    setuptools puts `license-files` in both the wheel and the sdist, so
+    `MANIFEST.in` needs no change. Checking that both files are present in
+    both artifacts (`tests/check_distribution.py`) waits for phase 4.
 *   Dependency compatibility: `pydicom` (MIT) can be used from Apache-2.0
     code. `dcm2niix` is called as an external program and not
     redistributed.
 *   The `Operating System :: OS Independent` classifier is replaced with
     Linux and Windows classifiers (Q2).
 
-#### Q1 Phases: all safety work in phase 1 (decided 2026-11-04)
+#### Q1 Phases: production-ready phase 1, later phases on triggers (decided 2026-11-04; revised after review 2026-11-05, D1, D4, D8)
 
-**Decision:** Phase 1 closes P1 to P11 and introduces schema 3 with
-`migrate`. Phase 2 adds containment and platform work, phase 3 scale and
-relocation, and phase 4 the release documentation and first release. See the
-[Phase map](#phase-map).
+**Decision:** Phase 1 is the lab's production version. It closes P1 and P3
+to P11, leaves P2 open on purpose (Q8), and introduces state schema 3. It
+also carries every change to the output layout or the state format, so
+production data is converted under one layout from its first run. Phases 2–4
+start only when their triggers occur. See the [Phase map](#phase-map).
 
 **Consequences:**
 
-*   Schema fields needed by later phases (attempt `created_utc` for Q15
-    retention, relative directory-map keys for Q21 size) are added in phase
-    1, so there is only one migration.
+*   Additive state changes need no migration. A later phase adds optional
+    fields, and readers treat a missing optional field as its default.
+    Phase 1 therefore carries only the fields it reads.
 *   Known cost, accepted: phase 1 changes most of `pipeline.py`. It is the
     largest phase and the slowest to review.
-*   Windows gets SIGTERM-equivalent handling (Ctrl+C) in phase 1. Its
-    whole-tree converter termination arrives with the Job Objects in phase
-    2. Until then, Windows stops only the direct converter process, as today.
+*   Windows gets the same stop handling (Ctrl+C) in phase 1. Stopping a run
+    on Windows stops the converter, not processes the converter started
+    (Q2).
 
 #### Module layout: full restructure by responsibility (decided 2026-11-04)
 
@@ -1222,12 +1286,12 @@ responsibility. The module list is in the Detailed Implementation Plan.
 
 ## Alternatives Considered
 
-The concepts brief has no "Alternatives Weighed" section, so every
-alternative below comes from the decision gates in this drafting session.
-Each was rejected by the author, who chose the option recorded in the
-Decision Log. The "Cons" column gives the failure condition stated when the
-options were presented. The author gave no further rationale, so none is
-added here.
+The concepts brief has no "Alternatives Weighed" section. Every alternative
+below was weighed at the author's decision gates on 2026-11-04 or in the
+review decisions of 2026-11-05. Rows marked "chosen 2026-11-04, … after
+review" are options that were first chosen and then replaced by the review
+decisions. The "Cons" column gives the failure condition stated when the
+options were presented.
 
 | Decision | Rejected alternative | Pros | Cons (recorded trade-off) |
 |---|---|---|---|
@@ -1236,7 +1300,7 @@ added here.
 | Q3 Canonical inputs | Replace only on explicit command, keeping superseded copies | Corrections can keep the same label; old data is kept | More code and disk; superseded copies need retention; risk of routine use without review |
 | Q3 Canonical inputs | Allow replacement, but record and flag it | Smallest change | A wrong export becomes the session's data before anyone reviews it |
 | Q5 Partial overlap | Merge or extend a session with a superset upload | One visit keeps one label | Excluded by Q3: accepted session content never changes |
-| Q6 Meaning of `converted` | Output or a configurable exclusion rule per series | No permanent `partial` for legitimate non-image series | An overly broad rule hides a missing series; needs SOP class plus migration. Q19 later brought back a narrower form: a fixed, versioned SOP class list instead of configurable rules |
+| Q6 Meaning of `converted` | Output or a configurable exclusion rule per series | No permanent `partial` for legitimate non-image series | An overly broad rule hides a missing series; needs SOP class plus migration. Q19 later brought back a narrower form: a fixed SOP class list instead of configurable rules |
 | Q6 Meaning of `converted` | Report-only warning | No migration | `converted` still does not mean complete; P1 stays open |
 | Q19 DICOM eligibility | Extract MR image SOP classes only | Smaller extraction; clean converter input | Image series outside the list are never extracted or converted |
 | Q19 DICOM eligibility | Keep current acceptance | No list to maintain | Sessions with non-image objects stay `partial` permanently |
@@ -1246,13 +1310,14 @@ added here.
 | Q7 Reconversion | Automatically reconvert on damage and on upgrades | Outputs track the current converter | One upgrade reconverts the whole study; replaces folders that are in use |
 | Q8 Provenance | Full fingerprint including the converter binary hash | Detects any converter change | A rebuild of the same version marks everything outdated; existing outputs start as unknown |
 | Q8 Provenance | Version-level fingerprint with an "outdated" report | Flags converter upgrades | One converter call per run; different builds with the same version string look identical |
+| Q12 Crash recovery | Roll forward a copied `.incoming_*` (chosen 2026-11-04, removed after review, D2) | Saves redoing a session's work after a crash during the swap | A cross-device copy can leave a receipt in an incomplete `.incoming_*`; telling complete from partial needs an extra copy step or intent phase |
 | Q12 Crash recovery | Explicit `repair` command | A person sees every action | Sessions stay stuck when nobody runs repair |
 | Q12 Crash recovery | Detect and document manual steps | No repair code to get wrong | Manual moves on shared storage are error-prone |
 | Q13 Lock scope | Root locks plus a heartbeat lease | Protects mounts whose locks only work within one node | A crashed run's lease blocks new runs; clock skew between nodes |
 | Q13 Lock scope | Project lock plus root claim markers | Smallest change | No protection on node-local-lock mounts; claims go stale after a move |
-| Q4 Upload readiness | Keep current size/mtime checks | No new code | Noisy failures; a Linux writer can keep writing after the move |
-| Q4 Upload readiness | Quiet period of N minutes | No noise; no new protocol | Stalls longer than N; every upload is delayed; depends on the server clock |
-| Q14 Trust model | Trusted archives with accident limits | Simplest | Parser bugs within the limits; forged receipts |
+| Q4 Upload readiness | Required marker files `.zip.done` or `.zip.sha256` (chosen 2026-11-04, dropped after review, D3) | Explicit readiness signal; optional checksum | Every uploader must write a marker; a forgotten marker stalls the ZIP; moving the marker with the ZIP added a crash window |
+| Q4 Upload readiness | Quiet period of N minutes | No noise; no new protocol | Stalls longer than N; every upload is delayed; depends on the server clock; Windows copies keep the source mtime |
+| Q14 Trust model | Untrusted archives parsed in a child process per archive, with memory, CPU, and size caps (chosen 2026-11-04, deferred after review, D1) | Contains parser bugs and decompression bombs | A process start per archive; Windows needs Job Objects; little benefit while archives come from the lab's own scanners |
 | Q14 Trust model | Untrusted archives and storage (HMAC receipts) | Detects forged receipts | Key management; a lost key invalidates every receipt |
 | Q15 Retention | Explicit cleanup command | Nothing disappears unless a person chooses it | Grows until the disk reserve stops new work |
 | Q15 Retention | Keep the last K attempts per session | Bounded per session | Discards the first failure's diagnostics; grows with the number of failing sessions |
@@ -1260,11 +1325,10 @@ added here.
 | Q10 Sanitization | Clear text fields; refuse extensions | Nothing is dropped silently | Sessions go `partial` if the converter starts writing extensions |
 | Q9 Validation scope | Reference fixtures in CI | Catches converter regressions | Approved fixtures are hard to get; never complete |
 | Q9 Validation scope | Runtime cross-check against DICOM geometry (chosen when Q9 was reopened, then reverted) | Checks real study data; addresses brief priority 6 | Re-implements converter geometry logic; false alarms on edge cases. The author gave implementation time as the reason for reverting |
-| Q9 Revert | Revert fully, without capturing geometry tags | Smallest phase 1 | A later check would need every earlier session re-prepared |
+| Q9 Revert | Capture geometry tags at preparation (chosen 2026-11-04, dropped after review, D4) | A later check could run without reading headers again | Seven fields per object that nothing in phase 1 reads |
 | Q11 Classification | Keep the rules and call the label a hint | No layout change | Known mislabels stay (T2* as T2, SWI mIP as SWI) |
 | Q11 Classification | Remove labels from output paths | Folder names make no claims | Breaks downstream scripts; mixed layouts |
-| Q22 Migration | Full verification with header reads | Old sessions get the new guarantee | Hours to days of header reads while the pipeline is locked |
-| Q22 Migration | Lazy legacy status | Fastest upgrade | P1 stays possible for every pre-upgrade session |
+| Q22 Migration | A metadata-only `migrate` command (chosen 2026-11-04, dropped after review, D5) | Upgrades 0.1.0 projects in place | No 0.1.0 project exists; the command carried most of the open review findings |
 | Q23 Relocation | Root-relative paths with identity files | Moves need no extra step | Copies fool the root guard; moves that lose directory mtimes invalidate every receipt |
 | Q23 Relocation | Keep absolute paths and document the cost | No code | Full re-extraction and manual reconversion after any move |
 | Q18 Scale | Up to about 2,000 sessions | The JSON index works unchanged | Rework when a project grows |
@@ -1279,6 +1343,7 @@ added here.
 | Q17 License | BSD-3-Clause | Bars use of names for endorsement | No explicit patent grant |
 | Q1 Phases | No-migration fixes first | First release ships soonest | P1 and P11 stay open in the first release; reports change twice |
 | Q1 Phases | Correctness core first | Smaller phase 1 | P5 and P6 stay open in the first release |
+| Q1 Phases | Phase 1 as a non-production step until phase 4 (review option D1 (b)) | Phase 1 needs no production-readiness evidence | The Critical bugs (P1, P3, P8, P10) stay in production use until phase 4 |
 | Module layout | Keep a single `pipeline.py` | Smallest structural change; existing test patch targets keep working | The module roughly doubles to about 2,000 lines |
 | Module layout | New modules only for new subsystems | New code stays separate | Risk of import cycles between `pipeline.py` and the new modules |
 
@@ -1286,27 +1351,27 @@ added here.
 
 ## Non-Functional Requirements
 
-*   **Security and privacy:** Archives are untrusted input; state, receipts,
-    and the roster are trusted (Q14). Containment arrives in phase 2. In phase
-    1, untrusted archives are still parsed in-process, as today. Privacy
-    channels are listed under invariant 8. Phase 1 changes two of them:
-    NIfTI header text now passes through (Q10), and unredacted converter
-    output never reaches disk (P8).
-*   **Performance:** The Q18 budgets apply. Phase 1 must not break the
-    per-session budgets (no content reads; at most 20 metadata calls per
-    cached session per command). The 20,000-session timing and memory are
-    measured in phase 3.
-*   **Rollout:** Install the phase 1 release, then run `migrate --dry-run`,
-    review it, and run `migrate`. Until `migrate` has run, `prepare` and
-    `convert` refuse to run on a schema-2 project.
-*   **Rollback:** Reinstall 0.1.0, then copy `Reports/.state/index.v2.json`
-    back to `index.json` and `run_history.v2.csv` back to `run_history.csv`.
-    Effect: sessions prepared or converted after the upgrade are unknown to
-    0.1.0. 0.1.0 re-prepares and reconverts them, replacing their folders,
-    which it is allowed to do because they hold receipts. Upload markers are
-    ignored by 0.1.0. The runbook documents this.
+*   **Security and privacy:** Archives are assumed to come from the lab's own
+    scanner exports and are parsed in-process, as today (Q14). The
+    free-space check (Q15) and the existing member-name rule are the only
+    archive protections in phase 1. State, receipts, and the roster are
+    trusted. Privacy channels are listed under invariant 8. Phase 1 changes
+    two of them: NIfTI header text now passes through (Q10), and unredacted
+    converter output never reaches disk (P8).
+*   **Performance:** Goal 5 applies: a cached rerun makes no content reads,
+    checked by `test_1000_cached_sessions_do_not_read_scan_contents`. Scale
+    budgets wait for phase 3 (Q18).
+*   **Rollout:** Install phase 1 from the repository. Keep a copy of every
+    ZIP outside the project before the first run. Run `prepare --dry-run`
+    (with `--import-legacy` when ZIPs sit in `DicomUploads/Subjects/`),
+    review the plan, then run `prepare` and `convert` (CUJ 6). No migration
+    is needed (Q22).
+*   **Rollback:** Reinstall 0.1.0 and give it a new, empty report root,
+    because 0.1.0 refuses a schema-3 index. With empty state, 0.1.0 re-prepares and
+    reconverts every session it finds, and it replaces folders that hold
+    receipts. ZIPs are not modified. The runbook documents this.
 
-### Additional Resources
+## Additional Resources
 
 *   [`concepts_brief.md`](./concepts_brief.md): input brief.
 *   [`mriDICOMpipeline-current-state-spec.md`](./mriDICOMpipeline-current-state-spec.md):
@@ -1317,10 +1382,13 @@ added here.
 *   EGM [README](https://github.com/google/elephant-goldfish-model/blob/main/README.md)
     and [workflow guide](https://github.com/google/elephant-goldfish-model/blob/main/docs/getting_started.md).
 
-### Future Improvements
+## Future Improvements
 
-*   **Phases 2–4:** see the [Phase map](#phase-map). Each gets its own
-    design document that follows this contract.
+*   **Phases 2–4:** see the [Phase map](#phase-map). Each starts only when
+    its trigger occurs and then gets its own design document that follows
+    this contract.
+*   **Override for series `dcm2niix` cannot convert (D7):** decided after
+    the real-converter smoke tests show how often it happens.
 *   **Overlap detail in conflict issues:** a held conflict could report how
     many DICOM objects the two uploads share, using both inventories, to
     speed up operator decisions (Q5).
@@ -1328,9 +1396,9 @@ added here.
     current environment. It can be added later without a schema change,
     because the provenance record already exists.
 *   **Runtime geometry cross-check (Q9):** compare each output's dimensions
-    and corner coordinates with the geometry tags captured at preparation
-    since phase 1. It addresses brief priority 6 and was deferred because of
-    implementation time. The design worked out when Q9 was reopened (sorted
+    and corner coordinates with geometry tags read from the DICOM headers
+    (phase 1 does not capture them, D4). It addresses brief priority 6 and
+    was deferred because of implementation time. The design worked out when Q9 was reopened (sorted
     dimensions; 4D volume count; eight corner voxel centers within the larger
     of 0.1 mm or 1% of the smallest voxel; sform, else qform; mosaic,
     multi-frame, and multi-orientation series unchecked) is a starting point,
@@ -1353,25 +1421,32 @@ the recorded risk of the restructure option.
 
 | Step | Content | Verified by |
 |---|---|---|
-| 0 | Move code from `pipeline.py` into the new modules **with no logic change**. Retarget imports in tests and launchers. Delete `pipeline.py`. | All 30 existing test cases pass with only import or patch-target edits |
-| 1 | Packaging and CI: Python 3.11+, `setuptools>=77`, Apache-2.0 `LICENSE`/`NOTICE`, CI matrix, distribution check | `python -m build`, `twine check`, `check_distribution.py`, CI green |
-| 2 | State schema 3: journal sequence numbers, `.bak`, 5-minute flush, refusal of schema 2 | `test_recovery.py` state tests, `test_migrate.py::test_commands_refuse_schema2_and_point_to_migrate` |
-| 3 | Identity rules (case-only collisions, reserved names) | `test_identity.py` |
-| 4 | Preparation: markers, immutable canonical ZIPs, SOP classes, repeats and multi-study holds, `--session`, `--accept-multi-study`, canonical rehash under `--audit`, missing-archive issue | `test_inputs.py` |
-| 5 | Conversion: strict coverage, Q7 rules, last-good and last attempt, adoption, pass-through NIfTI, provenance, streaming redaction, process groups, classifier revision 2 | `test_conversion.py` |
-| 6 | Per-root locks plus the legacy project lock | `test_locks.py` |
-| 7 | Intents, reconciliation, SIGTERM handling | `test_recovery.py` |
-| 8 | Reports and run history | `test_conversion.py`, `test_recovery.py::test_history_row_written_on_early_abort` |
-| 9 | `migrate` command | `test_migrate.py` |
-| 10 | Cache budget instrumentation; real-converter smoke tests | `test_cache_budget.py`, `test_real_converter.py` |
-| 11 | README phase 1 updates; runbook | Review against the checklist in Verification Plan |
+| 0 | Move code from `pipeline.py` into the new modules **with no logic change**. Retarget imports in tests and launchers. Move the shared test helpers into `tests/support.py` and `tests/conftest.py`. Delete `pipeline.py`. Merged on its own. | All existing test cases pass with only import or patch-target edits |
+| 1 | Real-converter smoke tests: `test_real_converter.py` (`dcm2niix`'s own behavior only), the synthetic DICOM helpers it needs, and the CI `real-converter` job | The four smoke tests run against real `dcm2niix`, and their results are recorded. If `dcm2niix` exits nonzero with a non-image object present, Q19 is reopened before step 6 |
+| 2 | Packaging and CI: Python 3.11+, `setuptools>=77`, Apache-2.0 `LICENSE`/`NOTICE`, the CI test matrix | `python -m build`, CI green |
+| 3 | State schema 3: journal sequence numbers, `.bak`, `os.replace` flush, the load decision table, refusal of other schemas | `test_recovery.py` state tests, `test_project_configuration.py::test_old_state_rejected_without_writes` |
+| 4 | Identity rules (case-only collisions, reserved names); per-root locks | `test_identity.py`, `test_locks.py` |
+| 5 | Intents, reconciliation, the adoption rule, stop handling (SIGTERM, Ctrl+C) | `test_recovery.py` |
+| 6 | Preparation: immutable canonical ZIPs, SOP classes, repeats and multi-study holds, `--session`, `--accept-multi-study`, canonical rehash under `--audit`, missing-archive issue, free-space check, moved-project refusal | `test_inputs.py` |
+| 7 | Conversion: strict coverage, Q7 rules (including `--audit --session` revalidation), last-good and last attempt, pass-through NIfTI, provenance, streaming redaction, process groups, classifier revision 2 | `test_conversion.py`; session-level assertions added to `test_real_converter.py` |
+| 8 | Reports and run history: new columns and outcomes, report files held open | `test_conversion.py`, `test_recovery.py::test_history_row_written_on_early_abort` |
+| 9 | README phase 1 updates; runbook | Review against the checklist in Verification Plan |
 
-From step 2 onward, each step's regression tests are written first and fail
-on the step 0 code. That is the evidence Goal 4 asks for.
+From step 3 onward, each P-item's regression test (see the traceability
+table) is written first and fails on the step 0 code. That is the evidence
+Goal 4 asks for. Tests of behavior that phase 1 keeps unchanged pass on both.
+
+Each step adds the issue keys it raises to the issue table in `reports.py`
+(file 13), with their blocking flag, so later steps never depend on step 8.
+Each change to an existing test (files 23–24) lands in the step that causes
+it.
 
 **Import convention (applies to every module):** modules import sibling
 modules, not names (`from . import fsutil`, then `fsutil.sha256(...)`), so
-tests can patch a function where it is defined.
+tests can patch a function where it is defined. One exception: modules
+import `State` directly (`from .state import State`). Many functions already
+have a local variable named `state`, and the test helpers have a `state()`
+function, so importing the module itself would clash with both.
 
 ### Target Files to Create/Modify
 
@@ -1380,27 +1455,30 @@ tests can patch a function where it is defined.
 *   **Type / Scope**: Python module.
 *   **Proposed Changes**: Its contents move into the modules below in step 0.
     Nothing re-exports it: the CLI is the supported interface (baseline §4),
-    and the launchers and tests are updated.
+    and the launchers and tests are updated. Items without a home elsewhere:
+    `VERSION` becomes `config.SCHEMA_VERSION`; `problem()` moves to
+    `reports.py`; `run()` moves to `runner.py`; `sanitized_nifti` moves to
+    `nifti.py`; and `redact_diagnostic` moves to `convert.py`. In step 0, the
+    import in `cli.py` is retargeted to `runner`.
 
 #### 2. `src/mri_dicom_pipeline/config.py` (Create)
 
 *   **Type / Scope**: Python module, CLI parsing and root configuration.
 *   **Proposed Changes**:
-    *   Constants `SCHEMA_VERSION = 3` and `LEGACY_SCHEMA_VERSION = 2`.
+    *   Constant `SCHEMA_VERSION = 3` (it was `VERSION = 2` in
+        `pipeline.py`).
     *   `config_parser(phase)`, moved. Adds a repeatable `--session KEY` to
         both commands and a repeatable `--accept-multi-study KEY` to
         `prepare`. New `--dry-run` help text: "Plan only: no project writes
         or converter calls; hashes files only when combined with --audit".
-        New `--audit` help text adds "prepare also re-hashes canonical ZIPs".
-    *   `migrate_parser()`: `--project-root`, `--report-root`,
-        `--input-root`, `--dicom-root`, `--nifti-root`, `--staging-root`,
-        `--dry-run`.
+        New `--audit` help text adds "prepare also re-hashes canonical ZIPs;
+        convert --session revalidates restored folders".
     *   `configure(args, phase)`, moved. Also validates every `--session` and
         `--accept-multi-study` value with `identity.parse_key`, and sets
         `cfg.lock_roots` per the Q13 table (`prepare`: uploads, DICOM,
-        reports, staging; `convert`: DICOM, NIfTI, reports, staging;
-        `migrate`: all five) and `cfg.run_id` (format unchanged:
-        `YYYYMMDD_HHMMSS_<8 hex>`, local time, Q16).
+        reports, staging; `convert`: DICOM, NIfTI, reports, staging) and
+        `cfg.run_id` (format unchanged: `YYYYMMDD_HHMMSS_<8 hex>`, local
+        time, Q16).
 
 #### 3. `src/mri_dicom_pipeline/identity.py` (Create)
 
@@ -1430,54 +1508,69 @@ tests can patch a function where it is defined.
     *   `publish_tree(stage, destination, ownership_root, incoming,
         previous)`: today's algorithm, using the names the caller already
         recorded in its intent.
-    *   `utc_now() -> float` (epoch seconds).
+    *   `utc_now() -> float` (epoch seconds), used in intent and lock-owner
+        files.
+    *   `write_text_or_log(path, writer, logger) -> bool`: runs an atomic
+        report write. On `PermissionError` or another `OSError` it logs a
+        warning and returns `False` instead of raising (Q2, report files held
+        open).
 
 #### 5. `src/mri_dicom_pipeline/receipts.py` (Create)
 
 *   **Type / Scope**: Python module, receipts, entries, and coverage.
 *   **Proposed Changes**:
-    *   `receipt_info(root, receipt, inventory)`, moved. The directory map
-        keys are relative to `root` (`"."` for the root itself).
-    *   `fast_valid(entry, audit=False)`, moved. It resolves the relative
-        keys against `entry["root"]`; otherwise unchanged.
+    *   `receipt_info(root, receipt, inventory)`, moved. Adds `receipt_id`
+        from the receipt; keys stay absolute, as today.
+    *   `fast_valid(entry, kind, audit=False)`, moved unchanged apart from
+        the version constant. The `kind` argument stays, as today.
     *   `prepared_entry(sid, date, label, canonical, digest, inventory,
         extraction, conversion, last_attempt, accepted_multi_study)` builds
         the schema-3 session entry. It is used by `prepare.prepare_one` and
-        by reconciliation adoption.
+        by adoption.
     *   `conversion_record(destination, status, n_volumes, source_sha256,
-        provenance, coverage, created_utc, run_id)` adds `receipt_info`.
-    *   `required_series(inventory) -> (required_keys, excused_keys)`. For
-        schema-2 inventories without `sop_classes`, every series is
-        required (Q22).
+        provenance, coverage, run_id)` adds `receipt_info`.
+    *   `required_series(inventory) -> (required_keys, excused_keys)`.
     *   `output_series_keys(output_root, inventory_files) -> set`: reads the
         `.json` sidecars listed in a conversion inventory and returns their
-        `source_series_key` values. Used for re-evaluation after
-        re-preparation and by `migrate`.
+        `source_series_key` values. Used only by adoption.
     *   `coverage(required, excused, converted) -> dict` with `required`,
         `converted`, `excused`, and `missing` (sorted lists).
+    *   `adoptable(root, receipt, inventory, expected_digest, kind) -> bool`:
+        the Q12 adoption rule. It is true when the receipt matches
+        `expected_digest` (`archive_sha256` for `extract`; `complete` and
+        `source_sha256` for `convert`) and every inventory file exists at
+        its recorded size (one `stat` per file).
+    *   `adopted_record(root, receipt_path, inventory_path, kind) -> dict`:
+        builds the entry for an adopted folder from its receipt and inventory,
+        as Q12 lists.
 
 #### 6. `src/mri_dicom_pipeline/state.py` (Create)
 
 *   **Type / Scope**: Python module, persistent index (Q21, P11).
-*   **Proposed Changes**: `class State(report_root)`:
-    *   **Load:** read `index.json`. If it is missing, read `index.json.bak`.
-        If it fails to parse, read `.bak` and set
-        `recovered_from_backup = True`; the runner logs this and raises a
-        blocking issue `state:recovered`. If both exist and neither parses,
-        raise `StateError` naming both paths. If neither exists, start empty
-        (`version 3`, `last_seq 0`).
-    *   **Version:** 2 raises `StateError("schema 2 project: run
-        'mri-dicom-pipeline migrate'")`. Any version other than 3 raises
-        "unsupported".
+*   **Proposed Changes**: `class StateError(ValueError)`, so existing callers
+    and tests that expect `ValueError` keep working. `class State(report_root,
+    run_id=None)`; the optional `run_id` keeps today's one-argument calls in
+    tests working:
+    *   **Load:** the Q21 load decision table. A corrupt `index.json` is
+        renamed to `index.json.corrupt-<run_id>` (or `-<epoch seconds>`
+        without a run ID), and
+        `recovered_from_backup = True` is set; the runner logs it at error
+        level and notes it in the history row. If neither file can be read
+        but one exists, raise `StateError` naming both paths. If neither
+        exists, start empty (`version 3`, `last_seq 0`).
+    *   **Version:** any version other than 3 raises
+        `StateError("Unsupported state version N in <path>; this version
+        starts new projects only. Use a new --report-root.")` and writes
+        nothing. The message keeps today's "Unsupported state version" prefix.
     *   **Replay:** apply journals whose `seq` exceeds the loaded
         `last_seq`, in sequence order.
     *   `checkpoint(event)`: assign `seq = last + 1`, write the journal
         `<seq:016x>_<4 hex>.json` with `atomic_json`, apply the event, and
-        flush if at least 300 s have passed since the last flush.
-    *   `flush()`: set `last_seq`, write a temporary file with `fsync`,
-        rename `index.json` to `index.json.bak`, rename the temporary file
-        to `index.json`, then delete journals with
-        `seq <= (backup's last_seq)`.
+        flush if more than 10 s have passed since the last flush (as today).
+    *   `flush()`: set `last_seq` from memory, write a temporary file with
+        `fsync`, `os.replace` `index.json` onto `index.json.bak`, then
+        `os.replace` the temporary file onto `index.json`, then delete
+        journals with `seq <= (backup's last_seq)`.
     *   `apply(event)`: as today (session replacement, source upserts, issue
         clears and upserts).
 
@@ -1485,38 +1578,45 @@ tests can patch a function where it is defined.
 
 *   **Type / Scope**: Python module, locking (Q13).
 *   **Proposed Changes**:
-    *   `ProjectLock`, moved unchanged. It still guards
-        `<project-root>/.mri_dicom_pipeline.lock` for compatibility with
-        0.1.0 processes.
-    *   `RootLocks(roots, command, run_id)`, a context manager. It creates
-        each root if missing, then, in sorted path order, takes a
-        nonblocking OS lock on `<root>/.mri_dicom_pipeline.lock` (same
-        mechanism as `ProjectLock`). After each lock it writes
-        `<root>/.mri_dicom_pipeline.lock.owner`
+    *   `ProjectLock`, moved, and kept as the single-file lock primitive that
+        `RootLocks` uses. Nothing takes the project-root lock any more (Q13).
+    *   `class LockBusy(RuntimeError)`. It is the error `ProjectLock` raises
+        today (`test_lock_and_pending_journal_recovery` expects
+        `RuntimeError`). Message: "<root> is locked by <host> pid <pid>
+        (<command>, run <run_id>, since <time>)".
+    *   `RootLocks(roots, command, run_id)`, a context manager composed of
+        one `ProjectLock` per root. It creates each root if missing, then, in
+        sorted path order, locks `<root>/.mri_dicom_pipeline.lock`. After each
+        lock it writes `<root>/.mri_dicom_pipeline.lock.owner`
         (`{host, pid, command, run_id, started_utc}`). On the first failure
-        it releases the locks already taken, reads that root's owner file,
-        and raises `LockBusy` naming the root and the holder. On exit it
-        releases everything and removes its own owner files.
+        it releases the locks already taken, reads that root's owner file
+        (if it is missing or unreadable, the holder is "unknown"), and
+        raises `LockBusy`. On exit it releases everything and removes its own
+        owner files.
 
 #### 8. `src/mri_dicom_pipeline/recovery.py` (Create)
 
 *   **Type / Scope**: Python module, intents and reconciliation (Q12).
 *   **Proposed Changes**:
     *   Intent schema, in `Reports/.state/intents/<id>.json`:
-        `{version: 3, id, kind: "zip_move" | "publish", phase, key, run_id,
-        created_utc, ...paths}`. `zip_move` has `source`, `destination`,
-        and `markers` (a list of from/to pairs). `publish` has `stage`,
-        `destination`, `incoming`, `previous`, and `ownership_root`.
-    *   `write_intent(reports_root, kind, **fields) -> id` (workers) and
+        `{version: 3, id, kind: "publish", stage: "prepare" | "convert", key,
+        run_id, created_utc, stage_dir, destination, incoming, previous,
+        ownership_root, receipt_id, expected_digest}`. There is no ZIP-move
+        intent (Q12).
+    *   `write_intent(reports_root, **fields) -> id` (workers) and
         `clear_intents(reports_root, ids)` (coordinator, after the matching
         event is checkpointed).
     *   `reconcile(cfg, state, logger, dry_run) -> counts` implements the
         Q12 table in the Decision Log. Rules:
+        *   It skips intents whose `ownership_root` is not in
+            `cfg.lock_roots`.
         *   Every path it touches must pass `fsutil.owned` against the
             intent's root.
-        *   Adoption builds entries with `receipts.prepared_entry` or
-            `receipts.conversion_record` from the receipt and inventory
-            JSON, and records them through `state.checkpoint`.
+        *   Adoption uses `receipts.adoptable` and
+            `receipts.adopted_record`, and records the result through
+            `state.apply` plus `state.checkpoint`.
+        *   A case where it touches nothing raises the blocking issue
+            `recover:<intent id>` (issue table, file 13).
         *   Every action is logged.
         *   It is idempotent: each rule checks the current filesystem state
             before acting.
@@ -1525,7 +1625,7 @@ tests can patch a function where it is defined.
 #### 9. `src/mri_dicom_pipeline/classify.py` (Create)
 
 *   **Type / Scope**: Python module, classifier revision 2 (Q11).
-*   **Proposed Changes**: `CLASSIFIER_REVISION = 2`. Signature unchanged:
+*   **Proposed Changes**: Signature unchanged:
     `classify(description, protocol="", image_type=None)`.
     *   **Tokens:** the uppercase description and protocol text, split on
         every character other than `A–Z`, `0–9`, or `*`. The raw uppercase
@@ -1543,7 +1643,7 @@ tests can patch a function where it is defined.
         | 3 | `ADC` | word `ADC` |
         | 4 | `QSM` | word `QSM` |
         | 5 | `SWI_MINIP` | word `MINIP`; sequence `MIN IP`; word `MIP` together with word `SWI` or `SWAN` |
-        | 6 | `SWI` / `SWI_PHASE` | word `SWI` or `SWAN`; `SWI_PHASE` if word `PHA` or `PHASE`, or `ImageType` contains `P` or `PHASE` |
+        | 6 | `SWI` / `SWI_PHASE` | word `SWI` or `SWAN`; `SWI_PHASE` if word `PHA` or `PHASE`, or an `ImageType` value equals `P` or `PHASE` (so `PRIMARY` does not match) |
         | 7 | `FLAIR` | contains `FLAIR` |
         | 8 | `GRE` (T2*) | word `T2*` or `T2STAR`; sequence `T2 STAR` |
         | 9 | `T1` / `T1_POST` | prefix `T1`; contains `MPRAGE`; word `BRAVO`, `SPGR`, `THRIVE`. `T1_POST` if word `POST` or `GAD`, contains `GADO` or `CONTRAST`, or the raw text contains `+C` |
@@ -1560,7 +1660,6 @@ tests can patch a function where it is defined.
 *   **Type / Scope**: Python module, NIfTI pass-through (Q10) and sidecar
     filtering.
 *   **Proposed Changes**:
-    *   `SANITIZER_REVISION = 2`, meaning pass-through.
     *   `validate_and_gzip(source, destination)` replaces
         `sanitized_nifti`. It keeps every structural check (header size,
         magic, dimensions, bit depth, voxel offset, the 16 MiB extension
@@ -1573,73 +1672,88 @@ tests can patch a function where it is defined.
 
 #### 11. `src/mri_dicom_pipeline/prepare.py` (Create)
 
-*   **Type / Scope**: Python module, preparation (Q3, Q4, Q19, Q20, R18).
+*   **Type / Scope**: Python module, preparation (Q3, Q15, Q19, Q20, R18).
 *   **Proposed Changes**:
-    *   **Constants.** `DICOM_TAGS` adds `ImageType`,
-        `ImagePositionPatient`, `ImageOrientationPatient`, `PixelSpacing`,
-        and `SliceThickness`, all read in the same header-only read (Q9 tag
-        capture). `SKIP_EXT`, moved.
-        `MR_IMAGE_SOP_CLASSES` is the four UIDs in Q19.
-        `SOP_LIST_REVISION = 1`.
+    *   **Constants.** `DICOM_TAGS` adds `ImageType`, read in the same
+        header-only read. `SKIP_EXT`, moved. `MR_IMAGE_SOP_CLASSES` is the
+        four UIDs in Q19. `FREE_SPACE_RESERVE` is the smaller of 5% of the
+        filesystem or 50 GiB (Q15).
     *   **`HoldError(ValueError)`.** Produces outcome `held` with a blocking
-        issue. The ZIP stays where it is and no session entry changes.
+        `prepare:<path>` issue. The ZIP stays where it is and no session
+        entry changes.
+    *   **`Candidate`** (a named tuple): `source`, `sid`, `date`, `label`,
+        `fingerprint`, and `mode`, which is `"new"` (normal work) or
+        `"audit"` (re-hash a cached canonical ZIP only).
     *   **`discover(cfg)`**, moved.
-    *   **`marker_for(zip_path) -> ("done", None) | ("sha256", hex) |
-        None`.** Looks for `<name>.done` and `<name>.sha256` next to the
-        ZIP. The `.sha256` file is parsed as
-        `<64 hex>[ whitespace [*]filename]`; if a file name is present, it
-        must equal the ZIP name.
+    *   **`check_free_space(archive, stage_root, dicom_root)`.** Sums the
+        `file_size` of every member that is not a directory. Raises
+        `ValueError` ("not enough free space: need N bytes plus reserve,
+        have M") when the total plus `FREE_SPACE_RESERVE` exceeds
+        `shutil.disk_usage(stage_root).free`. If `dicom_root` is on a
+        different device, it checks that root too.
     *   **`extract_archive(source, stage, stop, accept_multi_study)`.**
         Keeps today's behavior, plus:
-        *   It keeps a `sop_uid -> (sha256, size)` map. A byte-identical
-            repeat is not written and increments `repeated_identical`. A
-            repeat with different bytes raises `HoldError`. A missing SOP
-            Instance UID raises `ValueError`.
+        *   It calls `check_free_space` after opening the ZIP and before
+            writing anything.
+        *   It keeps a `sop_uid -> (sha256, size)` map. Each object is still
+            hashed while it is written. A byte-identical repeat is then
+            deleted again, left out of the inventory, and counted in
+            `repeated_identical`; because names come from the inventory
+            length, numbering stays continuous. A repeat with different bytes
+            raises `HoldError`. A missing SOP Instance UID raises
+            `ValueError`.
         *   Series rows gain `sop_classes` (sorted list) and `required`
             (any class in `MR_IMAGE_SOP_CLASSES`). Classification passes
             `ImageType`.
-        *   File rows gain `series_key`, `ipp`, `iop`, `pixel_spacing`,
-            `slice_thickness`, `rows`, `cols`, and `frames`. A missing tag is
-            stored as `null`. Nothing reads these fields in phase 1.
         *   More than one StudyInstanceUID without `accept_multi_study`
             raises `HoldError`.
         *   `content_sha256` is computed over unique objects.
-    *   **`move_archive(source, destination, cfg, fingerprint, markers)`.**
-        Also renames the marker files to `<canonical name>.done` or
-        `.sha256` next to the canonical ZIP.
+    *   **`move_archive(source, destination, cfg, fingerprint)`**, moved
+        unchanged.
     *   **`prepare_one(candidate, previous, cfg, stop)`.** Order of
         operations:
-        1.  Hash the ZIP. With a `.sha256` marker, a mismatch is a failure
-            and the ZIP stays.
+        1.  Hash the ZIP. In `audit` mode, compare the hash with the recorded
+            `archive_sha256` and stop: a match changes nothing, and a
+            mismatch raises `HoldError`.
         2.  Canonical-change rule (Q3): if the source is the previous
             canonical archive and the digest differs, raise `HoldError`
             ("accepted canonical ZIP changed"). If the digest matches but
-            the signature changed, emit a "refresh" event that updates only
-            `archive_signature`.
-        3.  Duplicate and conflict logic as today, with the `replacement`
+            the signature changed, emit a "refresh" event. It updates the
+            session's `archive_signature` and the source record's
+            `signature` together, so the ZIP is not hashed again on the next
+            run.
+        3.  Adoption: if the destination holds a receipt that state does not
+            record, apply `receipts.adoptable` with the digest. On a pass,
+            emit an `adopted` event without extracting. On a mismatch, raise
+            `HoldError` ("extraction on disk does not match this ZIP").
+        4.  Duplicate and conflict logic as today, with the `replacement`
             branch removed. `--force-reextract` re-extracts only when the
             digest matches.
-        4.  Write the `zip_move` intent, then move. Write the `publish`
-            intent, then publish. Receipts carry `run_id`. The event carries
-            its intent IDs.
-        5.  If the previous entry has a conversion, re-evaluate coverage
-            with `receipts.output_series_keys` and `receipts.coverage`. A
-            `partial` caused only by missing series that are now excused
-            returns to `converted`; anything else is unchanged. No
-            reconversion happens.
+        5.  Move the ZIP (no intent; Q12). Write the `publish` intent, then
+            publish. Receipts carry `run_id`. The event carries its intent
+            ID.
+    *   **Outcomes.** Each outcome sets the event fields, the counter, the
+        source record, and the caching rule:
+
+        | Outcome | Counted as | Source record | Session entry | Issue |
+        |---|---|---|---|---|
+        | `prepared` | completed | `outcome: prepared`, signature | New entry | Clears `prepare:<path>` |
+        | `adopted` | completed | `outcome: prepared`, signature | Rebuilt by `receipts.adopted_record` | Clears `prepare:<path>` |
+        | `duplicate` | duplicate | `outcome: duplicate`, signature | Unchanged | Clears `prepare:<path>` |
+        | `refresh` | cached | Signature updated | `archive_signature` updated | None |
+        | `held` | held | `outcome: held`, signature; not hashed again until the signature changes | Unchanged; no entry is created for a new key | Blocking `prepare:<path>` |
+        | `failed` | failed | `outcome: failed`, signature; retried when the signature changes or with `--retry-failed`, as today | Unchanged for an existing session; a new key gets a `failed` entry, as today | Blocking `prepare:<path>` |
+
     *   **`plan_prepare(cfg, state, ids, pairs, logger)`.** Today's rules,
         plus:
         *   The `--session` filter.
-        *   A non-legacy ZIP whose path is not in `sources` needs a marker.
-            Otherwise it gets a nonblocking `wait:<path>` issue and no
-            task, unless an owned extraction exists for its key: then it is
-            planned as an *adopt* candidate (hash it and compare with the
-            extraction receipt's `archive_sha256`; adopt on a match, hold
-            otherwise).
+        *   The moved-project refusal (Q23), checked once before planning.
         *   A ready session whose canonical archive is missing from the
-            discovered paths gets a nonblocking `missing:<key>` issue.
-        *   With `--audit`, cached canonical ZIPs are re-hashed, and a
-            mismatch is held.
+            discovered paths gets a nonblocking `missing:<key>` issue. The
+            issue clears when the archive is listed again.
+        *   With `--audit`, each cached canonical ZIP becomes an `audit`
+            candidate. A dry run with `--audit` hashes it and writes nothing
+            (P7).
 
 #### 12. `src/mri_dicom_pipeline/convert.py` (Create)
 
@@ -1653,25 +1767,32 @@ tests can patch a function where it is defined.
         thread decodes each line (`errors="replace"`), redacts it, and
         writes it to `converter.log`, so raw output never reaches disk.
         Stopping on stop or timeout: on POSIX, `SIGTERM` to the process
-        group, wait 5 s, then `SIGKILL` to the group; on Windows,
-        terminate, wait 5 s, kill (whole-tree termination arrives in phase
-        2).
+        group, wait 10 s (today's grace period), then `SIGKILL` to the group;
+        on Windows, terminate, wait 10 s, kill. On Windows, processes the
+        converter started are not stopped (Q2). `reason` is `stopped` when
+        the stop flag was set or the return code is `-SIGTERM` or
+        `-SIGKILL`, and `timeout` or `exit` otherwise.
     *   **`organize_conversion(...)`.** As today, but using
-        `nifti.validate_and_gzip` and `nifti.check_companion`. It also
-        returns `converted_keys`: the `source_series_key` of each valid
-        volume.
+        `nifti.validate_and_gzip` and `nifti.check_companion`. It returns
+        `(volumes, files, errors, converted_keys, converter_versions)`:
+        today's three values, the `source_series_key` of each valid volume,
+        and the set of sidecar `ConversionSoftwareVersion` values.
+    *   The redacted diagnostic in `event["detail"]` and its copy into
+        `latest_convert.log` stay as today. The text is already redacted line
+        by line before it reaches disk.
     *   **`convert_one(entry, cfg, stop)`:**
         1.  Read the extraction inventory and call
             `receipts.required_series`.
-        2.  Run the converter. Organize the output. Compute
-            `receipts.coverage`. Each missing required key adds the error
-            "Missing required series: …".
+        2.  Run the converter. If `reason` is `stopped`, keep the stage,
+            record `interrupted`, and return; nothing is organized, gzipped,
+            hashed, or published (Q12). Otherwise organize the output and
+            compute `receipts.coverage`. Each missing required key adds the
+            error "Missing required series: …".
         3.  Build `provenance`: package version, `run_id`, the resolved
-            converter path, the argument list after the executable, the
-            sorted set of sidecar `ConversionSoftwareVersion` values, and
-            the classifier, sanitizer, and SOP-list revisions. It is written
-            into the receipt together with `coverage`, `n_volumes`, and
-            `run_id`.
+            converter path, the argument list after the executable, and the
+            sorted set of sidecar `ConversionSoftwareVersion` values. It is
+            written into the receipt together with `coverage`, `n_volumes`,
+            and `run_id`.
         4.  **Explicit reconversion over last-good:** when the destination
             is the session's recorded complete folder, list its tree. If any
             file is outside its inventory and the control files, fail with
@@ -1680,119 +1801,120 @@ tests can patch a function where it is defined.
         6.  **State:** success sets `conversion` to the new record and
             clears `last_attempt`. A failure, partial, or interrupt with an
             existing complete `conversion` keeps that record and sets
-            `last_attempt = {status, output, created_utc, run_id, reason}`.
-            Without a complete `conversion`, it behaves as today and adds
-            `created_utc`.
-    *   **`plan_convert(cfg, state, ids, pairs, logger)`:**
+            `last_attempt = {status, output, run_id, reason}`. Without a
+            complete `conversion`, it behaves as today.
+    *   **`plan_convert(cfg, state, ids, pairs, logger)`.** "Complete" is
+        defined in Q7.
         *   **Complete session**, not forced: a valid receipt means cached;
             an invalid one adds the blocking issue `output:<key>` ("output
-            modified; restore it or reconvert explicitly") and no task.
+            modified; revalidate with --audit --session or reconvert
+            explicitly") and no task.
+        *   **Complete session, `--audit` with `--session`:** if the folder
+            fails only the mtime check, every inventory file hashes to its
+            recorded value, and the folder holds no files outside its
+            inventory and control files, record fresh `receipt_info` and
+            clear `output:<key>` (Q7 revalidation). Otherwise the issue
+            stays.
         *   **Complete session, `--force-reconvert`:** selected, subject to
             `--session`.
-        *   **No conversion record but a complete folder exists** at the
-            canonical path: read its receipt (one small read, only in this
-            case). Adopt it if `complete` and `source_sha256` match the
-            prepared content; otherwise add the blocking issue
-            `output:<key>` ("unreferenced output folder"). It is never
-            replaced automatically.
-        *   **Blocked set:** prepare issues for the session, excluding the
-            nonblocking prefixes.
+        *   **Conversion record under a different NIfTI root:** treated as no
+            record at this root (Q7).
+        *   **No conversion record but a folder with a receipt exists** at
+            the canonical path: read its receipt (one small read, only in this
+            case) and apply `receipts.adoptable`. Adopt on a pass; otherwise
+            add the blocking issue `output:<key>` ("unreferenced output
+            folder"). It is never replaced automatically.
+        *   **Blocked set:** prepare issues for the session that the issue
+            table marks blocking.
         *   Failed, partial, and interrupted rules without a complete record
-            stay as today.
+            stay as today. `--retry-failed` never selects a complete
+            session.
 
 #### 13. `src/mri_dicom_pipeline/reports.py` (Create)
 
 *   **Type / Scope**: Python module, logs, CSV reports, history.
 *   **Proposed Changes**:
-    *   `setup_log` and `write_csv`, moved.
-    *   `NONBLOCKING_PREFIXES = ("date:", "wait:", "missing:")` and
+    *   `setup_log`, `write_csv`, and `problem()`, moved.
+    *   **Issue table.** An issue is *blocking* when it counts toward the
+        unresolved total that makes a run exit with code 2. A nonblocking
+        issue is reported but does not change the exit code.
+        `NONBLOCKING_PREFIXES = ("date:", "missing:")` and
         `unresolved(state) -> int`.
+
+        | Key | Raised by | Blocking | Cleared by |
+        |---|---|---|---|
+        | `prepare:<ZIP path>` | Preparation failures and holds (Q3, Q15, Q20) | Yes; it also blocks conversion of that session | The next accepted preparation of that path, or the path disappearing (today's stale-issue rule) |
+        | `date:<key>` | Header dates that differ from the file name (today) | No | As today |
+        | `missing:<key>` | A ready session whose canonical ZIP is not listed (R18) | No | The ZIP being listed again |
+        | `convert:<key>` | Conversion failures, partials, and interrupts (today's key) | Yes | The next successful conversion of that session |
+        | `output:<key>` | A complete folder that fails its receipt check, or an unreferenced folder that fails adoption (Q7) | Yes | Revalidation with `convert --audit --session KEY`, an explicit reconversion, or the folder passing its check on a later run |
+        | `recover:<intent id>` | A reconciliation case that touches nothing (Q12) | Yes | The intent file being gone when the next run reconciles (the runbook says how to resolve it) |
+
     *   `reports(state, cfg, pairs)`: `session_status.csv` adds
-        `required_series`, `converted_series`, `excused_series`,
-        `last_attempt_status`, and `last_attempt_folder`.
-        *   `prepare_status` can also be `waiting_for_marker` or `held`.
-        *   `conversion_status` can also be `output_modified`.
+        `required_series`, `converted_series`, and `excused_series`
+        (semicolon-separated series keys), plus `last_attempt_status` and
+        `last_attempt_folder`.
+        *   `prepare_status` can also be `held`, taken from a blocking
+            `prepare:` issue on a ZIP whose name maps to the session key.
+        *   `conversion_status` can also be `output_modified`, taken from an
+            open `output:<key>` issue.
         *   "Converted with a failed last attempt" shows as `converted`
             plus a non-empty `last_attempt_status`.
+        *   Every report and history write goes through
+            `fsutil.write_text_or_log`. A file held open (for example by
+            Excel) is logged and retried at the next report write, and the
+            run continues (Q2).
     *   `append_history(cfg, row)`: columns are today's plus `reconciled`.
-        Outcomes: `ok`, `issues`, `interrupted`, `terminated`, `aborted`.
+        Outcomes: `ok`, `issues`, `interrupted` (Ctrl+C, exit 130),
+        `terminated` (SIGTERM, exit 143), and `aborted` (normal
+        finalization not reached).
 
 #### 14. `src/mri_dicom_pipeline/runner.py` (Create)
 
 *   **Type / Scope**: Python module, command orchestration.
 *   **Proposed Changes**:
-    *   `main(phase, argv)`: configure, then load the roster, then (except
-        in a dry run) enter `ProjectLock` and `RootLocks`. It loads `State`,
-        reconciles (report-only in a dry run), plans, applies `--limit`,
-        and runs workers.
+    *   `main(phase, argv=None)` (the default stays, as today): install the
+        stop handler, configure, load the roster, then (except in a dry run)
+        enter `RootLocks`. It loads `State`, reconciles (report-only in a
+        dry run), plans, applies `--limit`, and runs workers. `run()` from
+        `pipeline.py` moves here.
         *   The `try`/`finally` around everything after locking writes a
             history row on every exit path, with outcome `aborted` when
             normal finalization was not reached.
         *   `LockBusy` and `StateError` return 2.
-    *   **Signals:** a SIGTERM handler on the main thread raises
-        `Terminated(BaseException)`. It is handled like `KeyboardInterrupt`
-        (stop event, pool shutdown, drain, flush, reports) and returns 143.
-        Ctrl+C still returns 130.
+    *   **Signals (Q12):** one handler for SIGTERM and SIGINT, installed at
+        the start of `main` for the whole run. The first signal sets the stop
+        event and records which signal arrived; later signals are ignored
+        until the run ends. Workers see the stop event; the coordinator
+        drains finished events, then attempts the final flush and the report
+        rewrite. A failure in either is logged and does not change the exit
+        code. The run returns 143 after SIGTERM and 130 after Ctrl+C,
+        including a signal that arrives during planning.
     *   `accept(event)`: `state.checkpoint(event)`, then
-        `recovery.clear_intents(event.get("intents", []))`, then today's
-        counting and logging.
+        `recovery.clear_intents(cfg.reports, event.get("intents", []))`, then
+        today's counting and logging.
     *   `process_subject`, moved. It receives `cfg` (which carries `run_id`
         and the accepted multi-study set).
 
-#### 15. `src/mri_dicom_pipeline/migrate.py` (Create)
-
-*   **Type / Scope**: Python module, the `migrate` command (Q22).
-*   **Proposed Changes**: `main(argv) -> int`:
-    *   Parse with `config.migrate_parser`. Take all locks.
-    *   Read the schema-2 index directly (this bypasses the `State` version
-        check) and replay schema-2 journals in name order.
-    *   For each session, read its preparation inventory (one small JSON).
-        Mark series `required = true` with `sop_classes = ["unknown"]`.
-        Geometry tags are not back-filled; that would need header reads,
-        which Q22 excludes.
-        Recompute `content_sha256` over unique `(sha256, size)` pairs. When
-        it changes, update the conversion `source_sha256` in the same
-        step. Convert directory-map keys to relative form. Set entry
-        `version: 3`.
-    *   For each converted session: `receipts.output_series_keys`, then
-        `receipts.coverage`. A missing key sets status `partial`, keeps the
-        folder recorded, and adds the blocking issue
-        `convert:<key>` ("migrated: required series missing (SOP class
-        unknown); re-prepare to record SOP classes").
-    *   `study_count > 1` adds the multi-study hold issue. Provenance is
-        rebuilt from the sidecars plus the fixed 0.1.0 argument list, with
-        revision 1 for everything.
-    *   `--dry-run` prints counts and per-session changes and writes
-        nothing.
-    *   Apply, in this order:
-        1.  copy `index.json` to `index.v2.json`;
-        2.  write the schema-3 `index.json` atomically (`last_seq 0`);
-        3.  delete the schema-2 journals;
-        4.  rename `run_history.csv` to `run_history.v2.csv`.
-
-        A rerun on schema 3 is a no-op that returns 0. An interruption
-        before step 2 leaves schema 2 intact.
-
-#### 16. `src/mri_dicom_pipeline/cli.py` (Modify)
+#### 15. `src/mri_dicom_pipeline/cli.py` (Modify)
 
 *   **Type / Scope**: Installed CLI entry point.
-*   **Proposed Changes**: Commands become `prepare`, `convert`, and
-    `migrate`. `prepare` and `convert` dispatch to `runner.main`; `migrate`
-    dispatches to `migrate.main`.
+*   **Proposed Changes**: Commands stay `prepare` and `convert`. Both
+    dispatch to `runner.main` (retargeted from `pipeline` in step 0).
 
-#### 17. `src/mri_dicom_pipeline/__init__.py` (Modify)
+#### 16. `src/mri_dicom_pipeline/__init__.py` (Modify)
 
 *   **Type / Scope**: Package metadata.
 *   **Proposed Changes**: `__version__ = "0.2.0"`, the minor bump for the
     schema change (Q17 versioning).
 
-#### 18. `Scripts/unzip_and_inventory_dicoms.py` and `Scripts/convert_dicoms_to_nifti.py` (Modify)
+#### 17. `Scripts/unzip_and_inventory_dicoms.py` and `Scripts/convert_dicoms_to_nifti.py` (Modify)
 
 *   **Type / Scope**: Source-checkout launchers.
 *   **Proposed Changes**: Import `main` from `mri_dicom_pipeline.runner`
     instead of `.pipeline`. No other change.
 
-#### 19. `pyproject.toml` (Modify)
+#### 18. `pyproject.toml` (Modify)
 
 *   **Type / Scope**: Build configuration.
 *   **Proposed Changes**:
@@ -1805,7 +1927,7 @@ tests can patch a function where it is defined.
         `Operating System :: Microsoft :: Windows`.
     *   Dependencies unchanged.
 
-#### 20. `LICENSE` and `NOTICE` (Create)
+#### 19. `LICENSE` and `NOTICE` (Create)
 
 *   **Type / Scope**: Legal files.
 *   **Proposed Changes**: `LICENSE` is the unmodified Apache License 2.0
@@ -1814,27 +1936,13 @@ tests can patch a function where it is defined.
     or institution owns the code, it replaces the name here before the
     first release.
 
-#### 21. `MANIFEST.in` (Modify)
-
-*   **Type / Scope**: sdist contents.
-*   **Proposed Changes**: Add `include LICENSE NOTICE`. The exclusions are
-    unchanged.
-
-#### 22. `tests/check_distribution.py` (Modify)
-
-*   **Type / Scope**: Artifact content check.
-*   **Proposed Changes**:
-    *   Require `LICENSE` and `NOTICE` in both the wheel (under
-        `*.dist-info/licenses/`) and the sdist.
-    *   Replace `assert` statements with explicit checks that raise
-        `SystemExit`, so `python -O` cannot disable them (baseline §16.3).
-
-#### 23. `.github/workflows/ci.yml` (Modify)
+#### 20. `.github/workflows/ci.yml` (Modify)
 
 *   **Type / Scope**: CI.
 *   **Proposed Changes**:
     *   **`test` job:** OS `[ubuntu-latest, windows-latest]` × Python
-        `["3.11", "3.12", "3.13", "3.14"]`.
+        `["3.11", "3.12", "3.13", "3.14"]` (today: 3.10 and 3.12). The
+        install step stays `python -m pip install -e ".[test]"`.
     *   **New `real-converter` job:** OS `[ubuntu-latest, windows-latest]`
         × `dcm2niix` `[OLDEST, NEWEST]`, Python 3.12. It downloads the
         release archive for the OS from
@@ -1846,33 +1954,34 @@ tests can patch a function where it is defined.
             implemented.
         *   `OLDEST` is the version the target cluster's module provides
             (Q2); if that cannot be determined, `OLDEST = NEWEST`, and the
-            README support table lists a single version.
-    *   **`package` job:** adds `migrate --help` to the smoke commands.
+            README lists a single version.
+    *   **`package` job:** unchanged.
 
-#### 24. `tests/support.py` (Create)
+#### 21. `tests/support.py` (Create)
 
 *   **Type / Scope**: Shared test helpers (moved out of `test_pipeline.py`,
     which `test_project_configuration.py` imports today).
 *   **Proposed Changes**:
+    *   Step 0 moves `dicom_bytes`, `archive`, `call`, and `state` here
+        unchanged.
     *   `dicom_bytes(...)` gains `sop_class`, `sop_uid`, `series_uid`,
         `study_uid`, `description`, and slice geometry (`ImagePositionPatient`,
         `ImageOrientationPatient`, `PixelSpacing`, `SliceThickness`), so the
-        real converter accepts the output.
-    *   `archive(root, relative, members, marker="done" | "sha256" | None)`.
-    *   `call`, `state`.
+        real converter accepts the output (step 1).
     *   `fake_converter_script(...)`: the fake converter reads its input
         DICOMs with `pydicom` and names outputs `series_<SeriesInstanceUID>_…`.
-        Switches: skip one series, set the exit code, print a sentinel line
-        then sleep, spawn a child process, write a header sentinel.
-    *   `make_schema2_project(root, sessions)`: writes 0.1.0-format state,
-        receipts, inventories, and sidecars as described in baseline §12.1.
-        Sessions can include a non-image series, `study_count = 2`,
-        repeated file hashes, and a series missing from the outputs.
-    *   `run_with_crash(root, phase, crash_point, *args)`: runs a child
-        Python process that patches the named function to call
-        `os._exit(137)` on its N-th call, then calls `runner.main`.
+        This replaces today's hard-coded series key, which would make every
+        existing conversion test `partial` under strict coverage. Switches:
+        skip one series, set the exit code, print a sentinel line then sleep,
+        spawn a child process, write a header sentinel.
+    *   `run_with_crash(root, phase, target, n, *args)`: runs a child Python
+        process that patches the dotted function `target` to call
+        `os._exit(137)` on its `n`-th call, then calls `runner.main`.
+    *   `cross_device_copy(fail_after)`: a patch for `fsutil.publish_tree`
+        that forces the `copytree` path and kills the process after
+        `fail_after` files are copied (Q12 crash case).
 
-#### 25. `tests/conftest.py` (Create)
+#### 22. `tests/conftest.py` (Create)
 
 *   **Type / Scope**: pytest fixtures.
 *   **Proposed Changes**:
@@ -1880,7 +1989,7 @@ tests can patch a function where it is defined.
     *   `converter` (a fake converter built with `fake_converter_script`).
     *   `real_dcm2niix`: skipped unless `MRI_PIPELINE_DCM2NIIX` is set.
 
-#### 26. `tests/test_pipeline.py` (Modify)
+#### 23. `tests/test_pipeline.py` (Modify)
 
 *   **Type / Scope**: Existing integration tests.
 *   **Proposed Changes**:
@@ -1899,23 +2008,27 @@ tests can patch a function where it is defined.
         `state`.
     *   `test_sequence_categories_and_truncated_nifti` targets `classify`
         and `nifti.validate_and_gzip`.
-    *   `test_1000_cached_sessions_do_not_read_scan_contents` moves to
-        `test_cache_budget.py`.
-    *   Every ZIP these tests create gets a `.done` marker.
+    *   `test_path_traversal_member_cannot_escape`: the extra member is a
+        byte-identical repeat of the first object, so it now expects
+        `n_dicom == 1` and `repeated_identical == 1` (Q20). The escape
+        assertion stays.
+    *   `test_output_root_override_does_not_reuse_other_root` stays as it is
+        and must keep passing (Q7).
+    *   `test_1000_cached_sessions_do_not_read_scan_contents` stays here,
+        rebuilt on schema 3. It remains Goal 5's evidence.
 
-#### 27. `tests/test_project_configuration.py` (Modify)
+#### 24. `tests/test_project_configuration.py` (Modify)
 
 *   **Type / Scope**: Existing configuration tests.
 *   **Proposed Changes**:
     *   Import helpers from `support`.
     *   `test_old_state_rejected_without_writes` is parametrized over
-        versions 1 and 2; for version 2 it expects the "run migrate"
-        message.
+        versions 1 and 2. Both expect the "Unsupported state version"
+        message and an unchanged file.
     *   `test_publish_rolls_back_if_swap_fails` passes the swap names to
         `fsutil.publish_tree`.
-    *   `test_public_cli_help` adds `['migrate', '--help']`.
 
-#### 28. `tests/test_identity.py` (Create)
+#### 25. `tests/test_identity.py` (Create)
 
 *   **Type / Scope**: Unit tests (T01, T02).
 *   **Proposed Changes**:
@@ -1925,15 +2038,18 @@ tests can patch a function where it is defined.
     *   `test_session_key_grammar` (`_1` and `_02` rejected; `_2` and `_10`
         accepted)
 
-#### 29. `tests/test_inputs.py` (Create)
+#### 26. `tests/test_inputs.py` (Create)
 
-*   **Type / Scope**: Integration tests (T03, T05, T06; R05, R06, R12,
-    R18; P3, P7).
+*   **Type / Scope**: Integration tests (T03, T05, T06, T09; R05, R06, R07,
+    R12, R18; P3, P7).
 *   **Proposed Changes**:
-    *   **Markers:** `test_zip_without_marker_waits_nonblocking` (exit 0,
-        `wait:` issue), `test_sha256_marker_mismatch_fails_and_keeps_zip`,
-        `test_marker_moves_with_zip`, `test_legacy_import_needs_no_marker`,
-        `test_adopt_canonical_zip_without_marker_when_extraction_matches`.
+    *   **Uploads and space:**
+        `test_truncated_upload_fails_then_prepares_when_complete` (Q4),
+        `test_free_space_check_refuses_extraction_and_keeps_zip` (Q15;
+        patches `shutil.disk_usage`),
+        `test_legacy_import_moves_zip_and_never_deletes_it` (CUJ 6),
+        `test_empty_state_adopts_matching_extraction` (D6),
+        `test_moved_project_refused`.
     *   **Immutable canonical ZIPs:**
         `test_changed_canonical_zip_is_held_and_outputs_unchanged` (P3),
         `test_restored_canonical_zip_accepted_without_reextract`,
@@ -1949,7 +2065,7 @@ tests can patch a function where it is defined.
     *   **Dry run:** `test_dry_run_audit_hashes_but_writes_nothing` (P7: the
         documented behavior and the help text).
 
-#### 30. `tests/test_conversion.py` (Create)
+#### 27. `tests/test_conversion.py` (Create)
 
 *   **Type / Scope**: Integration tests (T08, T11–T14, T18; P1, P4, P8,
     P10).
@@ -1960,7 +2076,9 @@ tests can patch a function where it is defined.
         an added file stays, exit 2),
         `test_force_reconvert_refuses_folder_with_extra_files`,
         `test_failed_reconversion_keeps_last_good` (P4),
-        `test_unreferenced_complete_folder_adopted_not_replaced`.
+        `test_unreferenced_complete_folder_adopted_not_replaced`,
+        `test_adoption_refused_when_volume_deleted`,
+        `test_restored_folder_revalidated_by_audit_session`.
     *   **Output bytes and privacy:**
         `test_published_nifti_is_byte_identical_to_converter_output` (Q10),
         `test_header_text_passes_through_and_sidecar_stays_filtered` (T14
@@ -1973,95 +2091,89 @@ tests can patch a function where it is defined.
         and the existing cases),
         `test_prepare_and_convert_labels_agree`.
     *   **Selection and reports:** `test_session_filter_limits_work`,
-        `test_status_columns_and_last_attempt_reported` (T18).
-    *   **Tag capture (Q9):** `test_geometry_tags_recorded_in_inventory`
-        (the four tags per object, with `null` when absent).
+        `test_status_columns_and_last_attempt_reported` (T18),
+        `test_report_file_held_open_does_not_stop_run` (Q2; patches
+        `os.replace` to raise `PermissionError` for `session_status.csv`).
 
-#### 31. `tests/test_recovery.py` (Create)
+#### 28. `tests/test_recovery.py` (Create)
 
 *   **Type / Scope**: Crash-injection and process-control tests (T07–T09;
     P5, P11).
 *   **Proposed Changes**:
-    *   **`test_crash_at_boundary_reconciles`**, parametrized over the
-        crash points: after a `zip_move` intent; after the ZIP rename; after
-        the stage→incoming, destination→previous, and incoming→destination
-        renames; before the previous folder is removed; after publish
-        before the event; after the journal write before the intent is
-        cleared; after the index→bak rename before the temporary→index
-        rename.
-        *   Each case reruns the command and asserts: no `.incoming_*` or
-            `.previous_*` left; every session at its prior valid state or
-            its new result; no input lost.
+    *   **`test_crash_at_boundary_reconciles`**, parametrized over the crash
+        matrix below. Each case runs the command through
+        `support.run_with_crash`, reruns it normally, and asserts: no
+        `.incoming_*` or `.previous_*` left; every session at its prior valid
+        state or its new result; no input lost.
+
+        | Crash point | Command | Expected after the rerun |
+        |---|---|---|
+        | After the ZIP rename, before the publish intent | `prepare` | Canonical ZIP prepared as new work |
+        | After stage→incoming, before destination→previous | both | `.incoming_*` removed; work redone (first publish) or old folder kept |
+        | During a cross-device copy into `.incoming_*` (`support.cross_device_copy`) | both | `.incoming_*` removed; work redone; never `converted` with missing volumes |
+        | After destination→previous, before incoming→destination | both | Rolled back to the old folder |
+        | After incoming→destination, before the event | both | Adopted after the stat check |
+        | After the event's journal write, before the intent is cleared | both | Intent cleared; swap leftovers removed |
+        | After `index.json`→`.bak`, before temporary→`index.json` | both | `.bak` loaded silently; no rollback |
     *   **State and reconciliation:**
         `test_crash_during_reconciliation_is_recoverable`,
         `test_partial_journal_deletion_does_not_roll_back` (P11; it forces
         newest-first listing order, because NTFS's alphabetical order hides
         the defect),
-        `test_corrupt_index_recovers_from_backup`,
-        `test_both_index_files_corrupt_stops_run`.
+        `test_corrupt_index_recovers_from_backup` (moved aside, history
+        note, no persistent issue),
+        `test_both_index_files_corrupt_stops_run`,
+        `test_reconcile_skips_intents_on_unlocked_roots`.
     *   **Signals (skipped on Windows):**
-        `test_sigterm_stops_converter_group_within_20s` (exit 143; the fake
-        converter's child process is gone).
+        `test_sigterm_stops_converter_group_and_exits_143` (the fake
+        converter's child process is gone; the session is `interrupted`;
+        nothing is published).
     *   **Other exits and faults:**
         `test_history_row_written_on_early_abort`,
         `test_enospc_during_publish_keeps_old_output` (a simulated `OSError`
         with `ENOSPC` on rename or copy).
 
-#### 32. `tests/test_locks.py` (Create)
+#### 29. `tests/test_locks.py` (Create)
 
 *   **Type / Scope**: Multi-process lock tests (T10, local part).
 *   **Proposed Changes**:
     *   `test_shared_report_root_excludes_different_projects` (a child
         process holds the locks)
-    *   `test_lock_failure_names_holder`
-    *   `test_legacy_project_lock_still_excludes`
+    *   `test_lock_failure_names_holder` (and "unknown" when the owner file
+        is missing)
     *   `test_dry_run_takes_no_lock`
 
-#### 33. `tests/test_migrate.py` (Create)
-
-*   **Type / Scope**: Migration tests (T17).
-*   **Proposed Changes**:
-    *   `test_commands_refuse_schema2_and_point_to_migrate`
-    *   `test_migrate_dry_run_writes_nothing`
-    *   `test_migrate_upgrades_schema2_and_keeps_backup`
-    *   `test_migrate_recomputes_digest_with_repeats`
-    *   `test_migrate_flags_multi_study`
-    *   `test_migrate_marks_missing_series_partial_and_reprepare_clears`
-    *   `test_migrate_interrupted_then_rerun`
-
-#### 34. `tests/test_cache_budget.py` (Create)
-
-*   **Type / Scope**: Incrementality budget (T06; Q18 per-session budgets).
-*   **Proposed Changes**: `test_1000_cached_sessions_do_not_read_scan_contents`,
-    moved and rebuilt on schema 3.
-    *   It counts calls to `os.stat`, `os.scandir`, and `os.listdir`, and
-        `open` calls on files under the managed roots.
-    *   It asserts zero content opens, and metadata calls per session of at
-        most 20 for `prepare` and at most 20 for `convert`.
-    *   It prints the timings, as today.
-
-#### 35. `tests/test_real_converter.py` (Create)
+#### 30. `tests/test_real_converter.py` (Create)
 
 *   **Type / Scope**: Real `dcm2niix` smoke tests (Q9; P1 and Q19
     hypotheses). Runs only when `MRI_PIPELINE_DCM2NIIX` is set.
-*   **Proposed Changes**:
+*   **Proposed Changes**: Step 1 writes each test against `dcm2niix`'s own
+    behavior, and step 7 adds the session-level assertions in parentheses.
     *   `test_real_converter_names_outputs_by_series_uid` (output keys
         equal the inventory keys)
-    *   `test_real_converter_with_non_image_object_converts` (a CSA
-        Non-Image object is present; the exit code is recorded; the session
-        is `converted` with that series excused)
-    *   `test_real_converter_unconvertible_series_makes_session_partial`
-        (the observed exit code is logged as evidence for P1)
-    *   `test_real_converter_output_byte_identical`
+    *   `test_real_converter_with_non_image_object_converts`: a CSA
+        Non-Image object is present, and the exit code is recorded. Step 7
+        adds: the session is `converted` with that series excused. A
+        nonzero exit reopens Q19.
+    *   `test_real_converter_unconvertible_series_makes_session_partial`:
+        the observed exit code is logged as evidence for P1. Step 7 adds:
+        the session is `partial`.
+    *   `test_real_converter_output_byte_identical`: also asserts that the
+        output NIfTI files carry no header extensions (invariant 8).
 
-#### 36. `README.md` (Modify)
+#### 31. `README.md` (Modify)
 
 *   **Type / Scope**: Operator documentation (Goal 7, phase 1 part; the
     full contract rewrite is phase 4).
 *   **Proposed Changes**: Update the following and remove the claims they
     contradict:
     *   Python 3.11+.
-    *   Required upload markers.
+    *   Uploads: do not run `prepare` while copies into `Uploads/` are in
+        progress, or copy under a temporary name and rename it; partial copies
+        fail and are retried (Q4). ZIPs are moved, never modified or deleted.
+    *   Archives are assumed to come from the lab's own scanner exports; the
+        free-space check (Q14, Q15).
+    *   Moving a project is not supported yet (Q23).
     *   Immutable canonical ZIPs and the conflict, multi-study, and repeat
         holds (with `--accept-multi-study`).
     *   Strict `converted` and excused non-image series.
@@ -2073,26 +2185,45 @@ tests can patch a function where it is defined.
     *   Header text pass-through, with the time of day in `descrip` (this
         replaces "header text/extensions are cleared").
     *   Dry run with `--audit` hashing; `prepare --audit` re-hashing ZIPs.
-    *   Per-root locks with a pointer to the runbook's two-node check.
+    *   Per-root locks with a pointer to the runbook's two-node check; the
+        "State schema version 2 uses … `.mri_dicom_pipeline.lock`" sentence
+        becomes schema 3 with per-root lock files.
     *   Exit codes 0, 2, 130, 143.
-    *   `migrate` and rollback.
-    *   Classifier revision 2 and mixed layouts.
+    *   Older state is refused, not migrated (Q22); rollback (NFR).
+    *   Classifier revision 2 rules.
     *   License: Apache-2.0 (replacing "no license has been selected").
     *   The CI matrix and the real-converter jobs.
+    *   `run_history.csv`: one row per locked invocation, including
+        `terminated` and `aborted`, with a `reconciled` count (replacing "one
+        compact row per completed/interrupted invocation").
+    *   The `session_status.csv` field list, with the new columns.
+    *   The `.state` contents: `index.json.bak` and `intents/`.
+    *   Nonblocking issues: date mismatches and missing canonical ZIPs.
+    *   Interrupted work is retried automatically, except an interrupted
+        explicit reconversion.
 
-#### 37. `docs/runbook.md` (Create)
+#### 32. `docs/runbook.md` (Create)
 
 *   **Type / Scope**: Operator procedures. Phase 1 contents; phase 4 extends
     it.
 *   **Proposed Changes**: One section per procedure:
-    *   The two-node lock check (T10 site evidence) and how to record it.
-    *   Upgrading with `migrate`, and rolling back.
-    *   Clearing migrated false `partial` sessions.
-    *   Resolving a canonical-ZIP conflict, a multi-study hold, and an
-        `output modified` issue.
+    *   First production run (CUJ 6). Keep a copy of every ZIP outside the
+        project before the first run; `prepare` moves accepted ZIPs into
+        `SubjectsSorted/` and never modifies or deletes them.
+    *   The two-node lock check (T10 site evidence), only when runs start
+        from more than one machine on shared storage, and how to record it.
+    *   Resolving a canonical-ZIP conflict, a multi-study hold, an
+        `output modified` issue (revalidate or reconvert), and a `recover:`
+        issue.
     *   Explicit reconversion.
     *   What reconciliation does after a crash and what it reports.
-    *   Recovery from a corrupt index.
+    *   Recovery from a corrupt index; what happens with empty state and
+        full roots (D6).
+    *   Rolling back to 0.1.0.
+    *   Manual cleanup of failed stages and `.pending/` attempts (Q15).
+    *   Slurm: sending SIGTERM to the pipeline ahead of the time limit
+        (`#SBATCH --signal=B:TERM@<seconds>`, with `exec` in the batch
+        script so the signal reaches the pipeline).
     *   Quota exhaustion.
     *   Node-local staging limits.
 
@@ -2100,8 +2231,10 @@ tests can patch a function where it is defined.
 
 `src/mri_dicom_pipeline/__main__.py`, `Scripts/prepare_dicoms.sh`,
 `Scripts/convert_dicoms.sh`, `Scripts/requirements.txt`,
-`examples/sessions.csv`, `.gitignore` (lock, owner, marker, and backup
-files all sit under roots that are already ignored), `.gitattributes`, and
+`examples/sessions.csv`, `.gitignore` (lock, owner, and backup files all sit
+under roots that are already ignored), `.gitattributes`, `MANIFEST.in`
+(setuptools adds the license files to the sdist), `tests/check_distribution.py`
+(its license checks wait for phase 4), and
 the baseline files `docs/designs/mriDICOMpipeline-current-state-spec.md`,
 `docs/designs/concepts_brief.md`, and
 `docs/designs/current-source-manifest.json`. The baseline stays unchanged,
@@ -2115,11 +2248,11 @@ as baseline §21 requires.
 | P2 | Deliberately open (Q8); `test_provenance_recorded_in_receipt_and_state` covers the record |
 | P3 | `test_inputs.py::test_changed_canonical_zip_is_held_and_outputs_unchanged` |
 | P4 | `test_conversion.py::test_failed_reconversion_keeps_last_good` |
-| P5 | `test_recovery.py::test_crash_at_boundary_reconciles`, `test_sigterm_stops_converter_group_within_20s` |
+| P5 | `test_recovery.py::test_crash_at_boundary_reconciles`, `test_sigterm_stops_converter_group_and_exits_143` |
 | P6 | `test_locks.py::test_shared_report_root_excludes_different_projects` |
 | P7 | `test_inputs.py::test_dry_run_audit_hashes_but_writes_nothing` (help-text assertion) |
 | P8 | `test_conversion.py::test_raw_converter_output_never_written` |
-| P9 | CI matrix and `real-converter` jobs green; `check_distribution.py` license checks |
+| P9 | CI matrix and `real-converter` jobs green; `LICENSE` and `NOTICE` present (artifact checks in phase 4) |
 | P10 | `test_conversion.py::test_complete_session_not_reconverted_when_folder_modified` |
 | P11 | `test_recovery.py::test_partial_journal_deletion_does_not_roll_back` |
 | Q9 integrity (brief priority 6, narrowed) | `test_conversion.py::test_published_nifti_is_byte_identical_to_converter_output`, `test_real_converter.py::test_real_converter_output_byte_identical` |
@@ -2127,8 +2260,8 @@ as baseline §21 requires.
 ### Verification Plan
 
 *   **Compilation/Build**: `python -m pip install -e ".[dev]"`, then
-    `python -m build`, then `python -m twine check dist/*`, then
-    `python tests/check_distribution.py` on a clean `dist/`.
+    `python -m build`. The existing CI `package` job keeps running
+    `twine check` and `tests/check_distribution.py` unchanged.
 *   **Unit and integration tests**: `python -m pytest` on Linux and Windows,
     Python 3.11–3.14 (CI `test` job). The SIGTERM test runs on Linux only.
 *   **Real converter**: `MRI_PIPELINE_DCM2NIIX=<path> python -m pytest
@@ -2140,10 +2273,10 @@ as baseline §21 requires.
 *   **Test coverage requirement**: traceability rather than a percentage.
     Every phase 1 row in the behavior contract and every P-item in the
     traceability table has at least one named, passing test.
-*   **Budgets**: `test_cache_budget.py` asserts zero content opens and at
-    most 20 metadata calls per cached session per command.
-*   **Site checks (before claiming support for a storage type)**: the
-    runbook's two-node lock check on the target cluster filesystem.
+*   **Incrementality**: `test_1000_cached_sessions_do_not_read_scan_contents`
+    asserts that a cached rerun reads no scan contents (Goal 5).
+*   **Site checks (only when runs start from more than one machine on shared
+    storage)**: the runbook's two-node lock check on that filesystem.
 *   **Documentation**: a checklist that maps each changed README statement
     to its test, reviewed before the phase 1 merge (Goal 7).
 
