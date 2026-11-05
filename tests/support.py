@@ -1,6 +1,10 @@
 """Shared synthetic-data helpers for the test suite. Never reads research archives."""
 import json
+import os
+from pathlib import Path
 import struct
+import subprocess
+import sys
 import zipfile
 
 import pydicom
@@ -126,3 +130,92 @@ def call(root, phase, *extra):
 
 def state(root):
     return json.loads((root / 'Reports/.state/index.json').read_text())
+
+
+# Crash points for run_with_crash: (kind, rule). A "rename" point kills the
+# process right after a Path.rename that matches the rule (source, target).
+CRASH_POINTS = {
+    # The upload ZIP was renamed into SubjectsSorted; no publish intent yet.
+    'zip-moved': ('rename', lambda src, dst: src.suffix.lower() == '.zip'),
+    # The stage became .incoming_*; the old destination has not moved aside.
+    'staged': ('rename', lambda src, dst: dst.name.startswith('.incoming_')),
+    # The old destination became .previous_*; .incoming_* has not replaced it.
+    'moved-aside': ('rename', lambda src, dst: dst.name.startswith('.previous_')),
+    # .incoming_* became the destination; the result event is not saved yet.
+    'swapped': ('rename', lambda src, dst: src.name.startswith('.incoming_')),
+    # Reconciliation renamed .previous_* back to the destination; its intent remains.
+    'rolling-back': ('rename', lambda src, dst: src.name.startswith('.previous_')),
+    # A cross-device publish, killed after two files were copied into .incoming_*.
+    'copying': ('copy', 2),
+    # The result event's journal is written; its intent is not cleared yet.
+    'journaled': ('clear-intents', None),
+    # index.json became index.json.bak; the new index is not in place yet.
+    'index-rotated': ('replace', lambda src, dst: Path(dst).name == 'index.json.bak'),
+}
+
+
+def run_with_crash(root, phase, point, *extra):
+    """Run a command in a child process that is killed at the named crash point.
+
+    Returns the exit code: 137 when the crash point was reached.
+    """
+    tests = Path(__file__).resolve().parent
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(tests.parent / 'src'), str(tests)]))
+    code = 'import sys, support; support._crash_child(sys.argv[1], sys.argv[2], sys.argv[3:])'
+    args = [sys.executable, '-c', code, point, phase, '--project-root', str(root), '--workers', '1', *map(str, extra)]
+    result = subprocess.run(args, env=env, capture_output=True, text=True)
+    if result.returncode != 137:
+        print(f'crash point {point!r} not reached; child output:\n{result.stdout[-3000:]}\n{result.stderr[-3000:]}')
+    return result.returncode
+
+
+def _crash_child(point, phase, argv):
+    """Body of the run_with_crash child: patch the crash point, then run the command."""
+    import errno
+    import shutil
+    from mri_dicom_pipeline import runner
+    kind, rule = CRASH_POINTS[point]
+
+    def die():
+        os._exit(137)
+
+    original_rename = Path.rename
+    if kind == 'rename':
+        def rename(self, target):
+            result = original_rename(self, target)
+            if rule(Path(self), Path(target)):
+                die()
+            return result
+        Path.rename = rename
+    elif kind == 'copy':
+        def rename(self, target):
+            if Path(target).name.startswith('.incoming_'):
+                raise OSError(errno.EXDEV, 'Invalid cross-device link (simulated)')
+            return original_rename(self, target)
+        Path.rename = rename
+        original_copytree, copied = shutil.copytree, []
+
+        def copy_then_die(src, dst, *args, **kwargs):
+            if len(copied) == rule:
+                die()
+            copied.append(src)
+            return shutil.copy2(src, dst, *args, **kwargs)
+
+        def copytree(src, dst, *args, **kwargs):
+            # copytree calls itself for subfolders, passing copy_function positionally.
+            if len(args) < 3 and 'copy_function' not in kwargs:
+                kwargs['copy_function'] = copy_then_die
+            return original_copytree(src, dst, *args, **kwargs)
+        shutil.copytree = copytree
+    elif kind == 'clear-intents':
+        from mri_dicom_pipeline import recovery
+        recovery.clear_intents = lambda *args, **kwargs: die()
+    elif kind == 'replace':
+        original_replace = os.replace
+
+        def replace(src, dst, *args, **kwargs):
+            original_replace(src, dst, *args, **kwargs)
+            if rule(src, dst):
+                die()
+        os.replace = replace
+    sys.exit(runner.main(phase, argv))

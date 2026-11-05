@@ -57,13 +57,23 @@ def remove_tree(path, root):
         shutil.rmtree(path)
 
 
-def publish_tree(stage, destination, ownership_root):
-    """Copy to a sibling, then swap; retain the previous version until committed."""
+def swap_names(destination):
+    """The sibling .incoming_ and .previous_ paths used to publish destination."""
+    destination = Path(destination)
+    # Keep swap names short: nested files may already approach Windows limits.
+    return (destination.with_name(".incoming_" + uuid.uuid4().hex[:12]),
+            destination.with_name(".previous_" + uuid.uuid4().hex[:12]))
+
+
+def publish_tree(stage, destination, ownership_root, incoming, previous):
+    """Copy to a sibling, then swap; retain the previous version until committed.
+
+    The caller picks the swap names (swap_names) and records them in its
+    intent first, so crash recovery knows where to look (Q12).
+    """
     destination = owned(destination, ownership_root)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    # Keep swap names short: nested files may already approach Windows limits.
-    incoming = destination.with_name(".incoming_" + uuid.uuid4().hex[:12])
-    previous = destination.with_name(".previous_" + uuid.uuid4().hex[:12])
+    incoming, previous = Path(incoming), Path(previous)
     try:
         try:
             Path(stage).rename(incoming)

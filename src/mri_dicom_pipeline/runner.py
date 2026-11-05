@@ -15,12 +15,29 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import queue
 import shutil
+import signal
 import sys
 import threading
 import time
 
-from . import config, convert, identity, locks, prepare, reports
+from . import config, convert, identity, locks, prepare, recovery, reports
 from .state import State
+
+
+class StopSignal:
+    """The run's stop flag, shared by SIGTERM and Ctrl+C (Q12).
+
+    The first signal sets the flag; later signals are ignored until the run
+    ends. Workers stop at the flag, and nothing is published after it.
+    """
+    def __init__(self):
+        self.event = threading.Event()
+        self.signum = None
+
+    def __call__(self, signum, frame):
+        if self.signum is None:
+            self.signum = signum
+            self.event.set()
 
 
 def process_subject(items, cfg, phase, session_state, events, stop):
@@ -40,6 +57,10 @@ def process_subject(items, cfg, phase, session_state, events, stop):
 
 def main(phase, argv=None):
     args = config.config_parser(phase).parse_args(argv)
+    stopper, previous_handlers = StopSignal(), {}
+    if threading.current_thread() is threading.main_thread():
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous_handlers[signum] = signal.signal(signum, stopper)
     try:
         cfg = config.configure(args, phase)
         ids, pairs, roster_warnings = identity.load_roster(cfg.reference, cfg.subject_column, cfg.date_column)
@@ -47,9 +68,9 @@ def main(phase, argv=None):
         # root exclude each other whatever their project roots (Q13). Dry runs
         # take no lock.
         if cfg.dry_run:
-            return run(cfg, phase, ids, pairs, roster_warnings)
+            return run(cfg, phase, ids, pairs, roster_warnings, stopper)
         with locks.RootLocks(cfg.lock_roots, phase, cfg.run_id):
-            return run(cfg, phase, ids, pairs, roster_warnings)
+            return run(cfg, phase, ids, pairs, roster_warnings, stopper)
     except (ValueError, RuntimeError, OSError) as e:
         logger = logging.getLogger("mri_dicom_pipeline")
         if logger.handlers:
@@ -57,13 +78,15 @@ def main(phase, argv=None):
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
     finally:
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
         logger = logging.getLogger("mri_dicom_pipeline")
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)
             handler.close()
 
 
-def run(cfg, phase, ids, pairs, roster_warnings):
+def run(cfg, phase, ids, pairs, roster_warnings, stopper):
     logger = reports.setup_log(cfg.reports, phase, cfg.dry_run)
     started = time.monotonic()
     run_id = cfg.run_id
@@ -77,6 +100,9 @@ def run(cfg, phase, ids, pairs, roster_warnings):
     if state.recovered_from_backup:
         logger.error("State index %s could not be read; loaded %s and its journals instead. "
                      "The unreadable file is moved aside at the next save.", state.path, state.backup)
+    reconciled = recovery.reconcile(cfg, phase, state, logger, cfg.dry_run)
+    if reconciled:
+        logger.info("Recovered %s operations left open by an interrupted run", reconciled)
     if phase == "prepare":
         if not cfg.import_legacy and (cfg.uploads / "Subjects").is_dir() and not state.data["sessions"]:
             logger.warning("Legacy DicomUploads/Subjects is not scanned by default. Preview migration with --import-legacy --dry-run.")
@@ -105,12 +131,15 @@ def run(cfg, phase, ids, pairs, roster_warnings):
         except ImportError as e:
             raise ValueError("pydicom is missing; install mri-dicom-pipeline before preparation") from e
     cfg.work.mkdir(parents=True, exist_ok=True)
-    events, stop = queue.Queue(), threading.Event()
+    events, stop = queue.Queue(), stopper.event
     counts.update(completed=0, duplicate=0, failed=0)
     last_progress, last_report = time.monotonic(), time.monotonic()
+    if stop.is_set():
+        tasks = {}  # A stop that arrived before the workers started.
 
     def accept(event):
         state.checkpoint(event)
+        recovery.clear_intents(cfg.reports, event.get("intents", []))
         outcome = event["outcome"]
         counts["duplicate" if outcome == "duplicate" else "failed" if outcome in ("failed", "interrupted") else "completed"] += 1
         logger.log(logging.ERROR if outcome in ("failed", "interrupted") else logging.INFO, "%s %s: %s", outcome.upper(), event["key"], event.get("note", "identical archive/content; skipped"))
@@ -123,13 +152,16 @@ def run(cfg, phase, ids, pairs, roster_warnings):
 
     pool = futures.ThreadPoolExecutor(max_workers=cfg.workers)
     jobs = [pool.submit(process_subject, items, cfg, phase, copy.deepcopy({k: v for k, v in state.data["sessions"].items() if k.startswith(sid + "/")}), events, stop) for sid, items in tasks.items()]
-    interrupted = False
+    save_failed, stop_logged = False, False
     try:
         while any(not job.done() for job in jobs) or not events.empty():
             try:
                 accept(events.get(timeout=0.5))
             except queue.Empty:
                 pass
+            if stop.is_set() and not stop_logged:
+                logger.warning("Stop requested; stopping workers. Completed sessions remain checkpointed")
+                stop_logged = True
             if time.monotonic() - last_progress >= 30:
                 logger.info("Progress: %s/%s work items finished; %ss elapsed", counts["completed"] + counts["duplicate"] + counts["failed"], pending, int(time.monotonic()-started))
                 last_progress = time.monotonic()
@@ -138,18 +170,22 @@ def run(cfg, phase, ids, pairs, roster_warnings):
                 last_report = time.monotonic()
         for job in jobs:
             job.result()
-    except KeyboardInterrupt:
-        interrupted = True
-        logger.warning("Stopping workers; completed sessions remain checkpointed")
     finally:
         stop.set()
         pool.shutdown(wait=True, cancel_futures=True)
         while not events.empty():
             accept(events.get_nowait())
-        state.flush()
-        reports.reports(state, cfg, pairs)
+        # Attempted, not guaranteed: the journals already hold every result.
+        try:
+            state.flush()
+            reports.reports(state, cfg, pairs)
+        except OSError as e:
+            save_failed = True
+            logger.error("Could not save state or reports at the end of the run; the journals keep every result: %s", e)
+    terminated, interrupted = stopper.signum == signal.SIGTERM, stopper.signum is not None
     unresolved = sum(not k.startswith("date:") for k in state.data["issues"])
-    outcome = "interrupted" if interrupted else "issues" if unresolved or counts["failed"] or counts["held"] else "ok"
+    outcome = ("terminated" if terminated else "interrupted" if interrupted
+               else "issues" if unresolved or counts["failed"] or counts["held"] or save_failed else "ok")
     elapsed = round(time.monotonic()-started, 2)
     history = cfg.reports / "run_history.csv"
     fields = ["run_id", "stage", "outcome", "seconds", "completed", "cached", "duplicate", "failed", "held", "unresolved"]
@@ -160,4 +196,4 @@ def run(cfg, phase, ids, pairs, roster_warnings):
         writer.writerow(dict(run_id=run_id, stage=phase, outcome=outcome, seconds=elapsed, unresolved=unresolved, **counts))
     logger.info("RUN %s END outcome=%s completed=%s cached=%s duplicates=%s failed=%s held=%s unresolved=%s elapsed=%ss", run_id, outcome, counts["completed"], counts["cached"], counts["duplicate"], counts["failed"], counts["held"], unresolved, elapsed)
     logger.info("Read %s first; unresolved problems: %s", cfg.reports / "pipeline.log", cfg.reports / "issues.csv")
-    return 130 if interrupted else 2 if outcome != "ok" else 0
+    return 143 if terminated else 130 if interrupted else 2 if outcome != "ok" else 0

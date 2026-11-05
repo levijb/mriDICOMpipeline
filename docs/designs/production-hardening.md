@@ -769,6 +769,14 @@ conversion), so reconciliation never has to hash a ZIP.
 A stage directory named by an open intent, and not referenced by any issue, is
 removed.
 
+An attempt publication (a partial or failed conversion published under
+`Niftis/.pending/`) is never adopted. If its destination exists, it stays as
+a retained attempt; `.incoming_*` is removed and the intent is cleared.
+
+While a "touch nothing" issue (`recover:<intent id>`) is open, both planners
+hold that session, so nothing replaces the folder before a person has looked
+at it.
+
 **Adoption rule.** Reconciliation, `prepare`, and `convert` all use this one
 rule whenever a folder holds a receipt that state does not record. A folder
 is adopted only when both conditions hold:
@@ -798,9 +806,9 @@ receipt.
 *   Known cost, accepted: a crash during a first publication redoes that
     session's work, up to one converter run (14,400 s timeout). This is
     acceptable while crashes are rare.
-*   A command reconciles only intents whose `ownership_root` it has locked.
-    `prepare` resolves extraction publications and `convert` resolves
-    conversion publications.
+*   A command reconciles only its own intents, and only on roots it has
+    locked: `prepare` resolves extraction publications and `convert`
+    resolves conversion publications.
 *   Intent files live on shared storage under `Reports/.state/intents/`, never
     on node-local staging, so they survive the loss of a node. Each worker
     writes only its own files, with unique names, through `atomic_json`.
@@ -1528,26 +1536,28 @@ function, so importing the module itself would clash with both.
         from the receipt; keys stay absolute, as today.
     *   `fast_valid(entry, kind, audit=False)`, moved unchanged apart from
         the version constant. The `kind` argument stays, as today.
+    *   `RECEIPT` and `INVENTORY` name the two control files.
     *   `prepared_entry(sid, date, label, canonical, digest, inventory,
-        extraction, conversion, last_attempt, accepted_multi_study)` builds
-        the schema-3 session entry. It is used by `prepare.prepare_one` and
-        by adoption.
-    *   `conversion_record(destination, status, n_volumes, source_sha256,
-        provenance, coverage, run_id)` adds `receipt_info`.
+        destination, conversion)` builds the schema-3 session entry from the
+        published extraction (step 5). It is used by `prepare.prepare_one`
+        and by adoption. Step 6 adds `accepted_multi_study`; step 7 adds
+        `last_attempt`.
+    *   `conversion_record(destination, status, n_volumes, source_sha256)`
+        adds `receipt_info` (step 5). Step 7 adds `provenance` and
+        `coverage`.
+    *   `receipt_id(root)`: the receipt ID in a folder, or `None`.
     *   `required_series(inventory) -> (required_keys, excused_keys)`.
     *   `output_series_keys(output_root, inventory_files) -> set`: reads the
         `.json` sidecars listed in a conversion inventory and returns their
         `source_series_key` values. Used only by adoption.
     *   `coverage(required, excused, converted) -> dict` with `required`,
         `converted`, `excused`, and `missing` (sorted lists).
-    *   `adoptable(root, receipt, inventory, expected_digest, kind) -> bool`:
-        the Q12 adoption rule. It is true when the receipt matches
-        `expected_digest` (`archive_sha256` for `extract`; `complete` and
-        `source_sha256` for `convert`) and every inventory file exists at
-        its recorded size (one `stat` per file).
-    *   `adopted_record(root, receipt_path, inventory_path, kind) -> dict`:
-        builds the entry for an adopted folder from its receipt and inventory,
-        as Q12 lists.
+    *   `adoptable(root, kind, expected_digest) -> bool`: the Q12 adoption
+        rule. It is true when the receipt matches `expected_digest`
+        (`archive_sha256` for `extract`; `complete` and `source_sha256` for
+        `convert`) and every inventory file exists at its recorded size (one
+        `stat` per file). The state event for an adopted folder is built from
+        `prepared_entry` or `conversion_record` (`recovery.py`).
 
 #### 6. `src/mri_dicom_pipeline/state.py` (Create)
 
@@ -1608,20 +1618,28 @@ function, so importing the module itself would clash with both.
     *   Intent schema, in `Reports/.state/intents/<id>.json`:
         `{version: 3, id, kind: "publish", stage: "prepare" | "convert", key,
         run_id, created_utc, stage_dir, destination, incoming, previous,
-        ownership_root, receipt_id, expected_digest}`. There is no ZIP-move
-        intent (Q12).
+        ownership_root, receipt_id, expected_digest, attempt}`. A `prepare`
+        intent also carries `subject_id`, `date`, `label`, and `archive` (the
+        canonical ZIP), which adoption needs. There is no ZIP-move intent
+        (Q12). A worker puts the intent ID in its event only once the result
+        is complete; an intent left by a failure is resolved at the next run.
     *   `write_intent(reports_root, **fields) -> id` (workers) and
         `clear_intents(reports_root, ids)` (coordinator, after the matching
         event is checkpointed).
-    *   `reconcile(cfg, state, logger, dry_run) -> counts` implements the
-        Q12 table in the Decision Log. Rules:
-        *   It skips intents whose `ownership_root` is not in
-            `cfg.lock_roots`.
+    *   `blocked_keys(state) -> set`: sessions with an open `recover:` issue,
+        which both planners hold.
+    *   `reconcile(cfg, phase, state, logger, dry_run) -> int` implements
+        the Q12 table in the Decision Log and returns how many intents it
+        resolved. Rules:
+        *   It skips intents of the other command and intents whose
+            `ownership_root` is not in `cfg.lock_roots`.
         *   Every path it touches must pass `fsutil.owned` against the
             intent's root.
-        *   Adoption uses `receipts.adoptable` and
-            `receipts.adopted_record`, and records the result through
-            `state.apply` plus `state.checkpoint`.
+        *   Adoption uses `receipts.adoptable`, builds the entry with
+            `receipts.prepared_entry` or `receipts.conversion_record`, and
+            records it through `state.checkpoint`.
+        *   It clears a `recover:` issue whose intent file a person has
+            removed.
         *   A case where it touches nothing raises the blocking issue
             `recover:<intent id>` (issue table, file 13).
         *   Every action is logged.
@@ -1987,12 +2005,15 @@ function, so importing the module itself would clash with both.
         existing conversion test `partial` under strict coverage. Switches:
         skip one series, set the exit code, print a sentinel line then sleep,
         spawn a child process, write a header sentinel.
-    *   `run_with_crash(root, phase, target, n, *args)`: runs a child Python
-        process that patches the dotted function `target` to call
-        `os._exit(137)` on its `n`-th call, then calls `runner.main`.
-    *   `cross_device_copy(fail_after)`: a patch for `fsutil.publish_tree`
-        that forces the `copytree` path and kills the process after
-        `fail_after` files are copied (Q12 crash case).
+    *   `run_with_crash(root, phase, point, *args)` (step 5): runs the
+        command in a child Python process that calls `os._exit(137)` at a
+        named crash point and returns its exit code. The points
+        (`CRASH_POINTS`) match a `Path.rename` by its source or target name
+        (`zip-moved`, `staged`, `moved-aside`, `swapped`, `rolling-back`), an
+        `os.replace` onto `index.json.bak` (`index-rotated`), the first
+        `recovery.clear_intents` call (`journaled`), or a forced cross-device
+        copy killed after two files (`copying`). When a point is not reached,
+        it prints the child's output.
 
 #### 22. `tests/conftest.py` (Create)
 
@@ -2093,8 +2114,9 @@ function, so importing the module itself would clash with both.
         `test_force_reconvert_refuses_folder_with_extra_files`,
         `test_failed_reconversion_keeps_last_good` (P4),
         `test_unreferenced_complete_folder_adopted_not_replaced`,
-        `test_adoption_refused_when_volume_deleted`,
         `test_restored_folder_revalidated_by_audit_session`.
+        (`test_adoption_refused_when_volume_deleted` landed in
+        `test_recovery.py` in step 5, with the adoption rule.)
     *   **Output bytes and privacy:**
         `test_published_nifti_is_byte_identical_to_converter_output` (Q10),
         `test_header_text_passes_through_and_sidecar_stays_filtered` (T14
@@ -2126,7 +2148,7 @@ function, so importing the module itself would clash with both.
         |---|---|---|
         | After the ZIP rename, before the publish intent | `prepare` | Canonical ZIP prepared as new work |
         | After stage→incoming, before destination→previous | both | `.incoming_*` removed; work redone (first publish) or old folder kept |
-        | During a cross-device copy into `.incoming_*` (`support.cross_device_copy`) | both | `.incoming_*` removed; work redone; never `converted` with missing volumes |
+        | During a cross-device copy into `.incoming_*` (crash point `copying`) | both | `.incoming_*` removed; work redone; never `converted` with missing volumes |
         | After destination→previous, before incoming→destination | both | Rolled back to the old folder |
         | After incoming→destination, before the event | both | Adopted after the stat check |
         | After the event's journal write, before the intent is cleared | both | Intent cleared; swap leftovers removed |
@@ -2139,11 +2161,19 @@ function, so importing the module itself would clash with both.
         `test_corrupt_index_recovers_from_backup` (moved aside, history
         note, no persistent issue),
         `test_both_index_files_corrupt_stops_run`,
-        `test_reconcile_skips_intents_on_unlocked_roots`.
-    *   **Signals (skipped on Windows):**
-        `test_sigterm_stops_converter_group_and_exits_143` (the fake
-        converter's child process is gone; the session is `interrupted`;
-        nothing is published).
+        `test_dry_run_with_corrupt_index_writes_nothing`,
+        `test_crash_during_reconciliation_is_recoverable`,
+        `test_adoption_refused_when_volume_deleted`,
+        `test_dry_run_reports_reconciliation_without_acting`,
+        `test_reconcile_skips_other_commands_intents`.
+    *   **Signals:** `test_stop_signal_during_conversion` (step 5, all
+        platforms; SIGTERM and Ctrl+C raised in-process with
+        `_thread.interrupt_main`): exit 143 or 130, the session is
+        `interrupted`, the stage is kept, nothing is published, and the
+        history outcome is `terminated` or `interrupted`. Step 7 adds
+        `test_sigterm_stops_converter_group_and_exits_143` (skipped on
+        Windows): a real SIGTERM, and the fake converter's child process is
+        gone.
     *   **Other exits and faults:**
         `test_history_row_written_on_early_abort`,
         `test_enospc_during_publish_keeps_old_output` (a simulated `OSError`
@@ -2264,7 +2294,7 @@ as baseline §21 requires.
 | P2 | Deliberately open (Q8); `test_provenance_recorded_in_receipt_and_state` covers the record |
 | P3 | `test_inputs.py::test_changed_canonical_zip_is_held_and_outputs_unchanged` |
 | P4 | `test_conversion.py::test_failed_reconversion_keeps_last_good` |
-| P5 | `test_recovery.py::test_crash_at_boundary_reconciles`, `test_sigterm_stops_converter_group_and_exits_143` |
+| P5 | `test_recovery.py::test_crash_at_boundary_reconciles`, `test_stop_signal_during_conversion` (step 5), `test_sigterm_stops_converter_group_and_exits_143` (step 7) |
 | P6 | `test_locks.py::test_shared_report_root_excludes_different_projects` |
 | P7 | `test_inputs.py::test_dry_run_audit_hashes_but_writes_nothing` (help-text assertion) |
 | P8 | `test_conversion.py::test_raw_converter_output_never_written` |

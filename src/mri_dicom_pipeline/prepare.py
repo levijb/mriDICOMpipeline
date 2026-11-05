@@ -9,7 +9,7 @@ import tempfile
 import uuid
 import zipfile
 
-from . import classify, config, fsutil, identity, receipts, reports
+from . import classify, config, fsutil, identity, receipts, recovery, reports
 
 
 SKIP_EXT = set(".jpg .jpeg .png .gif .bmp .tif .tiff .pdf .txt .xml .html .htm .csv .json .ini .log .dll .exe .ocx .config .manifest .css .js .ico .onnx .lic .profiles .mapping .bin .rlv .rlv_meta .rbv .rbv_meta .local .zip".split())
@@ -158,19 +158,25 @@ def prepare_one(candidate, previous, cfg, stop=None):
                 if destination.exists() and not (destination / ".pipeline_complete.json").exists():
                     raise ValueError("Extracted destination is not owned by this pipeline; refusing replacement")
                 canonical = cfg.uploads / "SubjectsSorted" / sid / f"{sid}_{label}.zip"
+                if stop is not None and stop.is_set():
+                    raise InterruptedError("Preparation interrupted")
                 move_archive(source, canonical, cfg, fingerprint)
                 active_source = canonical
-                fsutil.atomic_json(stage / ".inventory.json", inventory)
-                fsutil.atomic_json(stage / ".pipeline_complete.json", {"version": config.SCHEMA_VERSION, "archive_sha256": digest, "receipt_id": uuid.uuid4().hex})
-                fsutil.publish_tree(stage, destination, cfg.dicoms)
-                extraction = receipts.receipt_info(destination, destination / ".pipeline_complete.json", destination / ".inventory.json")
-                entry = {"subject_id": sid, "date": date, "label": label, "status": "ready", "version": config.SCHEMA_VERSION,
-                    "archive": str(canonical), "archive_signature": fsutil.signature(canonical), "archive_sha256": digest,
-                    "content_sha256": inventory["content_sha256"], "n_dicom": inventory["n_dicom"],
-                    "n_series": inventory["n_series"], "dicom_bytes": inventory["dicom_bytes"],
-                    "pixel_bytes": inventory["pixel_bytes"], "extraction": extraction,
-                    "conversion": previous.get("conversion", {}) if previous else {}}
+                receipt_id = uuid.uuid4().hex
+                fsutil.atomic_json(stage / receipts.INVENTORY, inventory)
+                fsutil.atomic_json(stage / receipts.RECEIPT, {"version": config.SCHEMA_VERSION, "archive_sha256": digest,
+                                                             "receipt_id": receipt_id, "run_id": cfg.run_id})
+                incoming, aside = fsutil.swap_names(destination)
+                intent = recovery.write_intent(cfg.reports, stage="prepare", key=key, run_id=cfg.run_id,
+                    stage_dir=str(stage), destination=str(destination), incoming=str(incoming),
+                    previous=str(aside), ownership_root=str(cfg.dicoms), receipt_id=receipt_id,
+                    expected_digest=digest, attempt=False, subject_id=sid, date=date, label=label,
+                    archive=str(canonical))
+                fsutil.publish_tree(stage, destination, cfg.dicoms, incoming, aside)
+                entry = receipts.prepared_entry(sid, date, label, canonical, digest, inventory, destination,
+                                                previous.get("conversion", {}) if previous else {})
                 event["session"] = entry
+                event["intents"] = [intent]
                 event["sources"] = [{"path": str(canonical), "signature": fsutil.signature(canonical), "key": key,
                     "outcome": "prepared", "against": digest, "version": config.SCHEMA_VERSION}]
                 event["note"] = f"{inventory['n_dicom']} DICOMs, {inventory['n_series']} series; {inventory['skipped_files']} viewer/non-DICOM files omitted"
@@ -197,6 +203,7 @@ def prepare_one(candidate, previous, cfg, stop=None):
 
 def plan_prepare(cfg, state, ids, pairs, logger):
     tasks, counts = {}, {"cached": 0, "held": 0}
+    recovering = recovery.blocked_keys(state)
     for source, legacy in discover(cfg):
         issue_key = "prepare:" + str(source)
         sid = label = ""
@@ -220,6 +227,11 @@ def plan_prepare(cfg, state, ids, pairs, logger):
                     if (cached["outcome"] == "duplicate" and valid) or (cached["outcome"] == "failed" and not cfg.retry_failed):
                         counts["cached"] += 1
                         continue
+            if key in recovering:
+                # A folder crash recovery would not touch waits for a person (Q12).
+                counts["held"] += 1
+                logger.warning("Held %s: unresolved crash-recovery issue for %s; see issues.csv", source, key)
+                continue
             tasks.setdefault(sid, []).append((source, sid, date, label, fingerprint))
         except (OSError, ValueError) as e:
             counts["held"] += 1

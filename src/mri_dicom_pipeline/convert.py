@@ -9,13 +9,18 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import time
 import uuid
 
-from . import classify, config, fsutil, nifti, receipts, reports
+from . import classify, config, fsutil, nifti, receipts, recovery, reports
+
+# A converter that died from one of these signals was stopped, not broken:
+# Slurm sends SIGTERM to every process of the job at its time limit (Q12).
+STOP_RETURN_CODES = set() if os.name == "nt" else {-signal.SIGTERM, -signal.SIGKILL}
 
 
 def organize_conversion(raw, output, sid, label, archive_digest):
@@ -105,12 +110,13 @@ def convert_one(entry, cfg, stop):
             "-o", str(raw), str(Path(entry["extraction"]["root"]) / "dicom")]
         env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1")
         started = time.monotonic()
-        reason = ""
+        reason, timed_out = "", False
         with (stage / "converter.log").open("w", encoding="utf-8") as log:
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=env)
             try:
                 while process.poll() is None:
                     if stop.wait(0.25) or time.monotonic() - started > cfg.timeout:
+                        timed_out = not stop.is_set()
                         reason = "Interrupted" if stop.is_set() else "Converter timed out"
                         process.terminate()
                         try:
@@ -125,6 +131,13 @@ def convert_one(entry, cfg, stop):
                     process.wait()
         event["detail"] = redact_diagnostic((stage / "converter.log").read_text(encoding="utf-8", errors="replace"))
         (stage / "converter.log").write_text(event["detail"], encoding="utf-8")
+        if stop.is_set() or (not timed_out and process.returncode in STOP_RETURN_CODES):
+            # After a stop nothing is organized or published; the stage is kept (Q12).
+            preserve = True
+            event.update(outcome="interrupted", note=f"Stopped during conversion; working files retained: {stage}")
+            updated["conversion"] = {"status": "interrupted", "source_sha256": entry["content_sha256"], "output": str(stage)}
+            event["issues"] = [reports.problem(issue_key, "convert", sid, label, event["note"], stage)]
+            return event
         if process.returncode != 0:
             reason = reason or f"dcm2niix exited with code {process.returncode}"
         n_volumes, file_list, errors = organize_conversion(raw, stage / "organized", sid, label, entry["archive_sha256"])
@@ -134,17 +147,22 @@ def convert_one(entry, cfg, stop):
             errors.insert(0, reason)
         complete = not errors
         organized = stage / "organized"
-        fsutil.atomic_json(organized / ".inventory.json", {"files": file_list})
-        fsutil.atomic_json(organized / ".pipeline_complete.json", {"version": config.SCHEMA_VERSION, "complete": complete,
-            "source_sha256": entry["content_sha256"], "receipt_id": uuid.uuid4().hex})
+        receipt_id = uuid.uuid4().hex
+        fsutil.atomic_json(organized / receipts.INVENTORY, {"files": file_list})
+        fsutil.atomic_json(organized / receipts.RECEIPT, {"version": config.SCHEMA_VERSION, "complete": complete,
+            "source_sha256": entry["content_sha256"], "receipt_id": receipt_id, "run_id": cfg.run_id})
         destination = cfg.niftis / "Subjects" / sid / label if complete else cfg.niftis / ".pending" / sid / label / stage.name
-        if complete and destination.exists() and not (destination / ".pipeline_complete.json").exists():
+        if complete and destination.exists() and not (destination / receipts.RECEIPT).exists():
             raise ValueError("NIfTI destination is not owned by this pipeline; refusing replacement")
-        fsutil.publish_tree(organized, destination, cfg.niftis)
-        conversion = receipts.receipt_info(destination, destination / ".pipeline_complete.json", destination / ".inventory.json")
-        conversion.update(status="converted" if complete else "interrupted" if stop.is_set() else "partial", output=str(destination), n_volumes=n_volumes,
-                          source_sha256=entry["content_sha256"])
-        updated["conversion"] = conversion
+        incoming, aside = fsutil.swap_names(destination)
+        intent = recovery.write_intent(cfg.reports, stage="convert", key=key, run_id=cfg.run_id,
+            stage_dir=str(stage), destination=str(destination), incoming=str(incoming), previous=str(aside),
+            ownership_root=str(cfg.niftis), receipt_id=receipt_id, expected_digest=entry["content_sha256"],
+            attempt=not complete)
+        fsutil.publish_tree(organized, destination, cfg.niftis, incoming, aside)
+        status = "converted" if complete else "interrupted" if stop.is_set() else "partial"
+        updated["conversion"] = receipts.conversion_record(destination, status, n_volumes, entry["content_sha256"])
+        event["intents"] = [intent]
         if errors:
             preserve = True
             event.update(outcome="interrupted" if stop.is_set() else "failed", note="; ".join(errors) + f"; working files retained: {stage}")
@@ -166,6 +184,7 @@ def plan_convert(cfg, state, ids, pairs, logger):
     tasks, counts = {}, {"cached": 0, "held": 0}
     blocked = {(i.get("subject"), i.get("session")) for k, i in state.data["issues"].items()
                if i.get("stage") == "prepare" and not k.startswith("date:")}
+    recovering = recovery.blocked_keys(state)
     for key, entry in sorted(state.data["sessions"].items()):
         if entry.get("status") != "ready":
             continue
@@ -177,6 +196,8 @@ def plan_convert(cfg, state, ids, pairs, logger):
             reason = "Prepared cache belongs to a different DICOM root; run preparation with the intended --output-root"
         elif (sid, label) in blocked:
             reason = "Unresolved preparation problem; see issues.csv"
+        elif key in recovering:
+            reason = "Unresolved crash-recovery problem; see issues.csv"
         elif not receipts.fast_valid(entry["extraction"], "extract", cfg.audit):
             reason = "Extracted input changed or missing; run preparation"
         if reason:

@@ -68,7 +68,7 @@ def test_publish_rolls_back_if_swap_fails(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, 'rename', fail_final_swap)
     with pytest.raises(OSError, match='simulated publish failure'):
-        fsutil.publish_tree(stage, destination, root)
+        fsutil.publish_tree(stage, destination, root, *fsutil.swap_names(destination))
     assert (destination / 'image').read_text() == 'previous'
     assert not list(destination.parent.glob('.incoming_*'))
     assert not list(destination.parent.glob('.previous_*'))
