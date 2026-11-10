@@ -135,8 +135,12 @@ space.
 Header dates are cross-checks only; a mismatch is recorded as a warning.
 Subject identity never comes from patient identification fields or a matching
 spreadsheet. Generated sidecars include selected technical fields and the
-validated filename identity. Free-text source descriptions are used for the
-heuristic scan classifier but are not copied into published metadata.
+validated filename identity. Two date fields sit side by side so they can be
+compared: `session_date` is the date in the ZIP name, and `dicom_study_date`
+is the StudyDate read from the session's DICOM headers (normally one date;
+several are comma-separated; `null` when the headers carry none). Free-text
+source descriptions are used for the heuristic scan classifier but are not
+copied into published metadata.
 
 ## Fast repeated runs
 

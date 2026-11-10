@@ -34,9 +34,11 @@ def _nifti_stem(path):
     return path.name[:-7] if path.name.endswith(".nii.gz") else path.stem
 
 
-def organize_conversion(raw, output, sid, label, archive_digest):
+def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_date=None):
     """Validate, gzip and file the converter output by scan type.
 
+    dicom_study_date is the StudyDate found in the session's DICOM headers,
+    kept apart from session_date, which comes from the ZIP name.
     Returns (volumes, files, errors, converted series keys, converter versions).
     """
     output.mkdir()
@@ -70,7 +72,8 @@ def organize_conversion(raw, output, sid, label, archive_digest):
             image_valid = True
             series_key = hashlib.sha256(stem.split("_", 2)[1].encode()).hexdigest()[:20] if stem.startswith("series_") and "_" in stem[7:] else token
             enriched = nifti.clean_metadata(metadata)
-            enriched.update(subject_id=sid, session=label, session_date=label[:8], scan_type=scan,
+            enriched.update(subject_id=sid, session=label, session_date=label[:8],
+                            dicom_study_date=dicom_study_date, scan_type=scan,
                             source_archive_sha256=archive_digest, source_series_key=series_key)
             fsutil.atomic_json(directory / (base + ".json"), enriched)
             handled.update([nii.name, meta_path.name])
@@ -226,7 +229,8 @@ def convert_one(entry, cfg, stop):
             extra = files_outside_inventory(canonical)
             if extra:
                 raise ValueError("Explicit reconversion refused; files not in inventory: " + ", ".join(extra[:20]))
-        required, excused = receipts.required_series(fsutil.read_json(entry["extraction"]["inventory"]))
+        inventory = fsutil.read_json(entry["extraction"]["inventory"])
+        required, excused = receipts.required_series(inventory)
         needed = max(entry.get("pixel_bytes", 0) * 2, entry.get("dicom_bytes", 0) * 2)
         if shutil.disk_usage(stage).free < needed:
             raise ValueError("Insufficient free staging space for this session")
@@ -247,8 +251,10 @@ def convert_one(entry, cfg, stop):
         if returncode != 0:
             errors.append("Converter timed out" if reason == "timeout" else f"dcm2niix exited with code {returncode}")
         organized = stage / "organized"
+        # Normally one date; several are comma-separated; None when the headers carry no StudyDate.
+        dicom_study_date = ",".join(inventory.get("header_dates", [])) or None
         n_volumes, file_list, organize_errors, converted_keys, versions = organize_conversion(
-            raw, organized, sid, label, entry["archive_sha256"])
+            raw, organized, sid, label, entry["archive_sha256"], dicom_study_date)
         errors += organize_errors
         if not n_volumes:
             errors.append("No valid NIfTI volumes produced")
