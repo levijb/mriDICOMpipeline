@@ -25,6 +25,13 @@ STOP_RETURN_CODES = set() if os.name == "nt" else {-signal.SIGTERM, -signal.SIGK
 CONVERTER_OPTIONS = ["-z", "n", "-b", "y", "-ba", "y", "-c", "", "-d", "9", "-f", "series_%j_%s_%e"]
 CONTROL_FILES = {receipts.RECEIPT, receipts.INVENTORY}
 IDENTIFYING = re.compile(r"patient.?name|patient.?id|accession|birth.?date|physician|institution|station.?name|serial.?number", re.I)
+# dcm2niix saves each DICOM overlay plane as <volume>_ROI<n>.nii, a mask with
+# no sidecar of its own. It is published next to its volume, like .bval/.bvec.
+OVERLAY = re.compile(r"(.+)_(ROI\d+)")
+
+
+def _nifti_stem(path):
+    return path.name[:-7] if path.name.endswith(".nii.gz") else path.stem
 
 
 def organize_conversion(raw, output, sid, label, archive_digest):
@@ -34,8 +41,13 @@ def organize_conversion(raw, output, sid, label, archive_digest):
     """
     output.mkdir()
     files, errors, handled, volumes, converted_keys, versions = [], [], set(), 0, set(), set()
-    for nii in sorted(p for p in raw.iterdir() if p.name.endswith((".nii", ".nii.gz"))):
-        stem = nii.name[:-7] if nii.name.endswith(".nii.gz") else nii.stem
+    niftis = sorted(p for p in raw.iterdir() if p.name.endswith((".nii", ".nii.gz")))
+    stems = {_nifti_stem(p) for p in niftis}
+    overlays = {p: m for p in niftis if (m := OVERLAY.fullmatch(_nifti_stem(p))) and m[1] in stems}
+    for nii in niftis:
+        if nii in overlays:
+            continue
+        stem = _nifti_stem(nii)
         meta_path = raw / (stem + ".json")
         metadata = {}
         try:
@@ -72,6 +84,10 @@ def organize_conversion(raw, output, sid, label, archive_digest):
                     nifti.check_companion(companion)
                     shutil.copyfile(companion, directory / (base + suffix))
                     handled.add(companion.name)
+            for overlay, match in overlays.items():
+                if match[1] == stem:
+                    nifti.validate_and_gzip(overlay, directory / f"{base}_{match[2]}.nii.gz")
+                    handled.add(overlay.name)
         except Exception as e:
             if not image_valid and dest.exists() and nii.name not in handled:
                 # Never publish a failed/truncated gzip as a usable volume.

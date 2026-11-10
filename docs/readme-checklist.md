@@ -27,6 +27,7 @@ establishes it. Review this list whenever the README changes.
 | `convert --audit --session` revalidates a restored folder | `test_conversion.py::test_restored_folder_revalidated_by_audit_session` |
 | An explicit reconversion refuses folders with added files | `test_conversion.py::test_force_reconvert_refuses_folder_with_extra_files` |
 | A failed reconversion keeps the complete folder and records the attempt | `test_conversion.py::test_failed_reconversion_keeps_last_good`, `test_status_columns_and_last_attempt_reported` |
+| An overlay plane's mask is published next to its image | `test_conversion.py::test_overlay_mask_published_next_to_its_volume`, `test_real_converter.py::test_real_converter_overlay_published_with_its_volume` |
 | Provenance is recorded | `test_conversion.py::test_provenance_recorded_in_receipt_and_state` |
 | Commands that share any storage folder exclude each other; dry runs take no lock | `test_locks.py::test_shared_report_root_excludes_different_projects`, `test_lock_failure_names_holder`, `test_dry_run_takes_no_lock`; across machines: the runbook's two-node check |
 | No session rolls back after a crash; the index is recovered from its backup | `test_recovery.py::test_partial_journal_deletion_does_not_roll_back`, `test_corrupt_index_recovers_from_backup`, `test_missing_index_uses_backup_silently`, `test_both_index_files_corrupt_stops_run` |

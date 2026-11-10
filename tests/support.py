@@ -19,12 +19,14 @@ CSA_NON_IMAGE_STORAGE = '1.3.12.2.1107.5.9.1'
 
 
 def dicom_bytes(tmp_path, value=1, study=None, series=None, description='AX Diffusion_ADC',
-                series_number=3, slice_index=None, rows=2, columns=2, pixel_count=None, sop_uid=None):
+                series_number=3, slice_index=None, rows=2, columns=2, pixel_count=None, sop_uid=None,
+                overlay=False):
     """One synthetic MR Image Storage object.
 
     With ``slice_index`` set, the object also carries the slice geometry and
     instance number that a real converter needs to stack slices into a volume.
     ``pixel_count`` writes fewer pixels than ``rows`` x ``columns`` declare.
+    ``overlay`` adds a graphics overlay plane (group 6000) marking the first pixel.
     """
     meta = FileMetaDataset()
     meta.TransferSyntaxUID = ExplicitVRLittleEndian
@@ -45,6 +47,13 @@ def dicom_bytes(tmp_path, value=1, study=None, series=None, description='AX Diff
         ds.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
         ds.PixelSpacing = [1.0, 1.0]
         ds.SliceThickness = 1.0
+    if overlay:
+        bits = bytearray((rows * columns + 15) // 16 * 2)  # one bit per pixel, padded to a word
+        bits[0] = 1
+        for element, vr, data in ((0x0010, 'US', rows), (0x0011, 'US', columns), (0x0040, 'CS', 'G'),
+                                  (0x0050, 'SS', [1, 1]), (0x0100, 'US', 1), (0x0102, 'US', 0),
+                                  (0x3000, 'OW', bytes(bits))):
+            ds.add_new((0x6000, element), vr, data)
     count = rows * columns if pixel_count is None else pixel_count
     ds.PixelData = struct.pack(f'<{count}H', *([value]*count))
     p = tmp_path / (generate_uid() + '.dcm')
@@ -138,6 +147,8 @@ Switches (environment variables):
   FAKE_CONVERTER_SLEEP    seconds to sleep before exiting
   FAKE_CONVERTER_CHILD    file to write the PID of a sleeping child process into
   FAKE_CONVERTER_KEEP     folder to copy the raw .nii output into
+  FAKE_CONVERTER_OVERLAY  also write <volume>_ROI1.nii, a mask with no sidecar, as dcm2niix does
+                          for a DICOM overlay plane
 """
 import json, os, pathlib, shutil, struct, subprocess, sys, time
 import pydicom
@@ -162,6 +173,9 @@ for uid, ds in series.items():
     h[148:165] = b'FAKE_PRIVATE_NAME'
     h[228:243] = b'FAKE_PRIVATE_ID'
     (out / (stem + '.nii')).write_bytes(bytes(h) + struct.pack('<4h', 1, 2, 3, 4))
+    if os.environ.get('FAKE_CONVERTER_OVERLAY'):
+        struct.pack_into('<hh', h, 70, 2, 8)  # uint8
+        (out / (stem + '_ROI1.nii')).write_bytes(bytes(h) + bytes([1, 0, 0, 0]))
     sidecar = {'SeriesDescription': str(ds.get('SeriesDescription', '')), 'PatientName': 'FAKE_PRIVATE_NAME',
                'PatientID': 'FAKE_PRIVATE_ID', 'AccessionNumber': 'FAKE_PRIVATE_ACCESSION',
                'SeriesNumber': int(ds.get('SeriesNumber', 1)), 'EchoTime': 0.03,

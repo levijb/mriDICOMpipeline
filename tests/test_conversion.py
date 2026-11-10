@@ -132,6 +132,21 @@ def test_published_nifti_is_byte_identical_to_converter_output(project, tmp_path
     assert gzip.decompress(published.read_bytes()) == original.read_bytes()
 
 
+def test_overlay_mask_published_next_to_its_volume(project, tmp_path, converter, monkeypatch):
+    """dcm2niix writes a DICOM overlay plane as <volume>_ROI1.nii with no sidecar (seen in production)."""
+    raw = tmp_path / 'raw_copy'
+    monkeypatch.setenv('FAKE_CONVERTER_KEEP', str(raw))
+    monkeypatch.setenv('FAKE_CONVERTER_OVERLAY', '1')
+    folder = converted(project, tmp_path, converter)
+    [volume] = [p for p in folder.rglob('*.nii.gz') if '_ROI' not in p.name]
+    mask = volume.with_name(volume.name[:-len('.nii.gz')] + '_ROI1.nii.gz')
+    [original] = raw.glob('*_ROI1.nii')
+    assert gzip.decompress(mask.read_bytes()) == original.read_bytes()
+    inventory = json.loads((folder / '.inventory.json').read_text())['files']
+    assert mask.relative_to(folder).as_posix() in {item['name'] for item in inventory}
+    assert conversion(project)['status'] == 'converted' and conversion(project)['n_volumes'] == 1
+
+
 def test_header_text_passes_through_and_sidecar_stays_filtered(project, tmp_path, converter):
     """T14: NIfTI header text reaches the output (a documented channel); sidecars and logs stay filtered."""
     folder = converted(project, tmp_path, converter)

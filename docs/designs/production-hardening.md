@@ -591,6 +591,13 @@ session that misses any series is `partial`.
     therefore counts toward volumes but not toward series coverage.
 *   A series that `dcm2niix` splits into several outputs (echoes, magnitude
     and phase) counts once it yields at least one valid volume.
+*   `dcm2niix` writes a DICOM overlay plane as `<volume>_ROI<n>.nii`, a 0/1
+    mask with no sidecar. Before 2026-11-10 that missing sidecar failed the
+    session (seen on the first production conversion). Such a mask is now
+    published next to its volume as a companion, like `.bval`/`.bvec`, and
+    does not count as a volume. A `_ROI` file with no matching volume is
+    still an error. Tests: `test_overlay_mask_published_next_to_its_volume`,
+    `test_real_converter_overlay_published_with_its_volume`.
 *   Today preparation accepts any object with a SOP class and a series UID,
     except DICOMDIR. Under this rule, every non-image series that reaches the
     inventory would leave its session `partial` permanently. Which objects

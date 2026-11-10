@@ -232,7 +232,10 @@ a sibling directory swap. Each publication is recorded first; after a crash,
 the next run rolls back an interrupted swap, redoes unfinished work, or keeps
 a published folder only after checking every listed file. JSON uses an
 explicit technical field list. Matching .bval/.bvec companions are renamed
-with their image. All converted series/components are retained; no automatic
+with their image. A DICOM overlay plane (graphics stored with the images,
+group 6000) comes out of dcm2niix as a 0/1 mask without a sidecar; it is
+published next to its image as `<image name>_ROI1.nii.gz` (`_ROI2` and so on
+for further planes). All converted series/components are retained; no automatic
 best-scan selection is performed. Classification is a heuristic that matches
 whole words in the series description (revision 2: for example `AX T2* GRE`
 is GRE, `SWI mIP` is SWI_MINIP, `HEADCOIL T1` is T1); review before analysis.

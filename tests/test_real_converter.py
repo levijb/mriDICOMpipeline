@@ -126,3 +126,22 @@ def test_real_converter_output_byte_identical(project, tmp_path, real_dcm2niix):
     assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
     [published] = (project / 'Niftis/Subjects/S001/20260725').rglob('*.nii.gz')
     assert gzip.decompress(published.read_bytes()) == volumes[0].read_bytes()
+
+
+def test_real_converter_overlay_published_with_its_volume(project, tmp_path, real_dcm2niix, capsys):
+    """dcm2niix saves a DICOM overlay plane as <volume>_ROI1.nii, with no sidecar of its own.
+
+    Seen in production (2026-11-10). The pipeline publishes the mask next to
+    its volume, and the session converts.
+    """
+    _, image = mr_series(tmp_path, description='AX FLAIR', series_number=6, overlay=True)
+    result, output = run_converter(real_dcm2niix, image, tmp_path)
+    record(capsys, real_dcm2niix, 'series with an overlay plane', result.returncode)
+    [volume] = [p for p in output.glob('*.nii') if '_ROI' not in p.name]
+    assert sorted(p.name for p in output.iterdir() if '_ROI' in p.name) == [volume.stem + '_ROI1.nii']
+    archive_objects(project, 'S001_20260725.zip', image)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
+    [mask] = (project / 'Niftis/Subjects/S001/20260725').rglob('*_ROI1.nii.gz')
+    assert gzip.decompress(mask.read_bytes()) == (output / (volume.stem + '_ROI1.nii')).read_bytes()
+    assert session_conversion(project)['n_volumes'] == 1
