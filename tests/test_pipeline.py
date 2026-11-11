@@ -192,7 +192,7 @@ def test_sequence_categories_and_truncated_nifti(tmp_path):
 def test_new_batch_only_processes_new_session(project, tmp_path, monkeypatch):
     archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
     assert call(project, 'prepare') == 0
-    archive(project, 'S001_20260801.zip', dicom_bytes(tmp_path))
+    archive(project, 'S001_20260801.zip', dicom_bytes(tmp_path, fields={'StudyDate': '20260801'}))
     original = prepare.prepare_one
     calls = []
     def record(candidate, *args):

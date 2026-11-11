@@ -391,16 +391,16 @@ def test_multi_study_held_until_accepted(project, tmp_path):
     assert call(project, 'prepare') == 0
 
 
-def test_date_a_month_from_zip_name_held_until_accepted(project, tmp_path):
-    """A StudyDate 28+ days from the ZIP-name date (a mistyped month) is held; a smaller gap only warns."""
-    upload = archive(project, 'S001_20260822.zip', dicom_bytes(tmp_path))  # the headers say 20260725: 28 days
+def test_date_5_days_from_zip_name_held_until_accepted(project, tmp_path):
+    """A StudyDate 5+ days from the ZIP-name date is held until accepted; the accepted gap stays a warning."""
+    upload = archive(project, 'S001_20260730.zip', dicom_bytes(tmp_path))  # the headers say 20260725: 5 days
     assert call(project, 'prepare', '--allow-unlisted-dates') == 2
-    assert upload.exists() and 'S001/20260822' not in state(project)['sessions']
+    assert upload.exists() and 'S001/20260730' not in state(project)['sessions']
     [issue] = prepare_issues(project)
-    assert '28 days' in state(project)['issues'][issue]['reason']
-    assert call(project, 'prepare', '--allow-unlisted-dates', '--accept-date-mismatch', 'S001/20260822') == 0
-    assert state(project)['sessions']['S001/20260822']['status'] == 'ready'
-    assert 'date:S001/20260822' in state(project)['issues'] and not prepare_issues(project)
+    assert '5 days' in state(project)['issues'][issue]['reason']
+    assert call(project, 'prepare', '--allow-unlisted-dates', '--accept-date-mismatch', 'S001/20260730') == 0
+    assert state(project)['sessions']['S001/20260730']['status'] == 'ready'
+    assert 'date:S001/20260730' in state(project)['issues'] and not prepare_issues(project)
     # Once accepted, extracting the same ZIP again is not held.
     assert call(project, 'prepare', '--allow-unlisted-dates', '--force-reextract') == 0
 
@@ -425,11 +425,11 @@ def test_days_apart_table(header_dates, name_date, gap):
     assert prepare.days_apart(header_dates, name_date) == gap
 
 
-@pytest.mark.parametrize('study_date, held', [('20260628', False), ('20260627', True), ('20260626', True),
-                                              ('20260821', False), ('20260823', True)],
-                         ids=['27-before', '28-before', '29-before', '27-after', '29-after'])
-def test_date_hold_starts_at_28_days_in_either_direction(project, tmp_path, study_date, held):
-    """README: a StudyDate 28 or more days from the ZIP-name date holds the ZIP; a smaller difference only warns."""
+@pytest.mark.parametrize('study_date, held', [('20260721', False), ('20260720', True), ('20260719', True),
+                                              ('20260729', False), ('20260730', True), ('20260731', True)],
+                         ids=['4-before', '5-before', '6-before', '4-after', '5-after', '6-after'])
+def test_date_hold_starts_at_5_days_in_either_direction(project, tmp_path, study_date, held):
+    """README: a StudyDate 5 or more days from the ZIP-name date holds the ZIP; a smaller difference only warns."""
     upload = archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path, fields={'StudyDate': study_date}))
     assert call(project, 'prepare') == (2 if held else 0)
     assert upload.exists() == held and (KEY in state(project)['sessions']) == (not held)
@@ -507,7 +507,8 @@ def test_accepted_date_mismatch_lasts_for_those_zip_bytes_only(project, tmp_path
 
 def test_roster_issue_never_outlives_its_cause(project, tmp_path):
     """SB-1: a roster gap does not hold an already prepared ZIP, and a roster issue clears once fixed."""
-    archive(project, 'S001_20260802.zip', dicom_bytes(tmp_path))  # 20260802 is not in the roster
+    # 20260802 is not in the roster.
+    archive(project, 'S001_20260802.zip', dicom_bytes(tmp_path, fields={'StudyDate': '20260802'}))
     assert call(project, 'prepare', '--allow-unlisted-dates') == 0
     assert call(project, 'prepare') == 0 and not prepare_issues(project)
     # Working on the ZIP again without the option is refused...

@@ -36,7 +36,7 @@ def config_parser(phase):
         p.add_argument("--accept-multi-study", action="append", metavar="SUBJECT/SESSION",
                        help="Accept this session's ZIP although it holds more than one study; repeatable")
         p.add_argument("--accept-date-mismatch", action="append", metavar="SUBJECT/SESSION",
-                       help="Accept this session's ZIP although its DICOM StudyDate is 28+ days from the ZIP-name date; repeatable")
+                       help="Accept this session's ZIP although its DICOM StudyDate is 5+ days from the ZIP-name date; repeatable")
     else:
         p.add_argument("--dicom-root", type=Path, help="DicomExtracted root")
         p.add_argument("--output-root", type=Path, help="Niftis root")

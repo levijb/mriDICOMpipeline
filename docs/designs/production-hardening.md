@@ -281,8 +281,9 @@ section:
 *   Added 2026-11-11 at the user's request: a header StudyDate 28 or more
     days from the ZIP-name date holds the ZIP (a mistyped month), with
     `--accept-date-mismatch SUBJECT/SESSION` to accept it. A smaller
-    difference stays a nonblocking `date:` warning. Test:
-    `test_date_a_month_from_zip_name_held_until_accepted`.
+    difference stays a nonblocking `date:` warning. Later the same day the
+    user lowered the hold to 5 days (`prepare.DATE_HOLD_DAYS`). Test:
+    `test_date_5_days_from_zip_name_held_until_accepted`.
 *   Fixed 2026-11-11 after the test-plan review, each with a test:
     *   `prepare` checks the roster only for ZIPs it will work on, and clears
         an earlier roster issue on an unchanged prepared ZIP, so such an
@@ -292,7 +293,7 @@ section:
     *   `convert` checks the stop flag before each volume and before
         publishing.
     *   `zipfile` errors are reported without member names (P8).
-    *   StudyDates that are not 8 digits are skipped by the 28-day check.
+    *   StudyDates that are not 8 digits are skipped by the date-hold check.
 *   Fixed 2026-11-11 after the first testing round (bugs SB-4, SB-6, SB-9,
     SB-11, SB-12 and SB-13 in `docs/testing/`), each with a test:
     *   On Windows, a ZIP in `SubjectsSorted` whose path differs from the
@@ -1936,7 +1937,7 @@ function, so importing the module itself would clash with both.
 
         | Key | Raised by | Blocking | Cleared by |
         |---|---|---|---|
-        | `prepare:<ZIP path>` | Preparation failures and holds (Q3, Q15, Q20, and the 28-day date hold) | Yes; it also blocks conversion of that session | The next accepted preparation of that path, or the path disappearing (today's stale-issue rule) |
+        | `prepare:<ZIP path>` | Preparation failures and holds (Q3, Q15, Q20, and the 5-day date hold) | Yes; it also blocks conversion of that session | The next accepted preparation of that path, or the path disappearing (today's stale-issue rule) |
         | `date:<key>` | Header dates that differ from the file name (today) | No | As today |
         | `missing:<key>` | A ready session whose canonical ZIP is not listed (R18) | No | The ZIP being listed again |
         | `convert:<key>` | Conversion failures, partials, and interrupts (today's key) | Yes | The next successful conversion of that session |

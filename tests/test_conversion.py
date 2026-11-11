@@ -320,13 +320,13 @@ def test_overlay_mask_published_next_to_its_volume(project, tmp_path, converter,
 
 def test_sidecar_keeps_dicom_study_date_apart_from_name_date(project, tmp_path, converter):
     """session_date comes from the ZIP name; dicom_study_date is the StudyDate in the DICOM headers."""
-    archive(project, 'S001_20260801.zip', dicom_bytes(tmp_path))  # the headers say 20260725
+    archive(project, 'S001_20260801.zip', dicom_bytes(tmp_path, fields={'StudyDate': '20260728'}))  # 4 days: a warning
     assert call(project, 'prepare') == 0
     assert 'date:S001/20260801' in state(project)['issues']
     assert call(project, 'convert', '--dcm2niix-bin', converter) == 0
     [sidecar] = [p for p in (project / 'Niftis/Subjects/S001/20260801').rglob('*.json') if not p.name.startswith('.')]
     metadata = json.loads(sidecar.read_text())
-    assert metadata['session_date'] == '20260801' and metadata['dicom_study_date'] == '20260725'
+    assert metadata['session_date'] == '20260801' and metadata['dicom_study_date'] == '20260728'
 
 
 def sidecar_dates(folder):
@@ -470,7 +470,7 @@ def test_report_file_held_open_does_not_stop_run(project, tmp_path, monkeypatch,
 
 def test_session_filter_limits_work(project, tmp_path, converter):
     archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
-    archive(project, 'S001_20260801.zip', dicom_bytes(tmp_path))
+    archive(project, 'S001_20260801.zip', dicom_bytes(tmp_path, fields={'StudyDate': '20260801'}))
     assert call(project, 'prepare') == 0
     assert call(project, 'convert', '--dcm2niix-bin', converter, '--session', KEY) == 0
     sessions = state(project)['sessions']

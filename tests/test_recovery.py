@@ -196,7 +196,7 @@ def project_at(project, tmp_path, converter, start):
     if start == 'converted':
         assert call(project, 'convert', '--dcm2niix-bin', converter) == 0
     if start == 'second-upload':
-        archive(project, 'S001_20260801.zip', dicom_bytes(tmp_path))
+        archive(project, 'S001_20260801.zip', dicom_bytes(tmp_path, fields={'StudyDate': '20260801'}))
 
 
 def published(project, phase, label='20260725'):

@@ -31,8 +31,8 @@ MR_IMAGE_SOP_CLASSES = {
 
 
 # A StudyDate this many days or more from the ZIP-name date is held rather than
-# only reported; 28 is the shortest month, so a mistyped month is always held.
-DATE_HOLD_DAYS = 28
+# only reported; a smaller difference is a date: warning. Set by the user.
+DATE_HOLD_DAYS = 5
 
 
 def days_apart(header_dates, date):

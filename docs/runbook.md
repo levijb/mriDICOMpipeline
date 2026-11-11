@@ -68,7 +68,7 @@ two machines (for example two cluster nodes) on the same storage:
   separate `_N` ZIPs, or, if it is one session, accept it:
   `mri-dicom-pipeline prepare --accept-multi-study S001/20260725`.
 * **`prepare:` issue, "DICOM StudyDate is N days from the ZIP-name date".**
-  The scan date in the DICOM headers is 28 or more days from the date in the
+  The scan date in the DICOM headers is 5 or more days from the date in the
   ZIP name, which usually means the name was mistyped. The ZIP stays where it
   is and nothing is published. If the name is wrong, rename the ZIP to the
   right date and rerun; the old issue clears itself. If the name is right,
