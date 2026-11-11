@@ -34,11 +34,12 @@ def _nifti_stem(path):
     return path.name[:-7] if path.name.endswith(".nii.gz") else path.stem
 
 
-def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_date=None):
+def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_date=None, stop=None):
     """Validate, gzip and file the converter output by scan type.
 
     dicom_study_date is the StudyDate found in the session's DICOM headers,
     kept apart from session_date, which comes from the ZIP name.
+    A stop raises InterruptedError before the next volume (Q12).
     Returns (volumes, files, errors, converted series keys, converter versions).
     """
     output.mkdir()
@@ -47,6 +48,8 @@ def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_dat
     stems = {_nifti_stem(p) for p in niftis}
     overlays = {p: m for p in niftis if (m := OVERLAY.fullmatch(_nifti_stem(p))) and m[1] in stems}
     for nii in niftis:
+        if stop is not None and stop.is_set():
+            raise InterruptedError("Conversion interrupted")
         if nii in overlays:
             continue
         stem = _nifti_stem(nii)
@@ -224,8 +227,9 @@ def convert_one(entry, cfg, stop):
     try:
         if not receipts.fast_valid(entry["extraction"], "extract", cfg.audit):
             raise ValueError("Extracted input changed or is missing; run preparation first")
-        if last_good:
-            # An explicit reconversion never deletes files people added (Q7).
+        if (canonical / receipts.RECEIPT).exists():
+            # An explicit reconversion never deletes files people added (Q7), even when state does not
+            # record the folder; a folder that is gone is simply rebuilt.
             extra = files_outside_inventory(canonical)
             if extra:
                 raise ValueError("Explicit reconversion refused; files not in inventory: " + ", ".join(extra[:20]))
@@ -254,7 +258,7 @@ def convert_one(entry, cfg, stop):
         # Normally one date; several are comma-separated; None when the headers carry no StudyDate.
         dicom_study_date = ",".join(inventory.get("header_dates", [])) or None
         n_volumes, file_list, organize_errors, converted_keys, versions = organize_conversion(
-            raw, organized, sid, label, entry["archive_sha256"], dicom_study_date)
+            raw, organized, sid, label, entry["archive_sha256"], dicom_study_date, stop)
         errors += organize_errors
         if not n_volumes:
             errors.append("No valid NIfTI volumes produced")
@@ -272,6 +276,8 @@ def convert_one(entry, cfg, stop):
         destination = canonical if complete else cfg.niftis / ".pending" / sid / label / stage.name
         if complete and destination.exists() and not (destination / receipts.RECEIPT).exists():
             raise ValueError("NIfTI destination is not owned by this pipeline; refusing replacement")
+        if stop.is_set():
+            raise InterruptedError("Conversion interrupted")
         incoming, aside = fsutil.swap_names(destination)
         intent = recovery.write_intent(cfg.reports, stage="convert", key=key, run_id=cfg.run_id,
             stage_dir=str(stage), destination=str(destination), incoming=str(incoming), previous=str(aside),

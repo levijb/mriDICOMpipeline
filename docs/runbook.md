@@ -55,7 +55,8 @@ two machines (for example two cluster nodes) on the same storage:
 * **`prepare:` issue, "Accepted canonical ZIP changed".** Different bytes
   appeared at a ZIP's place in `SubjectsSorted/`. The prepared session and
   its outputs are unchanged, and conversion of that session is blocked.
-  Restore the original ZIP (from your copy) to clear the hold. If the new
+  Restore the original ZIP (from your copy) to clear the hold; a hold found
+  by `--audit` clears on the next `prepare --audit` run. If the new
   export is the one you want, move it out of `SubjectsSorted/` and upload it
   as a new session, for example `S001_20260725_2.zip`.
 * **`prepare:` issue, "Different DICOM contents for an existing session".**
@@ -169,6 +170,10 @@ Nothing deletes failure material automatically:
 Their paths appear in `issues.csv`. Once a session's `convert:` issue is gone
 (it converted, or you accepted the outcome), delete that session's folders
 from both places. Keep anything an open issue still points to.
+
+A run that is killed outright (power loss, `kill -9`, a closed terminal
+window) can leave `.work/prepare_*` or `.work/convert_*` folders that no
+issue names. With no command running, they are safe to delete.
 
 ## Slurm time limits
 

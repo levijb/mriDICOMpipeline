@@ -283,6 +283,16 @@ section:
     `--accept-date-mismatch SUBJECT/SESSION` to accept it. A smaller
     difference stays a nonblocking `date:` warning. Test:
     `test_date_a_month_from_zip_name_held_until_accepted`.
+*   Fixed 2026-11-11 after the test-plan review, each with a test:
+    *   `prepare` checks the roster only for ZIPs it will work on, and clears
+        an earlier roster issue on an unchanged prepared ZIP, so such an
+        issue no longer outlives its cause.
+    *   `--force-reconvert` rebuilds a complete folder that disappeared, and
+        refuses added files in any receipt-holding folder, recorded or not.
+    *   `convert` checks the stop flag before each volume and before
+        publishing.
+    *   `zipfile` errors are reported without member names (P8).
+    *   StudyDates that are not 8 digits are skipped by the 28-day check.
 *   P7: `--dry-run --audit` keeps hashing, and the help text and README are
     corrected to say so. This keeps a dry integrity check possible.
 *   `prepare --audit` also re-hashes canonical ZIPs, so that a same-size,
@@ -1809,8 +1819,8 @@ function, so importing the module itself would clash with both.
             planning, so a dry run hashes it too and writes nothing (P7). A
             mismatch holds the ZIP; a match clears an earlier audit hold.
         *   An unchanged ZIP whose source record says `held` is not hashed
-            again (its issue stays open), unless `--accept-multi-study`
-            names its session.
+            again (its issue stays open), unless `--accept-multi-study` or
+            `--accept-date-mismatch` names its session.
         *   `accepted_multi_study` in the entry is true when the published
             inventory holds more than one study, which only an explicit
             acceptance allows.

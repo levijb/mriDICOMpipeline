@@ -82,6 +82,27 @@ def test_force_reconvert_refuses_folder_with_extra_files(project, tmp_path, conv
     assert f'output:{KEY}' not in state(project)['issues']
 
 
+def test_force_reconvert_rebuilds_a_deleted_folder(project, tmp_path, converter):
+    """SB-2: the documented recovery for a complete folder that disappeared."""
+    folder = converted(project, tmp_path, converter)
+    shutil.rmtree(folder)
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 2
+    assert call(project, 'convert', '--dcm2niix-bin', converter, '--force-reconvert', '--session', KEY) == 0
+    assert (folder / '.pipeline_complete.json').exists()
+    assert f'output:{KEY}' not in state(project)['issues']
+
+
+def test_force_reconvert_after_lost_state_keeps_added_files(project, tmp_path, converter):
+    """SB-7: with state lost, an explicit reconversion still refuses a folder holding files people added."""
+    folder = converted(project, tmp_path, converter)
+    added = folder / 'ADC' / 'notes.txt'
+    added.write_text('analysis notes')
+    shutil.rmtree(project / 'Reports/.state')
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', converter, '--force-reconvert') == 2
+    assert added.exists() and 'files not in inventory' in json.dumps(state(project)['issues'])
+
+
 def test_failed_reconversion_keeps_last_good(project, tmp_path, converter, monkeypatch):
     """P4: a failed explicit reconversion leaves the complete folder and its record in place."""
     folder = converted(project, tmp_path, converter)

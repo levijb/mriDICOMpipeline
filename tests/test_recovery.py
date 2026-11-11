@@ -11,11 +11,12 @@ import textwrap
 import threading
 import time
 
+from pydicom.uid import generate_uid
 import pytest
 
-from mri_dicom_pipeline import fsutil
+from mri_dicom_pipeline import fsutil, nifti
 from mri_dicom_pipeline.state import State
-from support import archive, call, child_env, dicom_bytes, run_with_crash
+from support import archive, archive_objects, call, child_env, dicom_bytes, run_with_crash
 from support import state as read_state
 
 KEY, OTHER = 'S001/20260725', 'S002/20260725'
@@ -366,6 +367,28 @@ def test_stop_signal_during_conversion(project, tmp_path, signum, code, outcome)
     assert list((project / '.work').glob('convert_*/converter.log'))
     with (project / 'Reports/run_history.csv').open(newline='') as f:
         assert list(csv.DictReader(f))[-1]['outcome'] == outcome
+
+
+@pytest.mark.parametrize('stop_at', [1, 2], ids=['between-volumes', 'before-publish'])
+def test_stop_while_organizing_publishes_nothing(project, tmp_path, converter, monkeypatch, stop_at):
+    """SB-3: a Ctrl+C that arrives after the converter exited, while volumes are gzipped, publishes nothing."""
+    study = generate_uid()
+    archive_objects(project, 'S001_20260725.zip', [dicom_bytes(tmp_path, study=study), dicom_bytes(tmp_path, study=study)])
+    assert call(project, 'prepare') == 0
+    original, gzipped = nifti.validate_and_gzip, []
+
+    def gzip_then_stop(*args, **kwargs):
+        result = original(*args, **kwargs)
+        gzipped.append(args[0])
+        if len(gzipped) == stop_at:
+            signal.getsignal(signal.SIGINT)(signal.SIGINT, None)  # as if Ctrl+C arrived now
+        return result
+
+    monkeypatch.setattr(nifti, 'validate_and_gzip', gzip_then_stop)
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 130
+    assert len(gzipped) == stop_at
+    assert not list((project / 'Niftis').rglob('.pipeline_complete.json'))
+    assert read_state(project)['sessions'][KEY]['conversion']['status'] == 'interrupted'
 
 
 def process_alive(pid):

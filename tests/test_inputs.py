@@ -236,6 +236,46 @@ def test_date_a_month_from_zip_name_held_until_accepted(project, tmp_path):
     assert call(project, 'prepare', '--allow-unlisted-dates', '--force-reextract') == 0
 
 
+def test_days_apart_skips_study_dates_that_are_not_8_digits():
+    """SB-10: a shortened StudyDate such as 202611 is skipped, not read as 1 January 2026."""
+    assert prepare.days_apart(['202611', '2026072', '20261115.0'], '20261115') == 0
+    assert prepare.days_apart(['20261018', '202611'], '20261115') == 28
+
+
+def test_roster_issue_never_outlives_its_cause(project, tmp_path):
+    """SB-1: a roster gap does not hold an already prepared ZIP, and a roster issue clears once fixed."""
+    archive(project, 'S001_20260802.zip', dicom_bytes(tmp_path))  # 20260802 is not in the roster
+    assert call(project, 'prepare', '--allow-unlisted-dates') == 0
+    assert call(project, 'prepare') == 0 and not prepare_issues(project)
+    # Working on the ZIP again without the option is refused...
+    assert call(project, 'prepare', '--force-reextract') == 2 and prepare_issues(project)
+    # ...and the refusal clears on the next run that allows the date.
+    assert call(project, 'prepare', '--allow-unlisted-dates') == 0 and not prepare_issues(project)
+
+
+@pytest.mark.parametrize('damage', ['encrypted', 'renamed'])
+def test_zip_member_names_stay_out_of_reports(project, tmp_path, damage):
+    """SB-8: zipfile's error messages name the member, and member paths can carry patient names."""
+    upload = project / 'DicomUploads/Uploads/S001_20260725.zip'
+    upload.parent.mkdir(parents=True)
+    with zipfile.ZipFile(upload, 'w') as z:
+        z.writestr('FAKE_PRIVATE_NAME/IM0001', dicom_bytes(tmp_path))
+    data = bytearray(upload.read_bytes())
+    if damage == 'encrypted':
+        # Set the encryption flag in the local header and the central directory.
+        data[6] |= 1
+        data[data.rindex(b'PK') + 8] |= 1
+    else:
+        # The local header's copy of the name no longer matches the central directory's.
+        at = data.index(b'FAKE_PRIVATE_NAME') + 16
+        data[at:at + 1] = b'X'
+    upload.write_bytes(bytes(data))
+    assert call(project, 'prepare') == 2 and upload.exists()
+    for path in (project / 'Reports').rglob('*'):
+        if path.is_file():
+            assert b'FAKE_PRIVATE' not in path.read_bytes(), path
+
+
 def test_access_denied_during_publish_is_retried(project, tmp_path, monkeypatch):
     """Windows: a virus scanner still reading just-extracted files refuses the folder rename for a moment."""
     archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))

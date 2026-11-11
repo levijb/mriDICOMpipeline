@@ -87,14 +87,17 @@ mri-dicom-pipeline convert --reference-csv /data/visits.csv --subject-column par
 
 Blank rows are ignored; repeated pairs are
 collapsed. Invalid reference rows are logged and ignored without editing the
-CSV. IDs that differ only by letter case (`S001` and `s001`) would share
+CSV; a row with a valid ID and an invalid date still registers the ID, like a
+row without a date. IDs that differ only by letter case (`S001` and `s001`) would share
 folders on Windows, so every spelling of such an ID is ignored, with a warning
 naming the rows. IDs equal to a Windows device name (`CON`, `PRN`, `AUX`,
 `NUL`, `COM0`-`COM9`, `LPT0`-`LPT9`, in any case) are rejected. IDs without
 dates still register the subject, but do not authorize an unlisted date.
 Unknown IDs and dates are held in Uploads for review. For an intentionally
 unlisted date belonging to a known ID, pass `--allow-unlisted-dates` to both
-commands or update the reference.
+commands or update the reference. `prepare` checks the reference only for ZIPs
+it is about to work on; `convert` checks every session again before converting
+it.
 
 ### Uploads and canonical ZIPs
 
@@ -177,7 +180,7 @@ successful caches. `--limit N` selects work after cache checks, so a pilot can
 reach new scans beyond already completed ones.
 
 An exact repeat ZIP is skipped. A differently packaged ZIP containing the
-same multiset of DICOM file contents is also skipped. Its incoming copy stays
+same set of DICOM file contents is also skipped. Its incoming copy stays
 in Uploads and its outcome is cached; later runs do not repeatedly hash it.
 Different DICOM contents with the same session name are held, preserving both
 archives. Resolve the naming explicitly, for example `_2` for a second
@@ -280,6 +283,9 @@ pipeline does not de-identify any of them:
 * logs, where converter lines that look identifying are replaced before they
   reach disk; this matches line patterns and can miss identifiers.
 
+File and folder names inside the ZIPs, which can contain patient names, are
+not written to reports, logs or state.
+
 ## Where to look
 
 No timestamped report folder is created. Both commands print these paths:
@@ -295,7 +301,8 @@ No timestamped report folder is created. Both commands print these paths:
 | Reports/.state | Internal index (`index.json`, `index.json.bak`), result journals and open intents; preserve it |
 
 `session_status.csv` columns: `subject_id`, `session`, `prepare_status`
-(`awaiting_upload`, `ready`, `held`, `failed`, `interrupted`),
+(`awaiting_upload`, `ready`, `held`, `failed`, `interrupted`; a session
+whose ZIP has an open `prepare:` issue shows `held`),
 `dicom_instances`, `series`, `conversion_status` (`not_converted`,
 `converted`, `partial`, `failed`, `interrupted`, `needs_conversion`,
 `output_modified`), `converted_volumes`, `archive`, `nifti_folder`,
@@ -361,7 +368,8 @@ commit. Ignore rules do not remove files already tracked by Git.
 
 State schema version 3 uses `subject_id`, `.pipeline_complete.json` receipts,
 and a `.mri_dicom_pipeline.lock` file inside each storage folder. Any other
-state version is refused before processing, and nothing is written; start
+state version is refused before processing, and neither state nor data is
+written (the run's lock files, log and `aborted` history row still are); start
 older projects with a new `--report-root`. The commands refuse to overwrite
 session directories that lack the current ownership receipt.
 

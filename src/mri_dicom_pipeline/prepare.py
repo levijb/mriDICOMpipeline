@@ -36,14 +36,20 @@ DATE_HOLD_DAYS = 28
 
 
 def days_apart(header_dates, date):
-    """Largest gap in days between the ZIP-name date and a header StudyDate; unparsable StudyDates are skipped."""
+    """Largest gap in days between the ZIP-name date and a header StudyDate; StudyDates that are not valid YYYYMMDD are skipped."""
     named, gaps = datetime.strptime(date, "%Y%m%d"), [0]
     for value in header_dates:
+        if len(value) != 8 or not value.isdigit():
+            continue  # strptime would read 202611 as 1 January 2026
         try:
             gaps.append(abs((datetime.strptime(value, "%Y%m%d") - named).days))
         except ValueError:
             pass
     return max(gaps)
+
+
+UNLISTED = ("Subject/date absent from reference CSV; update reference or use --allow-unlisted-dates "
+            "for known IDs")
 
 
 class HoldError(ValueError):
@@ -122,7 +128,7 @@ def extract_archive(source, stage, stop=None, accept_multi_study=False):
                     continue
                 sop_uid = str(ds.get("SOPInstanceUID", ""))
                 if not sop_uid:
-                    raise ValueError("DICOM missing SOPInstanceUID; held for review")
+                    raise ValueError("DICOM object missing SOPInstanceUID")
                 filename = f"{len(files)+1:08d}.dcm"
                 dest = dicom_dir / filename
                 f.seek(0)
@@ -154,7 +160,7 @@ def extract_archive(source, stage, stop=None, accept_multi_study=False):
                     expected_pixels = 0
                 uid = str(ds.get("SeriesInstanceUID", ""))
                 if not uid:
-                    raise ValueError("DICOM missing SeriesInstanceUID; held for review")
+                    raise ValueError("DICOM object missing SeriesInstanceUID")
                 key = hashlib.sha256(uid.encode()).hexdigest()[:20]
                 row = series.setdefault(key, {"series_key": key, "series_number": str(ds.get("SeriesNumber", "")),
                     "scan_type": classify.classify(str(ds.get("SeriesDescription", "")), str(ds.get("ProtocolName", "")),
@@ -242,7 +248,12 @@ def prepare_one(candidate, previous, cfg, stop=None):
         else:
             check_free_space(source, cfg.work, cfg.dicoms)
             accept = key in cfg.accept_multi_study or bool((previous or {}).get("accepted_multi_study"))
-            inventory = extract_archive(source, stage, stop, accept)
+            try:
+                inventory = extract_archive(source, stage, stop, accept)
+            except (zipfile.BadZipFile, RuntimeError) as e:
+                # zipfile's messages name the member, and member paths can carry patient names (P8).
+                raise ValueError(f"Damaged or unreadable ZIP ({type(e).__name__}); member names are not "
+                                 "reported") from None
             if fsutil.signature(source) != fingerprint:
                 raise ValueError("Upload changed during extraction; wait for transfer completion")
             if valid_previous and not is_canonical:
@@ -319,8 +330,6 @@ def plan_prepare(cfg, state, ids, pairs, logger):
             key = f"{sid}/{label}"
             if cfg.sessions is not None and key not in cfg.sessions:
                 continue
-            if sid not in ids or ((sid, date) not in pairs and not cfg.allow_unlisted_dates):
-                raise ValueError("Subject/date absent from reference CSV; update reference or use --allow-unlisted-dates for known IDs")
             fingerprint = fsutil.signature(source)
             prior = state.data["sessions"].get(key, {})
             cached = state.data["sources"].get(str(source), {})
@@ -335,6 +344,9 @@ def plan_prepare(cfg, state, ids, pairs, logger):
                                             "session and its outputs are unchanged")
                         if issue_key in state.data["issues"] and not cfg.dry_run:
                             state.checkpoint({"clear_issues": [issue_key]})
+                    elif state.data["issues"].get(issue_key, {}).get("reason") == UNLISTED and not cfg.dry_run:
+                        # Left by a run that would have worked on this ZIP again (for example --force-reextract).
+                        state.checkpoint({"clear_issues": [issue_key]})
                     counts["cached"] += 1
                     continue
                 if cached.get("outcome") == "held" and key not in cfg.accept_multi_study | cfg.accept_date_mismatch:
@@ -345,6 +357,10 @@ def plan_prepare(cfg, state, ids, pairs, logger):
                     if (cached["outcome"] == "duplicate" and valid) or (cached["outcome"] == "failed" and not cfg.retry_failed):
                         counts["cached"] += 1
                         continue
+            # Only ZIPs about to be worked on are checked against the roster: an issue on a cached ZIP
+            # could never clear, and convert checks the roster again before converting.
+            if sid not in ids or ((sid, date) not in pairs and not cfg.allow_unlisted_dates):
+                raise ValueError(UNLISTED)
             if key in recovering:
                 # A folder crash recovery would not touch waits for a person (Q12).
                 counts["held"] += 1
