@@ -25,9 +25,12 @@ STOP_RETURN_CODES = set() if os.name == "nt" else {-signal.SIGTERM, -signal.SIGK
 CONVERTER_OPTIONS = ["-z", "n", "-b", "y", "-ba", "y", "-c", "", "-d", "9", "-f", "series_%j_%s_%e"]
 CONTROL_FILES = {receipts.RECEIPT, receipts.INVENTORY}
 IDENTIFYING = re.compile(r"patient.?name|patient.?id|accession|birth.?date|physician|institution|station.?name|serial.?number", re.I)
-# dcm2niix saves each DICOM overlay plane as <volume>_ROI<n>.nii, a mask with
-# no sidecar of its own. It is published next to its volume, like .bval/.bvec.
-OVERLAY = re.compile(r"(.+)_(ROI\d+)")
+# dcm2niix writes some volumes with no sidecar of their own, each named after
+# the volume it derives from: <volume>_ROI<n>.nii for a DICOM overlay plane,
+# <volume>_Eq_<n>.nii for a copy resampled to even slice spacing, and
+# <volume>_Tilt_<n>.nii for a gantry-tilt-corrected copy. Each is published
+# next to its volume, like .bval/.bvec.
+OVERLAY = re.compile(r"(.+)_(ROI\d+|Eq_\d+|Tilt_\d+)")
 
 
 def _nifti_stem(path):
@@ -46,7 +49,8 @@ def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_dat
     files, errors, handled, volumes, converted_keys, versions = [], [], set(), 0, set(), set()
     niftis = sorted(p for p in raw.iterdir() if p.name.endswith((".nii", ".nii.gz")))
     stems = {_nifti_stem(p) for p in niftis}
-    overlays = {p: m for p in niftis if (m := OVERLAY.fullmatch(_nifti_stem(p))) and m[1] in stems}
+    overlays = {p: m for p in niftis if (m := OVERLAY.fullmatch(_nifti_stem(p))) and m[1] in stems
+                and not (raw / (_nifti_stem(p) + ".json")).exists()}
     for nii in niftis:
         if stop is not None and stop.is_set():
             raise InterruptedError("Conversion interrupted")
@@ -60,6 +64,7 @@ def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_dat
             if not isinstance(metadata, dict):
                 raise ValueError("sidecar is not a JSON object")
         except (OSError, ValueError) as e:
+            metadata = {}
             errors.append("Missing/invalid JSON sidecar for volume " + hashlib.sha256(stem.encode()).hexdigest()[:12])
         scan = classify.classify(metadata.get("SeriesDescription"), metadata.get("ProtocolName"), metadata.get("ImageType"))
         directory = output / scan
@@ -283,19 +288,21 @@ def convert_one(entry, cfg, stop):
             stage_dir=str(stage), destination=str(destination), incoming=str(incoming), previous=str(aside),
             ownership_root=str(cfg.niftis), receipt_id=receipt_id, expected_digest=entry["content_sha256"],
             attempt=not complete)
-        fsutil.publish_tree(organized, destination, cfg.niftis, incoming, aside)
+        cleaned = fsutil.publish_tree(organized, destination, cfg.niftis, incoming, aside)
         record = receipts.conversion_record(destination, "converted" if complete else "partial", n_volumes,
                                             entry["content_sha256"], provenance, coverage)
         if complete:
             updated["conversion"] = record
             updated.pop("last_attempt", None)
             event["clear_issues"].append("output:" + key)
-            event["note"] = f"{n_volumes} volumes; all required series and companions published"
+            event["note"] = f"{n_volumes} volumes; all required series and companions published" + (
+                "" if cleaned else f"; previous folder {aside} not deleted yet, later runs retry")
         else:
             preserve = True
             note = "; ".join(errors) + f"; working files retained: {stage}"
             _record_failure(event, updated, last_good, "partial", str(destination), note, destination, record, cfg)
-        event["intents"] = [intent]
+        # An open intent makes later runs retry deleting the previous folder.
+        event["intents"] = [intent] if cleaned else []
     except Exception as e:
         preserve = True
         status = "interrupted" if stop.is_set() else "failed"

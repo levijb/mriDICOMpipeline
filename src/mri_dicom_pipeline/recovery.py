@@ -120,7 +120,12 @@ def _resolve(intent, state, cfg, dry_run):
         if not dry_run:
             if event is not None:
                 state.checkpoint(event)
-            fsutil.remove_tree(aside, root)
+            try:
+                fsutil.remove_tree(aside, root)
+            except OSError as e:
+                # A file in it is still held open; the intent stays, so the next run tries again.
+                return f"{action}; could not delete the previous folder {aside} yet ({type(e).__name__}), " \
+                       "a later run retries", False
             fsutil.remove_tree(incoming, root)
     elif aside.exists():
         action = "rolled back to the previous folder"

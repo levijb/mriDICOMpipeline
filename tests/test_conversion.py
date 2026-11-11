@@ -1,6 +1,7 @@
 """Conversion and report tests (T08, T11-T14, T18; P1, P4, P8, P10)."""
 import csv
 import gzip
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,7 +13,7 @@ from pydicom.uid import generate_uid
 import pytest
 
 from mri_dicom_pipeline import __version__, classify, convert
-from support import archive, archive_objects, call, dicom_bytes, mr_series, state
+from support import archive, archive_objects, call, dicom_bytes, mr_series, state, write_nifti
 
 KEY = 'S001/20260725'
 NIFTI = 'Niftis/Subjects/S001/20260725'
@@ -142,6 +143,155 @@ def test_restored_folder_revalidated_by_audit_session(project, tmp_path, convert
     assert call(project, 'convert', '--dcm2niix-bin', converter) == 0
 
 
+def test_nifti_folder_without_a_receipt_is_never_replaced(project, tmp_path, converter):
+    """README: the commands refuse to overwrite session directories that lack the ownership receipt (plan F-08)."""
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 0
+    foreign = project / NIFTI / 'someone_elses_file.txt'
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text('not made by the pipeline')
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 2
+    assert [p.name for p in (project / NIFTI).iterdir()] == ['someone_elses_file.txt']
+    assert foreign.read_text() == 'not made by the pipeline'
+    assert 'not owned by this pipeline' in state(project)['issues'][f'convert:{KEY}']['reason']
+
+
+# ---- Converter failures (plan D-08) ---------------------------------------------------
+
+def test_converter_timeout_is_not_success_and_is_not_retried(project, tmp_path, converter, monkeypatch):
+    """README: a timeout cannot become a successful cache entry; the working files are kept."""
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 0
+    monkeypatch.setenv('FAKE_CONVERTER_SLEEP', '60')
+    started = time.monotonic()
+    assert call(project, 'convert', '--dcm2niix-bin', converter, '--timeout', 1) == 2
+    assert time.monotonic() - started < 30
+    assert 'Converter timed out' in state(project)['issues'][f'convert:{KEY}']['reason']
+    assert conversion(project)['status'] == 'partial' and not (project / NIFTI).exists()
+    assert list((project / '.work').glob('convert_*/converter.log'))
+    monkeypatch.delenv('FAKE_CONVERTER_SLEEP')
+    with monkeypatch.context() as patch:
+        patch.setattr(convert, 'convert_one', fail_if_called)
+        assert call(project, 'convert', '--dcm2niix-bin', converter) == 2
+    assert call(project, 'convert', '--dcm2niix-bin', converter, '--retry-failed') == 0
+    assert conversion(project)['status'] == 'converted'
+
+
+def test_missing_converter_stops_the_run_before_any_work(project, tmp_path, capsys):
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', tmp_path / 'no_such_dcm2niix') == 2
+    assert 'dcm2niix not found' in capsys.readouterr().err
+    assert not state(project)['sessions'][KEY].get('conversion') and not state(project)['issues']
+    assert not list((project / '.work').glob('convert_*'))
+    with (project / 'Reports/run_history.csv').open(newline='') as f:
+        assert list(csv.DictReader(f))[-1]['outcome'] == 'aborted'
+
+
+def test_converter_that_cannot_start_fails_the_session(project, tmp_path):
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 0
+    broken = tmp_path / 'dcm2niix_broken.exe'
+    broken.write_text('not a program')
+    assert call(project, 'convert', '--dcm2niix-bin', broken) == 2
+    assert conversion(project)['status'] == 'failed' and not (project / NIFTI).exists()
+    assert 'working files retained' in state(project)['issues'][f'convert:{KEY}']['reason']
+
+
+# ---- Organizing converter output (plan D-01; the _ROI1 failure of 2026-11-10) -----------
+
+SERIES_UID = '1.2.826.0.1.3680043.8.498.1'
+SERIES_KEY = hashlib.sha256(SERIES_UID.encode()).hexdigest()[:20]
+STEM = f'series_{SERIES_UID}_5_1'
+# Suffixes dcm2niix adds to an output name: echo, phase, real and imaginary parts, coil, unstacked
+# image number, name collisions, derived ADC, motion-corrected, equalized spacing, tilt-corrected.
+NAMED_VARIANTS = ['', '_e2', '_ph', '_e2_ph', '_real', '_imaginary', '_c1', '_i00001', 'a', 'b', '_ADC', '_MoCo',
+                  '_Eq_1', '_Tilt_1']
+
+
+def raw_output(tmp_path, stems):
+    """A hand-built converter output folder: a valid volume per stem, with a sidecar unless it is an _ROI mask."""
+    raw = tmp_path / 'raw'
+    raw.mkdir()
+    for stem in stems:
+        write_nifti(raw / (stem + '.nii'))
+        if '_ROI' not in stem:
+            (raw / (stem + '.json')).write_text(json.dumps({'SeriesDescription': 'AX FLAIR',
+                                                            'ConversionSoftwareVersion': 'v1'}))
+    return raw
+
+
+def organize(tmp_path, raw):
+    """(volumes, published file names, errors, series keys) for a converter output folder."""
+    volumes, files, errors, keys, _ = convert.organize_conversion(raw, tmp_path / 'organized', 'S001', '20260725',
+                                                                 'archive-digest')
+    return volumes, sorted(Path(item['name']).name for item in files), errors, keys
+
+
+def test_organizer_publishes_each_named_variant_under_its_series_key(tmp_path):
+    """Every output that has its own sidecar is a volume of the series named at the front of its file name."""
+    stems = [STEM + suffix for suffix in NAMED_VARIANTS]
+    volumes, names, errors, keys = organize(tmp_path, raw_output(tmp_path, stems))
+    assert (volumes, errors, keys) == (len(stems), [], {SERIES_KEY})
+    assert sum(name.endswith('.nii.gz') for name in names) == sum(name.endswith('.json') for name in names) == len(stems)
+
+
+def test_organizer_publishes_every_overlay_mask_with_its_volume(tmp_path):
+    """README: an overlay plane is published as <image name>_ROI1.nii.gz, _ROI2 and so on for further planes."""
+    stems = [STEM, STEM + '_ROI1', STEM + '_ROI2', STEM + '_ph', STEM + '_ph_ROI1']
+    volumes, names, errors, keys = organize(tmp_path, raw_output(tmp_path, stems))
+    assert (volumes, errors, keys) == (2, [], {SERIES_KEY})
+
+    def published(stem):
+        return 'S001_20260725_FLAIR_' + hashlib.sha256(stem.encode()).hexdigest()[:16]
+
+    assert [name for name in names if '_ROI' in name] == sorted([
+        published(STEM) + '_ROI1.nii.gz', published(STEM) + '_ROI2.nii.gz', published(STEM + '_ph') + '_ROI1.nii.gz'])
+
+
+@pytest.mark.parametrize('kind, published_volumes', [
+    ('mask-without-its-volume', 2), ('volume-without-a-sidecar', 2), ('truncated-volume', 1),
+    ('stray-text-file', 1), ('file-in-a-subfolder', 1)])
+def test_organizer_reports_output_it_cannot_place(tmp_path, kind, published_volumes):
+    """Anything the organizer cannot place is an error, so the session cannot become `converted`.
+
+    A volume without a sidecar is still gzipped (the attempt goes to .pending);
+    a volume that fails validation is not.
+    """
+    raw = raw_output(tmp_path, [STEM])
+    if kind == 'mask-without-its-volume':
+        write_nifti(raw / 'series_1.2.3_7_1_ROI1.nii')
+    elif kind == 'volume-without-a-sidecar':
+        write_nifti(raw / (STEM + '_e2.nii'))
+    elif kind == 'truncated-volume':
+        (raw / (STEM + '_e2.nii')).write_bytes((raw / (STEM + '.nii')).read_bytes()[:-2])
+        (raw / (STEM + '_e2.json')).write_text('{}')
+    elif kind == 'stray-text-file':
+        (raw / 'notes.txt').write_text('left by the converter')
+    else:
+        (raw / 'sub').mkdir()
+        (raw / 'sub' / 'notes.txt').write_text('left by the converter')
+    volumes, names, errors, keys = organize(tmp_path, raw)
+    assert errors and SERIES_KEY in keys
+    assert volumes == sum(name.endswith('.nii.gz') for name in names) == published_volumes
+
+
+def test_organizer_reports_a_sidecar_that_is_not_a_json_object(tmp_path):
+    """SB-13: such a sidecar is reported as an error, not a crash, and the volume is still gzipped."""
+    raw = raw_output(tmp_path, [STEM])
+    (raw / (STEM + '.json')).write_text('["not", "an", "object"]')
+    volumes, names, errors, keys = organize(tmp_path, raw)
+    assert errors == [f'Missing/invalid JSON sidecar for volume {hashlib.sha256(STEM.encode()).hexdigest()[:12]}']
+    assert volumes == 1
+
+
+def test_volume_not_named_by_series_uid_does_not_count_as_coverage(tmp_path):
+    """A volume whose name does not start with series_<UID>_ is published but covers no inventory series."""
+    volumes, names, errors, keys = organize(tmp_path, raw_output(tmp_path, ['unexpected_name']))
+    assert (volumes, errors) == (1, []) and SERIES_KEY not in keys
+    assert all(len(key) == 16 for key in keys)  # inventory series keys have 20 characters, so none can match
+
+
 # ---- Output bytes and privacy (Q10, P8) ------------------------------------------
 
 def test_published_nifti_is_byte_identical_to_converter_output(project, tmp_path, converter, monkeypatch):
@@ -177,6 +327,37 @@ def test_sidecar_keeps_dicom_study_date_apart_from_name_date(project, tmp_path, 
     [sidecar] = [p for p in (project / 'Niftis/Subjects/S001/20260801').rglob('*.json') if not p.name.startswith('.')]
     metadata = json.loads(sidecar.read_text())
     assert metadata['session_date'] == '20260801' and metadata['dicom_study_date'] == '20260725'
+
+
+def sidecar_dates(folder):
+    """(session_date, dicom_study_date) of every published sidecar."""
+    sidecars = [json.loads(p.read_text()) for p in folder.rglob('*.json') if not p.name.startswith('.')]
+    return [(sidecar['session_date'], sidecar['dicom_study_date']) for sidecar in sidecars]
+
+
+def test_sidecar_study_date_is_null_without_a_header_date(project, tmp_path, converter):
+    """README: dicom_study_date is null when the headers carry no StudyDate (plan C-02)."""
+    folder = converted(project, tmp_path, converter, [dicom_bytes(tmp_path, fields={'StudyDate': None})])
+    assert sidecar_dates(folder) == [('20260725', None)]
+    assert f'date:{KEY}' not in state(project)['issues']
+
+
+def test_several_study_dates_are_listed_in_every_sidecar(project, tmp_path, converter):
+    """README: several StudyDates are comma-separated (plan C-02, and E-08: every sidecar carries both fields)."""
+    study = generate_uid()
+    objects = [dicom_bytes(tmp_path, study=study, series_number=number, fields={'StudyDate': date})
+               for number, date in ((2, '20260725'), (3, '20260726'))]
+    folder = converted(project, tmp_path, converter, objects)
+    assert sidecar_dates(folder) == [('20260725', '20260725,20260726')] * 2
+    assert f'date:{KEY}' in state(project)['issues']
+
+
+@pytest.mark.filterwarnings('ignore')  # pydicom warns that the value is not a valid date
+def test_study_date_that_is_not_a_date_warns_and_does_not_hold(project, tmp_path, converter):
+    """A StudyDate shortened by a de-identification tool: a date: warning, never a hold (plan C-02)."""
+    folder = converted(project, tmp_path, converter, [dicom_bytes(tmp_path, fields={'StudyDate': '2026'})])
+    assert sidecar_dates(folder) == [('20260725', '2026')]
+    assert f'date:{KEY}' in state(project)['issues']
 
 
 def test_header_text_passes_through_and_sidecar_stays_filtered(project, tmp_path, converter):

@@ -293,6 +293,21 @@ section:
         publishing.
     *   `zipfile` errors are reported without member names (P8).
     *   StudyDates that are not 8 digits are skipped by the 28-day check.
+*   Fixed 2026-11-11 after the first testing round (bugs SB-4, SB-6, SB-9,
+    SB-11, SB-12 and SB-13 in `docs/testing/`), each with a test:
+    *   On Windows, a ZIP in `SubjectsSorted` whose path differs from the
+        canonical one only in letter case is recorded as found, so it stays
+        cached.
+    *   When the old folder cannot be deleted after a successful swap, the
+        new folder is recorded and the intent stays open; later runs retry
+        the deletion instead of aborting.
+    *   A lock call that fails for a reason other than "busy" is reported
+        as that error, not as "locked by unknown".
+    *   `_Eq_<n>` and `_Tilt_<n>` outputs are companions (see below).
+    *   Any `prepare:` issue on an unchanged, valid canonical ZIP clears on
+        the next plain run (a failed `--force-reextract` left one for good),
+        except an `--audit` hold, which only the next `--audit` clears.
+    *   A sidecar that is not a JSON object is reported, not a crash.
 *   P7: `--dry-run --audit` keeps hashing, and the help text and README are
     corrected to say so. This keeps a dry integrity check possible.
 *   `prepare --audit` also re-hashes canonical ZIPs, so that a same-size,
@@ -613,6 +628,13 @@ session that misses any series is `partial`.
     does not count as a volume. A `_ROI` file with no matching volume is
     still an error. Tests: `test_overlay_mask_published_next_to_its_volume`,
     `test_real_converter_overlay_published_with_its_volume`.
+*   On 2026-11-11 the testing review found the same shape for uneven slice
+    spacing: `dcm2niix` adds `<volume>_Eq_1.nii` (resampled to even spacing)
+    with no sidecar. It is now a companion too, and so is `<volume>_Tilt_1.nii`,
+    the name dcm2niix gives a gantry-tilt-corrected copy (not reproduced with
+    synthetic MR data). A file with one of these suffixes that has its own
+    sidecar is treated as a volume. Test:
+    `test_real_converter_uneven_slice_spacing_session_converts`.
 *   Today preparation accepts any object with a SOP class and a series UID,
     except DICOMDIR. Under this rule, every non-image series that reaches the
     inventory would leave its session `partial` permanently. Which objects

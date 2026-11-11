@@ -90,6 +90,9 @@ def publish_tree(stage, destination, ownership_root, incoming, previous):
 
     The caller picks the swap names (swap_names) and records them in its
     intent first, so crash recovery knows where to look (Q12).
+    Returns False when the new folder is in place but the previous one could
+    not be deleted (for example a file in it is held open); the caller keeps
+    the intent, and reconciliation retries the deletion on later runs.
     """
     destination = owned(destination, ownership_root)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +112,10 @@ def publish_tree(stage, destination, ownership_root, incoming, previous):
             if previous.exists():
                 retry_locked(lambda: previous.rename(destination))
             raise
-        remove_tree(previous, ownership_root)
+        try:
+            remove_tree(previous, ownership_root)
+        except OSError:
+            return False
+        return True
     finally:
         remove_tree(incoming, ownership_root)

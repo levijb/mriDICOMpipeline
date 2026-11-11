@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import errno
 import os
 from pathlib import Path
 import socket
@@ -40,6 +41,9 @@ class ProjectLock:
                 fcntl.flock(self.file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as e:
             self.file.close()
+            if e.errno not in (errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK):
+                # Storage that cannot lock at all (for example some network filesystems) is not "busy".
+                raise OSError(e.errno, f"Could not lock {self.path}: {e.strerror}") from e
             raise RuntimeError("Another pipeline command is running for this project") from e
         return self
 

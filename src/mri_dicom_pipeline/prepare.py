@@ -50,6 +50,7 @@ def days_apart(header_dates, date):
 
 UNLISTED = ("Subject/date absent from reference CSV; update reference or use --allow-unlisted-dates "
             "for known IDs")
+AUDIT_HOLD = "Accepted canonical ZIP changed (found by --audit); the prepared session and its outputs are unchanged"
 
 
 class HoldError(ValueError):
@@ -218,6 +219,10 @@ def prepare_one(candidate, previous, cfg, stop=None):
             raise ValueError("Upload changed during hashing; wait for transfer completion")
         destination = cfg.dicoms / "Subjects" / sid / label
         canonical = cfg.uploads / "SubjectsSorted" / sid / f"{sid}_{label}.zip"
+        if canonical == source:
+            # On Windows the same file can be spelled with other letter cases (S001_20260725.ZIP, or a
+            # folder s001). Record the spelling discovery lists, so later runs find the ZIP cached.
+            canonical = source
         valid_previous = (previous and previous.get("status") == "ready"
                           and previous.get("extraction", {}).get("root") == str(destination)
                           and receipts.fast_valid(previous["extraction"], "extract", cfg.audit))
@@ -283,16 +288,18 @@ def prepare_one(candidate, previous, cfg, stop=None):
                     previous=str(aside), ownership_root=str(cfg.dicoms), receipt_id=receipt_id,
                     expected_digest=digest, attempt=False, subject_id=sid, date=date, label=label,
                     archive=str(canonical))
-                fsutil.publish_tree(stage, destination, cfg.dicoms, incoming, aside)
+                cleaned = fsutil.publish_tree(stage, destination, cfg.dicoms, incoming, aside)
                 event["session"] = receipts.prepared_entry(sid, date, label, canonical, digest, inventory, destination,
                                                            previous.get("conversion", {}) if previous else {})
-                event["intents"] = [intent]
+                # An open intent makes later runs retry deleting the previous folder.
+                event["intents"] = [intent] if cleaned else []
                 event["sources"] = [{"path": str(canonical), "signature": fsutil.signature(canonical), "key": key,
                     "outcome": "prepared", "against": digest, "version": config.SCHEMA_VERSION}]
                 event["note"] = (f"{inventory['n_dicom']} DICOMs, {inventory['n_series']} series; "
                                  f"{inventory['skipped_files']} viewer/non-DICOM files omitted"
                                  + (f"; {inventory['repeated_identical']} repeated objects stored once"
-                                    if inventory["repeated_identical"] else ""))
+                                    if inventory["repeated_identical"] else "")
+                                 + ("" if cleaned else f"; previous folder {aside} not deleted yet, later runs retry"))
                 if inventory["header_dates"] and inventory["header_dates"] != [date]:
                     event["issues"].append(reports.problem("date:" + key, "prepare", sid, label, "Header dates differ from filename; filename date retained", canonical))
                 else:
@@ -340,12 +347,13 @@ def plan_prepare(cfg, state, ids, pairs, logger):
                     if cfg.audit:
                         # Catches an edit that kept the size and mtime (Q3); runs in dry runs too (P7).
                         if fsutil.sha256(source) != prior.get("archive_sha256"):
-                            raise HoldError("Accepted canonical ZIP changed (found by --audit); the prepared "
-                                            "session and its outputs are unchanged")
+                            raise HoldError(AUDIT_HOLD)
                         if issue_key in state.data["issues"] and not cfg.dry_run:
                             state.checkpoint({"clear_issues": [issue_key]})
-                    elif state.data["issues"].get(issue_key, {}).get("reason") == UNLISTED and not cfg.dry_run:
-                        # Left by a run that would have worked on this ZIP again (for example --force-reextract).
+                    elif (issue_key in state.data["issues"] and not cfg.dry_run
+                          and state.data["issues"][issue_key].get("reason") != AUDIT_HOLD):
+                        # Left by a failed attempt that kept the valid extraction (for example a
+                        # --force-reextract that failed); only the next --audit clears an audit hold.
                         state.checkpoint({"clear_issues": [issue_key]})
                     counts["cached"] += 1
                     continue

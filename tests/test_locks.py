@@ -1,4 +1,7 @@
 """Per-root lock tests (T10, local part; P6)."""
+import errno
+import importlib
+import os
 import subprocess
 import sys
 
@@ -60,3 +63,37 @@ def test_dry_run_takes_no_lock(project):
     with locks.RootLocks(cfg.lock_roots, 'prepare', 'HOLDER'):
         assert call(project, 'prepare', '--dry-run') == 0
         assert call(project, 'prepare') == 2
+
+
+def test_killed_holder_releases_its_locks(project):
+    """The operating system holds the lock, so it ends with its process; the owner file left behind is replaced (plan G1-01)."""
+    holder = subprocess.Popen([sys.executable, '-c', HOLD, '--project-root', str(project)],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=child_env())
+    try:
+        assert holder.stdout.readline().strip() == 'locked'
+        assert call(project, 'prepare') == 2
+    finally:
+        holder.kill()
+        holder.wait(timeout=30)
+        holder.stdin.close()
+        holder.stdout.close()
+    owner = project / 'Reports' / locks.OWNER_NAME
+    assert 'HOLDER-RUN' in owner.read_text()  # the killed holder could not remove it
+    cfg = config.configure(config.config_parser('prepare').parse_args(['--project-root', str(project)]), 'prepare')
+    with locks.RootLocks(cfg.lock_roots, 'prepare', 'NEXT-RUN'):
+        assert 'NEXT-RUN' in owner.read_text()
+    assert not owner.exists()
+    assert call(project, 'prepare') == 0
+
+
+def test_lock_error_other_than_busy_is_reported_as_such(tmp_path, monkeypatch):
+    """SB-9 (plan G1-03): storage that cannot lock at all is not reported as "locked by unknown"."""
+    def no_locks_available(*args):
+        raise OSError(errno.ENOLCK, 'No locks available')
+
+    module, function = ('msvcrt', 'locking') if os.name == 'nt' else ('fcntl', 'flock')
+    monkeypatch.setattr(importlib.import_module(module), function, no_locks_available)
+    with pytest.raises((RuntimeError, OSError)) as error:
+        with locks.RootLocks([tmp_path / 'root'], 'prepare', 'RUN-A'):
+            pass
+    assert 'No locks available' in str(error.value) and 'locked by' not in str(error.value)

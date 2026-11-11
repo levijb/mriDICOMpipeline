@@ -246,7 +246,10 @@ explicit technical field list. Matching .bval/.bvec companions are renamed
 with their image. A DICOM overlay plane (graphics stored with the images,
 group 6000) comes out of dcm2niix as a 0/1 mask without a sidecar; it is
 published next to its image as `<image name>_ROI1.nii.gz` (`_ROI2` and so on
-for further planes). All converted series/components are retained; no automatic
+for further planes). In the same way, a series with uneven slice spacing also
+yields `<image name>_Eq_1.nii.gz`, a copy resampled to even spacing (the same
+rule covers dcm2niix's `_Tilt_1` gantry-tilt copies, not reproduced with MR
+test data). All converted series/components are retained; no automatic
 best-scan selection is performed. Classification is a heuristic that matches
 whole words in the series description (revision 2: for example `AX T2* GRE`
 is GRE, `SWI mIP` is SWI_MINIP, `HEADCOIL T1` is T1); review before analysis.
@@ -279,6 +282,10 @@ pipeline does not de-identify any of them:
   `TE=…;Time=…` (the time of day), and NIfTI header extensions (the tested
   dcm2niix versions write none);
 * the original DICOM bytes in `DicomExtracted/` and in the canonical ZIPs;
+* dcm2niix's own sidecars in the working files kept after a failed, partial
+  or interrupted conversion (`.work/convert_*/raw/*.json`), which carry the
+  fields dcm2niix extracts, such as institution, station, device serial
+  number, protocol and descriptions, when the DICOM headers hold them;
 * hashes;
 * logs, where converter lines that look identifying are replaced before they
   reach disk; this matches line patterns and can miss identifiers.

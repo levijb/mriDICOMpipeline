@@ -1,9 +1,12 @@
 """Crash-recovery, stop-signal and state-index tests (T07-T09; P5, P11)."""
 import _thread
+from collections import namedtuple
 import csv
+import errno
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
 import sys
@@ -14,12 +17,16 @@ import time
 from pydicom.uid import generate_uid
 import pytest
 
-from mri_dicom_pipeline import fsutil, nifti
+from mri_dicom_pipeline import convert, fsutil, nifti
 from mri_dicom_pipeline.state import State
 from support import archive, archive_objects, call, child_env, dicom_bytes, run_with_crash
 from support import state as read_state
 
 KEY, OTHER = 'S001/20260725', 'S002/20260725'
+
+
+def fail_if_called(*args, **kwargs):
+    pytest.fail('unexpected call')
 
 
 def status(state, key=KEY):
@@ -223,11 +230,24 @@ CRASH_CASES = [
     ('moved-aside', 'convert', 'converted', ('--force-reconvert',), 'rolled-back'),
     ('swapped', 'convert', 'prepared', (), 'kept'),
     ('journaled', 'convert', 'prepared', (), 'kept'),
+    # The remaining rows of the design's crash matrix (plan H-01).
+    ('copying', 'prepare', 'new', (), 'redone'),
+    ('moved-aside', 'prepare', 'prepared', ('--force-reextract',), 'rolled-back'),
+    ('journaled', 'prepare', 'new', (), 'kept'),
+    ('index-rotated', 'convert', 'prepared', (), 'kept'),
+    # Killed before the old folder moved aside: the old folder stays, and the new copy is removed.
+    ('staged', 'prepare', 'prepared', ('--force-reextract',), 'rolled-back'),
+    ('staged', 'convert', 'converted', ('--force-reconvert',), 'rolled-back'),
 ]
 
 
+def crash_case_id(case):
+    point, phase, start, extra, expected = case
+    return f'{phase}-{point}' + ('-over-existing' if point == 'staged' and extra else '')
+
+
 @pytest.mark.parametrize('point, phase, start, extra, expected', CRASH_CASES,
-                         ids=[f'{case[1]}-{case[0]}' for case in CRASH_CASES])
+                         ids=[crash_case_id(case) for case in CRASH_CASES])
 def test_crash_at_boundary_reconciles(project, tmp_path, converter, point, phase, start, extra, expected):
     """P5: after a kill at any publication step, a normal rerun recovers.
 
@@ -331,6 +351,174 @@ def test_reconcile_skips_other_commands_intents(project, tmp_path, converter):
     assert_recovered(project)
 
 
+def folder_contents(folder):
+    return {p: p.read_bytes() for p in folder.rglob('*') if p.is_file()}
+
+
+@pytest.mark.parametrize('change', ['other-receipt', 'no-receipt'])
+def test_unexpected_receipt_after_a_crash_waits_for_a_person(project, tmp_path, converter, change):
+    """Q12 table, last row, then the runbook's recover: procedure: delete the intent file and rerun (plan H-03)."""
+    project_at(project, tmp_path, converter, 'prepared')
+    options = ('--dcm2niix-bin', converter)
+    assert run_with_crash(project, 'convert', 'swapped', *options) == 137
+    folder = published(project, 'convert')
+    receipt = folder / '.pipeline_complete.json'
+    if change == 'other-receipt':
+        receipt.write_text(json.dumps(dict(json.loads(receipt.read_text()), receipt_id='not-the-recorded-one')))
+    else:
+        receipt.unlink()
+    contents = folder_contents(folder)
+    assert call(project, 'convert', *options) == 2
+    assert folder_contents(folder) == contents
+    [issue] = [key for key in read_state(project)['issues'] if key.startswith('recover:')]
+    assert read_state(project)['issues'][issue]['path'] == str(folder)
+    assert not read_state(project)['sessions'][KEY].get('conversion')
+    intent = project / 'Reports/.state/intents' / (issue[len('recover:'):] + '.json')
+    intent.unlink()  # the runbook step, after inspecting the folder
+    if change == 'other-receipt':
+        # The folder still passes the adoption check (complete, same input, every file present), so it is adopted.
+        assert call(project, 'convert', *options) == 0
+        assert read_state(project)['sessions'][KEY]['conversion']['status'] == 'converted'
+        assert not read_state(project)['issues'] and folder_contents(folder) == contents
+    else:
+        # A folder without a receipt is not the pipeline's to replace; it has to be moved away first.
+        assert call(project, 'convert', *options) == 2
+        issues = read_state(project)['issues']
+        assert list(issues) == [f'convert:{KEY}'] and 'not owned by this pipeline' in issues[f'convert:{KEY}']['reason']
+        assert folder_contents(folder) == contents
+        folder.rename(tmp_path / 'moved_aside')
+        assert call(project, 'convert', *options, '--retry-failed') == 0
+        assert not read_state(project)['issues']
+
+
+# ---- Publishing across filesystems and cleanup failures (plan F-01, F-02, F-06) ---------
+
+@pytest.mark.parametrize('kind', ['exdev', 'winerror-17'])
+def test_cross_device_publish_completes(project, tmp_path, converter, monkeypatch, kind):
+    """Staging on another filesystem, such as node-local scratch: the folder is copied, then swapped in."""
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    scratch, original = tmp_path / 'scratch', Path.rename
+
+    def rename_fails_across_filesystems(self, target):
+        if Path(target).name.startswith('.incoming_'):
+            if kind == 'exdev':
+                raise OSError(errno.EXDEV, 'Invalid cross-device link (simulated)')
+            error = OSError('The system cannot move the file to a different disk drive (simulated)')
+            error.winerror = 17
+            raise error
+        return original(self, target)
+
+    monkeypatch.setattr(Path, 'rename', rename_fails_across_filesystems)
+    convert_options = ('--dcm2niix-bin', converter, '--staging-root', scratch)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', *convert_options) == 0
+    assert_recovered(project)
+    assert not list((project / '.work').glob('prepare_*')) and not list(scratch.glob('convert_*'))
+    session = read_state(project)['sessions'][KEY]
+    assert session['status'] == 'ready' and session['conversion']['status'] == 'converted'
+    # The receipts recorded after the copy are valid: a rerun finds nothing to do.
+    receipts_before = [receipt_id(published(project, phase)) for phase in ('prepare', 'convert')]
+    assert call(project, 'prepare') == 0 and call(project, 'convert', *convert_options) == 0
+    assert [receipt_id(published(project, phase)) for phase in ('prepare', 'convert')] == receipts_before
+
+
+def test_retry_locked_retries_only_permission_errors(monkeypatch):
+    """fsutil.retry_locked: Access denied is retried until the deadline; any other error is raised at once."""
+    monkeypatch.setattr(fsutil, 'LOCKED_RETRY_SECONDS', 0.5)
+    calls = []
+
+    def busy_twice():
+        calls.append('busy')
+        if len(calls) < 3:
+            raise PermissionError(13, 'Access is denied')
+        return 'done'
+
+    assert fsutil.retry_locked(busy_twice) == 'done' and len(calls) == 3
+
+    def always(error):
+        def action():
+            calls.append('again')
+            raise error
+        return action
+
+    calls.clear()
+    started = time.monotonic()
+    with pytest.raises(PermissionError):
+        fsutil.retry_locked(always(PermissionError(13, 'Access is denied')))
+    assert len(calls) > 1 and time.monotonic() - started < 5
+    # Pin (SB-6): "directory not empty", which rmtree can raise while another program holds a
+    # just-deleted file, is not retried.
+    for error in (FileNotFoundError(errno.ENOENT, 'No such file'), OSError(errno.ENOTEMPTY, 'Directory not empty')):
+        calls.clear()
+        with pytest.raises(type(error)):
+            fsutil.retry_locked(always(error))
+        assert len(calls) == 1
+
+
+FORCED = {'prepare': '--force-reextract', 'convert': '--force-reconvert'}
+
+
+def previous_folder_cannot_be_removed(monkeypatch):
+    """Make deleting .previous_* fail, as when the old folder is read-only or held open (SB-6)."""
+    original = shutil.rmtree
+
+    def rmtree(path, *args, **kwargs):
+        if Path(path).name.startswith('.previous_'):
+            raise PermissionError(13, 'Access is denied (simulated)')
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(fsutil, 'LOCKED_RETRY_SECONDS', 0.2)
+    monkeypatch.setattr(shutil, 'rmtree', rmtree)
+
+
+def recorded_receipt(project, phase):
+    session = read_state(project)['sessions'][KEY]
+    return session['extraction' if phase == 'prepare' else 'conversion']['receipt_id']
+
+
+def leftover_folders(folder):
+    return [p for p in folder.parent.iterdir() if p.name.startswith('.previous_')]
+
+
+@pytest.mark.parametrize('phase', ['prepare', 'convert'])
+def test_cleanup_failure_after_the_swap_is_not_a_failed_attempt(project, tmp_path, converter, monkeypatch, phase):
+    """SB-6 (plan F-02): the new folder is recorded, and later runs retry the cleanup instead of aborting."""
+    project_at(project, tmp_path, converter, 'converted')
+    folder = published(project, phase)
+    options = ('--dcm2niix-bin', converter) if phase == 'convert' else ()
+    before = receipt_id(folder)
+    with monkeypatch.context() as patch:
+        previous_folder_cannot_be_removed(patch)
+        assert call(project, phase, *options, FORCED[phase]) == 0
+        swapped_in = receipt_id(folder)
+        assert swapped_in != before and recorded_receipt(project, phase) == swapped_in
+        assert len(leftover_folders(folder)) == 1 and not read_state(project)['issues']
+        # While the old folder still cannot be deleted, a plain run is not stopped by it.
+        assert call(project, phase, *options) == 0
+        assert history_rows(project)[-1]['outcome'] != 'aborted' and len(leftover_folders(folder)) == 1
+    # Once it can be deleted, the next plain run removes it and leaves nothing open.
+    assert call(project, phase, *options) == 0
+    assert_recovered(project)
+    assert receipt_id(folder) == recorded_receipt(project, phase) == swapped_in
+    assert not read_state(project)['issues']
+
+
+def test_failed_forced_reextraction_issue_clears_on_the_next_plain_run(project, tmp_path, monkeypatch):
+    """SB-12, found while writing F-02: a failed --force-reextract of a valid session left a blocking issue for good.
+
+    The extraction on disk is still the valid one. After a failed
+    --force-reconvert, convert clears the matching convert: issue on its next
+    plain run.
+    """
+    project_at(project, tmp_path, None, 'prepared')
+    usage = namedtuple('usage', 'total used free')
+    with monkeypatch.context() as patch:
+        patch.setattr(shutil, 'disk_usage', lambda path: usage(10**12, 10**12 - 1000, 1000))
+        assert call(project, 'prepare', '--force-reextract') == 2
+    assert call(project, 'prepare') == 0
+    assert not read_state(project)['issues']
+
+
 # ---- Stop signals (Q12, P5) ---------------------------------------------------
 
 SLOW_CONVERTER = textwrap.dedent("""
@@ -389,6 +577,46 @@ def test_stop_while_organizing_publishes_nothing(project, tmp_path, converter, m
     assert len(gzipped) == stop_at
     assert not list((project / 'Niftis').rglob('.pipeline_complete.json'))
     assert read_state(project)['sessions'][KEY]['conversion']['status'] == 'interrupted'
+
+
+def ctrl_c_after_first_gzip(monkeypatch):
+    """Deliver Ctrl+C to the run just after it gzips its first volume, before anything is published."""
+    original = nifti.validate_and_gzip
+
+    def gzip_then_stop(*args, **kwargs):
+        result = original(*args, **kwargs)
+        signal.getsignal(signal.SIGINT)(signal.SIGINT, None)
+        return result
+
+    monkeypatch.setattr(nifti, 'validate_and_gzip', gzip_then_stop)
+
+
+def test_interrupted_conversion_is_retried_by_the_next_plain_run(project, tmp_path, converter, monkeypatch):
+    """README: interrupted, unfinished work is retried automatically on the next invocation (plan H-08)."""
+    project_at(project, tmp_path, converter, 'prepared')
+    options = ('--dcm2niix-bin', converter)
+    with monkeypatch.context() as patch:
+        ctrl_c_after_first_gzip(patch)
+        assert call(project, 'convert', *options) == 130
+    assert read_state(project)['sessions'][KEY]['conversion']['status'] == 'interrupted'
+    assert call(project, 'convert', *options) == 0
+    assert read_state(project)['sessions'][KEY]['conversion']['status'] == 'converted'
+    assert not read_state(project)['issues']
+
+
+def test_interrupted_explicit_reconversion_is_not_retried(project, tmp_path, converter, monkeypatch):
+    """README: ...except an interrupted explicit reconversion; the complete folder stays as it was (plan H-08)."""
+    project_at(project, tmp_path, converter, 'converted')
+    folder, options = published(project, 'convert'), ('--dcm2niix-bin', converter)
+    before = receipt_id(folder)
+    with monkeypatch.context() as patch:
+        ctrl_c_after_first_gzip(patch)
+        assert call(project, 'convert', *options, '--force-reconvert') == 130
+    entry = read_state(project)['sessions'][KEY]
+    assert entry['conversion']['receipt_id'] == before and entry['last_attempt']['status'] == 'interrupted'
+    monkeypatch.setattr(convert, 'convert_one', fail_if_called)
+    assert call(project, 'convert', *options) == 0
+    assert receipt_id(folder) == before
 
 
 def process_alive(pid):

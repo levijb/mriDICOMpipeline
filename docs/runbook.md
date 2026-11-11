@@ -101,7 +101,10 @@ two machines (for example two cluster nodes) on the same storage:
   (see "After a crash" below). The session is held. Inspect the folder named
   in the issue. When it is safe, delete the intent file named by the issue's
   key (`Reports/.state/intents/<id>.json`) and run the command again; the
-  issue clears itself, and the session is processed normally.
+  issue clears itself, and the session is processed normally. A folder
+  without a `.pipeline_complete.json` receipt is not the pipeline's to
+  replace: the run then reports it as "not owned by this pipeline" until you
+  move it away.
 * **`convert:` issue.** A conversion failed or came out partial. The reason
   lists missing required series or the converter's exit code. Fix the cause,
   then run `convert --retry-failed`.
@@ -174,6 +177,13 @@ from both places. Keep anything an open issue still points to.
 A run that is killed outright (power loss, `kill -9`, a closed terminal
 window) can leave `.work/prepare_*` or `.work/convert_*` folders that no
 issue names. With no command running, they are safe to delete.
+
+A `.previous_<id>` folder next to a session folder is the old version left by
+an explicit re-extraction or reconversion when it could not be deleted (for
+example a viewer held a file in it). The new folder is already in place and
+recorded. Each later run of the same command tries again and logs
+`could not delete the previous folder` until it succeeds. Close the program
+holding it, or delete the folder yourself while no command is running.
 
 ## Slurm time limits
 
