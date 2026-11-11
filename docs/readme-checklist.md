@@ -28,6 +28,7 @@ establishes it. Review this list whenever the README changes.
 | An explicit reconversion refuses folders with added files | `test_conversion.py::test_force_reconvert_refuses_folder_with_extra_files` |
 | A failed reconversion keeps the complete folder and records the attempt | `test_conversion.py::test_failed_reconversion_keeps_last_good`, `test_status_columns_and_last_attempt_reported` |
 | An overlay plane's mask is published next to its image | `test_conversion.py::test_overlay_mask_published_next_to_its_volume`, `test_real_converter.py::test_real_converter_overlay_published_with_its_volume` |
+| A StudyDate 28+ days from the ZIP-name date holds the ZIP until renamed or accepted; a smaller difference only warns | `test_inputs.py::test_date_a_month_from_zip_name_held_until_accepted`, `test_conversion.py::test_sidecar_keeps_dicom_study_date_apart_from_name_date` |
 | Sidecars carry `session_date` (ZIP name) and `dicom_study_date` (DICOM headers) separately | `test_conversion.py::test_sidecar_keeps_dicom_study_date_apart_from_name_date` |
 | Provenance is recorded | `test_conversion.py::test_provenance_recorded_in_receipt_and_state` |
 | Commands that share any storage folder exclude each other; dry runs take no lock | `test_locks.py::test_shared_report_root_excludes_different_projects`, `test_lock_failure_names_holder`, `test_dry_run_takes_no_lock`; across machines: the runbook's two-node check |

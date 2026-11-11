@@ -222,6 +222,20 @@ def test_multi_study_held_until_accepted(project, tmp_path):
     assert call(project, 'prepare') == 0
 
 
+def test_date_a_month_from_zip_name_held_until_accepted(project, tmp_path):
+    """A StudyDate 28+ days from the ZIP-name date (a mistyped month) is held; a smaller gap only warns."""
+    upload = archive(project, 'S001_20260822.zip', dicom_bytes(tmp_path))  # the headers say 20260725: 28 days
+    assert call(project, 'prepare', '--allow-unlisted-dates') == 2
+    assert upload.exists() and 'S001/20260822' not in state(project)['sessions']
+    [issue] = prepare_issues(project)
+    assert '28 days' in state(project)['issues'][issue]['reason']
+    assert call(project, 'prepare', '--allow-unlisted-dates', '--accept-date-mismatch', 'S001/20260822') == 0
+    assert state(project)['sessions']['S001/20260822']['status'] == 'ready'
+    assert 'date:S001/20260822' in state(project)['issues'] and not prepare_issues(project)
+    # Once accepted, extracting the same ZIP again is not held.
+    assert call(project, 'prepare', '--allow-unlisted-dates', '--force-reextract') == 0
+
+
 def test_access_denied_during_publish_is_retried(project, tmp_path, monkeypatch):
     """Windows: a virus scanner still reading just-extracted files refuses the folder rename for a moment."""
     archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))

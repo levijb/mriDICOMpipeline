@@ -66,6 +66,12 @@ two machines (for example two cluster nodes) on the same storage:
   which can mean two people's exams were exported together. Split it into
   separate `_N` ZIPs, or, if it is one session, accept it:
   `mri-dicom-pipeline prepare --accept-multi-study S001/20260725`.
+* **`prepare:` issue, "DICOM StudyDate is N days from the ZIP-name date".**
+  The scan date in the DICOM headers is 28 or more days from the date in the
+  ZIP name, which usually means the name was mistyped. The ZIP stays where it
+  is and nothing is published. If the name is wrong, rename the ZIP to the
+  right date and rerun; the old issue clears itself. If the name is right,
+  accept it: `mri-dicom-pipeline prepare --accept-date-mismatch S001/20260725`.
 * **`prepare:` issue, "share a SOP Instance UID but have different bytes".**
   The export contains conflicting copies of an image. Re-export the session
   and upload the new ZIP as a new `_N` session.

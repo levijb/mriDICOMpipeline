@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import hashlib
 import os
 from pathlib import Path
@@ -27,6 +28,22 @@ MR_IMAGE_SOP_CLASSES = {
     "1.2.840.10008.5.1.4.1.1.4.3",  # Enhanced MR Color Image Storage
     "1.2.840.10008.5.1.4.1.1.4.4",  # Legacy Converted Enhanced MR Image Storage
 }
+
+
+# A StudyDate this many days or more from the ZIP-name date is held rather than
+# only reported; 28 is the shortest month, so a mistyped month is always held.
+DATE_HOLD_DAYS = 28
+
+
+def days_apart(header_dates, date):
+    """Largest gap in days between the ZIP-name date and a header StudyDate; unparsable StudyDates are skipped."""
+    named, gaps = datetime.strptime(date, "%Y%m%d"), [0]
+    for value in header_dates:
+        try:
+            gaps.append(abs((datetime.strptime(value, "%Y%m%d") - named).days))
+        except ValueError:
+            pass
+    return max(gaps)
 
 
 class HoldError(ValueError):
@@ -236,6 +253,11 @@ def prepare_one(candidate, previous, cfg, stop=None):
             else:
                 if destination.exists() and not (destination / receipts.RECEIPT).exists():
                     raise ValueError("Extracted destination is not owned by this pipeline; refusing replacement")
+                gap = days_apart(inventory["header_dates"], date)
+                accepted = key in cfg.accept_date_mismatch or (previous or {}).get("archive_sha256") == digest
+                if gap >= DATE_HOLD_DAYS and not accepted:
+                    raise HoldError(f"DICOM StudyDate is {gap} days from the ZIP-name date; correct the ZIP name, "
+                                    "or accept it with --accept-date-mismatch SUBJECT/SESSION")
                 if stop is not None and stop.is_set():
                     raise InterruptedError("Preparation interrupted")
                 move_archive(source, canonical, cfg, fingerprint)
@@ -315,7 +337,7 @@ def plan_prepare(cfg, state, ids, pairs, logger):
                             state.checkpoint({"clear_issues": [issue_key]})
                     counts["cached"] += 1
                     continue
-                if cached.get("outcome") == "held" and key not in cfg.accept_multi_study:
+                if cached.get("outcome") == "held" and key not in cfg.accept_multi_study | cfg.accept_date_mismatch:
                     # Not hashed again until the ZIP changes; its issue stays open.
                     counts["held"] += 1
                     continue

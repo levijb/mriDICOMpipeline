@@ -35,6 +35,8 @@ def config_parser(phase):
         p.add_argument("--force-reextract", action="store_true")
         p.add_argument("--accept-multi-study", action="append", metavar="SUBJECT/SESSION",
                        help="Accept this session's ZIP although it holds more than one study; repeatable")
+        p.add_argument("--accept-date-mismatch", action="append", metavar="SUBJECT/SESSION",
+                       help="Accept this session's ZIP although its DICOM StudyDate is 28+ days from the ZIP-name date; repeatable")
     else:
         p.add_argument("--dicom-root", type=Path, help="DicomExtracted root")
         p.add_argument("--output-root", type=Path, help="Niftis root")
@@ -69,6 +71,7 @@ def configure(args, phase):
         raise ValueError("workers exceeds SLURM_CPUS_PER_TASK")
     args.sessions = {"/".join(identity.parse_key(v)) for v in args.session} if args.session else None
     args.accept_multi_study = {"/".join(identity.parse_key(v)) for v in getattr(args, "accept_multi_study", None) or []}
+    args.accept_date_mismatch = {"/".join(identity.parse_key(v)) for v in getattr(args, "accept_date_mismatch", None) or []}
     # Every root the command touches is locked (Q13).
     args.lock_roots = ([args.uploads, args.dicoms, args.reports, args.work] if phase == "prepare"
                        else [args.dicoms, args.niftis, args.reports, args.work])

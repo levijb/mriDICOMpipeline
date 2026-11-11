@@ -278,6 +278,11 @@ section:
 *   Q12: a missing canonical ZIP raises a nonblocking issue; SIGTERM ends
     with exit code 143.
 *   Q20: the `--accept-multi-study SUBJECT/SESSION` option.
+*   Added 2026-11-11 at the user's request: a header StudyDate 28 or more
+    days from the ZIP-name date holds the ZIP (a mistyped month), with
+    `--accept-date-mismatch SUBJECT/SESSION` to accept it. A smaller
+    difference stays a nonblocking `date:` warning. Test:
+    `test_date_a_month_from_zip_name_held_until_accepted`.
 *   P7: `--dry-run --audit` keeps hashing, and the help text and README are
     corrected to say so. This keeps a dry integrity check possible.
 *   `prepare --audit` also re-hashes canonical ZIPs, so that a same-size,
@@ -1899,7 +1904,7 @@ function, so importing the module itself would clash with both.
 
         | Key | Raised by | Blocking | Cleared by |
         |---|---|---|---|
-        | `prepare:<ZIP path>` | Preparation failures and holds (Q3, Q15, Q20) | Yes; it also blocks conversion of that session | The next accepted preparation of that path, or the path disappearing (today's stale-issue rule) |
+        | `prepare:<ZIP path>` | Preparation failures and holds (Q3, Q15, Q20, and the 28-day date hold) | Yes; it also blocks conversion of that session | The next accepted preparation of that path, or the path disappearing (today's stale-issue rule) |
         | `date:<key>` | Header dates that differ from the file name (today) | No | As today |
         | `missing:<key>` | A ready session whose canonical ZIP is not listed (R18) | No | The ZIP being listed again |
         | `convert:<key>` | Conversion failures, partials, and interrupts (today's key) | Yes | The next successful conversion of that session |

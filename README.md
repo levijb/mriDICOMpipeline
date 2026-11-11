@@ -132,7 +132,11 @@ smaller. A ZIP that does not fit is left in place with an issue. On
 quota-managed storage, check your quota as well; the check sees only free
 space.
 
-Header dates are cross-checks only; a mismatch is recorded as a warning.
+Header dates are cross-checks only. A StudyDate that differs from the
+ZIP-name date is recorded as a warning. A StudyDate 28 or more days away (the
+shortest month, so a mistyped month is always caught) holds the ZIP until its
+name is corrected, or until the date is accepted with
+`--accept-date-mismatch SUBJECT/SESSION`.
 Subject identity never comes from patient identification fields or a matching
 spreadsheet. Generated sidecars include selected technical fields and the
 validated filename identity. Two date fields sit side by side so they can be
