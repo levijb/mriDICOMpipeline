@@ -250,3 +250,24 @@ def test_1000_cached_sessions_do_not_read_scan_contents(project, monkeypatch, ca
     conversion_time = time.perf_counter()-start
     with capsys.disabled():
         print(f'\n1000 cached sessions: prepare={prepare_time:.3f}s convert={conversion_time:.3f}s; zero archive hashes/header reads/converter calls')
+
+
+def test_dry_run_names_the_work_it_would_do(project, tmp_path, converter, caplog):
+    """README: --dry-run plans only; it lists each session it would prepare or convert."""
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare', '--dry-run') == 0
+    assert 'WOULD prepare S001/20260725' in caplog.text
+    assert call(project, 'prepare') == 0
+    caplog.clear()
+    assert call(project, 'convert', '--dry-run', '--dcm2niix-bin', converter) == 0
+    assert 'WOULD convert S001/20260725' in caplog.text
+
+
+def test_failed_preparation_gives_convert_nothing_to_do(project, tmp_path, converter):
+    """A session whose preparation failed has no convert work item and no convert: issue."""
+    upload = project / 'DicomUploads/Uploads/S001_20260725.zip'
+    upload.parent.mkdir(parents=True)
+    upload.write_bytes(b'not a zip')
+    assert call(project, 'prepare') == 2
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 2  # the prepare: issue is still open
+    assert not [key for key in state(project)['issues'] if key.startswith('convert:')]

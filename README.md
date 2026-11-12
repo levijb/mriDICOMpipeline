@@ -112,15 +112,19 @@ deletes a ZIP, and a ZIP it cannot accept stays where it is, with an issue.
 at that path (for example a re-export copied over it), the session is held
 and its extraction and NIfTI outputs stay unchanged. A corrected export
 becomes a new `_N` session. The same bytes with a new file time (a restore
-from backup) are accepted without extracting again. `--force-reextract` never
-accepts changed bytes. A prepared session whose canonical ZIP disappears gets
+from backup) are accepted without extracting again. While such a hold is open,
+each run hashes that ZIP again, and the hold clears once the original bytes
+are back. `--force-reextract` never accepts changed bytes. A prepared session whose canonical ZIP disappears gets
 a nonblocking `missing:` issue; conversion continues from the extracted copy.
 
 Viewer software, previews, DICOMDIR indices and non-DICOM files are omitted
 from extracted output; **extensionless DICOM objects are supported**. Archive
 member paths are not used as extraction paths. The original ZIP retains all
 ancillary files. ZIP members are streamed to completion to check their CRCs;
-obviously short uncompressed image objects are also rejected. Objects that
+obviously short uncompressed image objects are also rejected, and so is a
+member with the `DICM` mark or a `.dcm` name that cannot be read as an object
+(for example one cut off inside its header), or an MR image object without
+Rows or Columns. Objects that
 repeat byte for byte are stored once. A ZIP is held when two objects share a
 SOP Instance UID but differ, or when it holds more than one study; accept a
 genuine multi-study session with `--accept-multi-study SUBJECT/SESSION`.
@@ -171,7 +175,14 @@ run and say the project appears moved.
 
 Unchanged failures/partial conversions are recorded and **not retried by
 default**, so repeated batches do not continually reprocess a known bad scan.
-After addressing the cause, pass `--retry-failed`. New/changed inputs are
+After addressing the cause, pass `--retry-failed`. When the cause is in the
+data itself (for example an aborted diffusion run whose last volume is
+incomplete, which makes dcm2niix exit with an error), review the issue and
+accept the session with `convert --accept-partial SUBJECT/SESSION`: it is
+converted again and published with every valid volume, the accepted errors
+are recorded in its receipt and in `session_status.csv`, and later runs treat
+it as done. A timeout or a session with no valid volume is never accepted.
+New/changed inputs are
 considered automatically. Interrupted, unfinished work is retried automatically
 on the next invocation, except an interrupted explicit reconversion.
 `--force-reextract` and `--force-reconvert` explicitly bypass the relevant
@@ -248,7 +259,12 @@ published next to its image as `<image name>_ROI1.nii.gz` (`_ROI2` and so on
 for further planes). In the same way, a series with uneven slice spacing also
 yields `<image name>_Eq_1.nii.gz`, a copy resampled to even spacing (the same
 rule covers dcm2niix's `_Tilt_1` gantry-tilt copies, not reproduced with MR
-test data). All converted series/components are retained; no automatic
+test data). Such a session converts, with a nonblocking `spacing:` issue
+saying a slice may be missing. A GE diffusion series that holds the combined
+image next to the direction images yields `<image name>_ADC.nii.gz`, published
+the same way. A Siemens physiological log (`…_PhysioLog`) becomes two
+`_physio` files and no image; they are not published (the DICOM object stays
+in DicomExtracted). All converted series/components are retained; no automatic
 best-scan selection is performed. Classification is a heuristic that matches
 whole words in the series description (revision 2: for example `AX T2* GRE`
 is GRE, `SWI mIP` is SWI_MINIP, `HEADCOIL T1` is T1); review before analysis.
@@ -310,12 +326,17 @@ No timestamped report folder is created. Both commands print these paths:
 (`awaiting_upload`, `ready`, `held`, `failed`, `interrupted`; a session
 whose ZIP has an open `prepare:` issue shows `held`),
 `dicom_instances`, `series`, `conversion_status` (`not_converted`,
-`converted`, `partial`, `failed`, `interrupted`, `needs_conversion`,
-`output_modified`), `converted_volumes`, `archive`, `nifti_folder`,
-`required_series`, `converted_series`, `excused_series` (semicolon-separated
-series keys), `last_attempt_status` and `last_attempt_folder`. A converted
-session with a non-empty `last_attempt_status` kept its complete folder after
-a failed reconversion.
+`converted`, `accepted_partial`, `partial`, `failed`, `interrupted`,
+`needs_conversion`, `output_modified`), `converted_volumes`, `archive`,
+`nifti_folder`, `required_series`, `converted_series`, `excused_series`
+(semicolon-separated series keys), `accepted_errors` (what
+`--accept-partial` accepted), `last_attempt_status` and
+`last_attempt_folder`. A converted session with a non-empty
+`last_attempt_status` kept its complete folder after a failed reconversion.
+`needs_conversion` means the extraction changed after the session was
+converted (for example after `prepare --force-reextract`); a plain `convert`
+leaves it as it is, and `convert --force-reconvert --session SUBJECT/SESSION`
+converts it again.
 
 `run_history.csv` columns: `run_id`, `stage`, `outcome` (`ok`, `issues`,
 `interrupted`, `terminated`, `aborted`), `seconds`, `completed`, `cached`,

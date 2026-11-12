@@ -22,15 +22,21 @@ from . import __version__, classify, config, fsutil, nifti, receipts, recovery, 
 # Slurm sends SIGTERM to every process of the job at its time limit (Q12).
 STOP_RETURN_CODES = set() if os.name == "nt" else {-signal.SIGTERM, -signal.SIGKILL}
 # Options passed to dcm2niix before "-o OUTPUT INPUT"; recorded in provenance (Q8).
-CONVERTER_OPTIONS = ["-z", "n", "-b", "y", "-ba", "y", "-c", "", "-d", "9", "-f", "series_%j_%s_%e"]
+# "-l o" is dcm2niix's default, passed so that defaults saved on the account cannot rescale 16-bit data.
+CONVERTER_OPTIONS = ["-z", "n", "-b", "y", "-ba", "y", "-l", "o", "-c", "", "-d", "9", "-f", "series_%j_%s_%e"]
 CONTROL_FILES = {receipts.RECEIPT, receipts.INVENTORY}
 IDENTIFYING = re.compile(r"patient.?name|patient.?id|accession|birth.?date|physician|institution|station.?name|serial.?number", re.I)
 # dcm2niix writes some volumes with no sidecar of their own, each named after
 # the volume it derives from: <volume>_ROI<n>.nii for a DICOM overlay plane,
-# <volume>_Eq_<n>.nii for a copy resampled to even slice spacing, and
-# <volume>_Tilt_<n>.nii for a gantry-tilt-corrected copy. Each is published
-# next to its volume, like .bval/.bvec.
-OVERLAY = re.compile(r"(.+)_(ROI\d+|Eq_\d+|Tilt_\d+)")
+# <volume>_Eq_<n>.nii for a copy resampled to even slice spacing,
+# <volume>_Tilt_<n>.nii for a gantry-tilt-corrected copy, and <volume>_ADC.nii
+# for the combined images of a GE diffusion series. Each is published next to
+# its volume, like .bval/.bvec.
+OVERLAY = re.compile(r"(.+)_(ROI\d+|Eq_\d+|Tilt_\d+|ADC)")
+# A published _Eq_ copy means the series' slices were unevenly spaced (a slice may be missing).
+EQUALIZED = re.compile(r"_Eq_\d+\.nii\.gz$")
+# A Siemens physiological log (CMRR) becomes these two files and no image; they are not published.
+PHYSIO = re.compile(r"_physio\.(tsv\.gz|json)$")
 
 
 def _nifti_stem(path):
@@ -46,7 +52,8 @@ def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_dat
     Returns (volumes, files, errors, converted series keys, converter versions).
     """
     output.mkdir()
-    files, errors, handled, volumes, converted_keys, versions = [], [], set(), 0, set(), set()
+    files, errors, volumes, converted_keys, versions = [], [], 0, set(), set()
+    handled = {p.name for p in raw.iterdir() if PHYSIO.search(p.name)}
     niftis = sorted(p for p in raw.iterdir() if p.name.endswith((".nii", ".nii.gz")))
     stems = {_nifti_stem(p) for p in niftis}
     overlays = {p: m for p in niftis if (m := OVERLAY.fullmatch(_nifti_stem(p))) and m[1] in stems
@@ -269,7 +276,10 @@ def convert_one(entry, cfg, stop):
             errors.append("No valid NIfTI volumes produced")
         coverage = receipts.coverage(required, excused, converted_keys)
         errors += [f"Missing required series: {series_key}" for series_key in coverage["missing"]]
-        complete = not errors
+        # --accept-partial: after review, a session with at least one valid volume is published with
+        # its errors recorded. A timeout is never accepted: its outcome can differ from run to run.
+        accepted = errors if errors and n_volumes and reason != "timeout" and key in cfg.accept_partial else []
+        complete = not errors or bool(accepted)
         provenance = {"package_version": __version__, "run_id": cfg.run_id,
                       "converter": str(Path(shutil.which(binary) or binary).resolve()),
                       "arguments": list(CONVERTER_OPTIONS), "converter_versions": sorted(versions)}
@@ -277,7 +287,7 @@ def convert_one(entry, cfg, stop):
         fsutil.atomic_json(organized / receipts.INVENTORY, {"files": file_list})
         fsutil.atomic_json(organized / receipts.RECEIPT, {"version": config.SCHEMA_VERSION, "complete": complete,
             "source_sha256": entry["content_sha256"], "receipt_id": receipt_id, "run_id": cfg.run_id,
-            "n_volumes": n_volumes, "provenance": provenance, "coverage": coverage})
+            "n_volumes": n_volumes, "provenance": provenance, "coverage": coverage, "accepted_errors": accepted})
         destination = canonical if complete else cfg.niftis / ".pending" / sid / label / stage.name
         if complete and destination.exists() and not (destination / receipts.RECEIPT).exists():
             raise ValueError("NIfTI destination is not owned by this pipeline; refusing replacement")
@@ -289,18 +299,30 @@ def convert_one(entry, cfg, stop):
             ownership_root=str(cfg.niftis), receipt_id=receipt_id, expected_digest=entry["content_sha256"],
             attempt=not complete)
         cleaned = fsutil.publish_tree(organized, destination, cfg.niftis, incoming, aside)
+        if not cleaned:
+            # Later runs only retry deleting the previous folder; they never roll it back (SB-16).
+            recovery.mark_cleanup_only(cfg.reports, intent)
         record = receipts.conversion_record(destination, "converted" if complete else "partial", n_volumes,
-                                            entry["content_sha256"], provenance, coverage)
+                                            entry["content_sha256"], provenance, coverage, accepted)
         if complete:
             updated["conversion"] = record
             updated.pop("last_attempt", None)
             event["clear_issues"].append("output:" + key)
-            event["note"] = f"{n_volumes} volumes; all required series and companions published" + (
-                "" if cleaned else f"; previous folder {aside} not deleted yet, later runs retry")
+            event["note"] = (f"{n_volumes} volumes; " + ("accepted with errors: " + "; ".join(accepted) if accepted
+                                                         else "all required series and companions published")
+                             + ("" if cleaned else f"; previous folder {aside} not deleted yet, later runs retry"))
         else:
             preserve = True
             note = "; ".join(errors) + f"; working files retained: {stage}"
             _record_failure(event, updated, last_good, "partial", str(destination), note, destination, record, cfg)
+        uneven = [item["name"] for item in file_list if EQUALIZED.search(item["name"])]
+        if uneven:
+            event["issues"].append(reports.problem(
+                "spacing:" + key, "convert", sid, label,
+                f"Uneven slice spacing in {len(uneven)} volume(s); dcm2niix also wrote an evenly resampled _Eq_ "
+                "copy. A slice may be missing: check the series", destination))
+        else:
+            event["clear_issues"].append("spacing:" + key)
         # An open intent makes later runs retry deleting the previous folder.
         event["intents"] = [intent] if cleaned else []
     except Exception as e:
@@ -386,7 +408,8 @@ def plan_convert(cfg, state, ids, pairs, logger):
             save({"issues": [reports.problem(output_issue, "convert", sid, label, note, canonical)]})
             continue
         same = conversion.get("source_sha256") == entry["content_sha256"]
-        if not cfg.force_reconvert and same and conversion.get("status") in ("failed", "partial") and not cfg.retry_failed:
+        if (not cfg.force_reconvert and same and conversion.get("status") in ("failed", "partial")
+                and not cfg.retry_failed and key not in cfg.accept_partial):
             counts["cached"] += 1
             continue
         tasks.setdefault(sid, []).append(copy.deepcopy(entry))

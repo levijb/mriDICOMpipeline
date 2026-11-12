@@ -97,3 +97,32 @@ def test_lock_error_other_than_busy_is_reported_as_such(tmp_path, monkeypatch):
         with locks.RootLocks([tmp_path / 'root'], 'prepare', 'RUN-A'):
             pass
     assert 'No locks available' in str(error.value) and 'locked by' not in str(error.value)
+
+
+# Takes the locks the named command would take for the project, then waits until its standard input closes.
+HOLD_COMMAND = '''
+import sys
+from mri_dicom_pipeline import config, locks
+phase, root = sys.argv[1], sys.argv[2]
+cfg = config.configure(config.config_parser(phase).parse_args(['--project-root', root]), phase)
+with locks.RootLocks(cfg.lock_roots, phase, 'HOLDER-RUN'):
+    print('locked', flush=True)
+    sys.stdin.read()
+'''
+
+
+@pytest.mark.parametrize('holder, other', [('convert', 'prepare'), ('prepare', 'convert')])
+def test_commands_exclude_each_other(project, tmp_path, capsys, holder, other):
+    """Plan G1-02: prepare and convert on one project share roots, so each blocks the other; dry runs do not."""
+    options = ('--dcm2niix-bin', tmp_path / 'unused') if other == 'convert' else ()
+    child = subprocess.Popen([sys.executable, '-c', HOLD_COMMAND, holder, str(project)], stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, text=True, env=child_env())
+    try:
+        assert child.stdout.readline().strip() == 'locked'
+        assert call(project, other, *options) == 2
+        assert f'({holder}, run HOLDER-RUN' in capsys.readouterr().err
+        assert call(project, other, *options, '--dry-run') == 0
+    finally:
+        child.stdin.close()
+        child.wait(timeout=30)
+        child.stdout.close()

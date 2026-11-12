@@ -55,8 +55,9 @@ two machines (for example two cluster nodes) on the same storage:
 * **`prepare:` issue, "Accepted canonical ZIP changed".** Different bytes
   appeared at a ZIP's place in `SubjectsSorted/`. The prepared session and
   its outputs are unchanged, and conversion of that session is blocked.
-  Restore the original ZIP (from your copy) to clear the hold; a hold found
-  by `--audit` clears on the next `prepare --audit` run. If the new
+  Restore the original ZIP (from your copy) to clear the hold: while the
+  hold is open, each `prepare` hashes that ZIP again, and the next run after
+  the original bytes are back clears it. If the new
   export is the one you want, move it out of `SubjectsSorted/` and upload it
   as a new session, for example `S001_20260725_2.zip`.
 * **`prepare:` issue, "Different DICOM contents for an existing session".**
@@ -107,7 +108,25 @@ two machines (for example two cluster nodes) on the same storage:
   move it away.
 * **`convert:` issue.** A conversion failed or came out partial. The reason
   lists missing required series or the converter's exit code. Fix the cause,
-  then run `convert --retry-failed`.
+  then run `convert --retry-failed`. If the cause is in the data and cannot be
+  fixed, for example "dcm2niix exited with code 1" with "Missing/invalid JSON
+  sidecar" for an aborted diffusion run whose last volume is incomplete,
+  check the volumes in the attempt folder named in the issue
+  (`Niftis/.pending/...`). If they are usable, accept the session:
+  `mri-dicom-pipeline convert --accept-partial S001/20260725`. It is
+  converted again and published with every valid volume; a volume that lost
+  its dcm2niix sidecar is filed under `OTHER`. `session_status.csv` then shows
+  `accepted_partial` and the accepted errors. Delete the attempt folders in
+  `.pending` afterwards.
+* **`spacing:` issue (nonblocking).** A converted series had unevenly spaced
+  slices, so dcm2niix also wrote an evenly resampled `_Eq_1` copy next to the
+  volume. Usually a slice is missing; check the series. If the spacing is
+  intended, nothing needs doing. The warning stays while the session is
+  unchanged.
+* **`needs_conversion` in `session_status.csv`.** The extraction changed after
+  the session was converted, for example after `prepare --force-reextract`.
+  A plain `convert` leaves it; convert it again with
+  `mri-dicom-pipeline convert --force-reconvert --session S001/20260725`.
 
 ## Explicit reconversion
 
@@ -181,8 +200,10 @@ issue names. With no command running, they are safe to delete.
 A `.previous_<id>` folder next to a session folder is the old version left by
 an explicit re-extraction or reconversion when it could not be deleted (for
 example a viewer held a file in it). The new folder is already in place and
-recorded. Each later run of the same command tries again and logs
-`could not delete the previous folder` until it succeeds. Close the program
+recorded. Each later run of the same command tries again and logs a
+`CLEANUP` line saying `could not delete the previous folder` until it
+succeeds; it never moves the old folder back. A read-only file or folder
+inside it is made writable and deleted. Close the program
 holding it, or delete the folder yourself while no command is running.
 
 ## Slurm time limits

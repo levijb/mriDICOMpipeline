@@ -131,8 +131,8 @@ def _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summ
         summary["notes"] = "state recovered from index.json.bak"
     refuse_moved_project(cfg, state)
     summary["reconciled"] = recovery.reconcile(cfg, phase, state, logger, cfg.dry_run)
-    if summary["reconciled"]:
-        logger.info("Recovered %s operations left open by an interrupted run", summary["reconciled"])
+    if summary["reconciled"] and not cfg.dry_run:
+        logger.info("Resolved %s open operations (interrupted runs or pending cleanups)", summary["reconciled"])
     if phase == "prepare":
         tasks, counts = prepare.plan_prepare(cfg, state, ids, pairs, logger)
     else:

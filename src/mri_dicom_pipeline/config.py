@@ -44,6 +44,9 @@ def config_parser(phase):
         p.add_argument("--dcm2niix-bin", default="dcm2niix")
         p.add_argument("--timeout", type=int, default=14400, help="Seconds per session")
         p.add_argument("--force-reconvert", action="store_true")
+        p.add_argument("--accept-partial", action="append", metavar="SUBJECT/SESSION",
+                       help="After reviewing its issue, publish this session although some of its conversion "
+                            "failed; the errors are recorded; repeatable")
     return p
 
 
@@ -72,6 +75,7 @@ def configure(args, phase):
     args.sessions = {"/".join(identity.parse_key(v)) for v in args.session} if args.session else None
     args.accept_multi_study = {"/".join(identity.parse_key(v)) for v in getattr(args, "accept_multi_study", None) or []}
     args.accept_date_mismatch = {"/".join(identity.parse_key(v)) for v in getattr(args, "accept_date_mismatch", None) or []}
+    args.accept_partial = {"/".join(identity.parse_key(v)) for v in getattr(args, "accept_partial", None) or []}
     # Every root the command touches is locked (Q13).
     args.lock_roots = ([args.uploads, args.dicoms, args.reports, args.work] if phase == "prepare"
                        else [args.dicoms, args.niftis, args.reports, args.work])

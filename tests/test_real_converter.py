@@ -7,18 +7,19 @@ the evidence. Step 1 of the production-hardening plan checks dcm2niix's own
 behavior; step 7 adds the session-level assertions.
 """
 import gzip
+import io
 import json
 import struct
 import subprocess
 
+import pydicom
 from pydicom.uid import generate_uid
 import pytest
 
-from support import (OTHER_SOP_CLASSES, UNCONVERTIBLE_SYNTAXES, archive_objects, call, csa_non_image_bytes, dicom_bytes,
-                     mr_series, other_class_objects, state, unconvertible_series)
-
-# The arguments convert.convert_one passes to dcm2niix before -o.
-CONVERTER_ARGS = ['-z', 'n', '-b', 'y', '-ba', 'y', '-c', '', '-d', '9', '-f', 'series_%j_%s_%e']
+from mri_dicom_pipeline.convert import CONVERTER_OPTIONS as CONVERTER_ARGS  # what convert_one passes before -o
+from support import (CSA_NON_IMAGE_STORAGE, OTHER_SOP_CLASSES, UNCONVERTIBLE_SYNTAXES, archive_objects, call,
+                     csa_non_image_bytes, dicom_bytes, mr_series, non_image_bytes, other_class_objects, state,
+                     unconvertible_series)
 
 
 def run_converter(binary, objects, tmp_path):
@@ -238,6 +239,9 @@ def test_real_converter_uneven_slice_spacing_session_converts(project, tmp_path,
     assert (session_conversion(project)['status'], session_conversion(project)['n_volumes']) == ('converted', 1)
     [volume] = [p for p in (project / 'Niftis/Subjects/S001/20260725').rglob('*.nii.gz') if '_Eq_' not in p.name]
     assert volume.with_name(volume.name[:-len('.nii.gz')] + '_Eq_1.nii.gz').exists()
+    # SB-17: a nonblocking warning says a slice may be missing; the exit code stays 0.
+    assert list(state(project)['issues']) == ['spacing:S001/20260725']
+    assert 'A slice may be missing' in state(project)['issues']['spacing:S001/20260725']['reason']
 
 
 # ---- Other object classes and identifying fields (plan C-05, K-01) --------------------
@@ -304,3 +308,121 @@ def test_real_converter_identifying_fields_stay_out_of_outputs(project, tmp_path
     in_header = set().union(*(sentinels_in(gzip.decompress(p.read_bytes())) for p in volumes))
     record(capsys, real_dcm2niix, f'identifying elements found in NIfTI header text: {sorted(in_header)}', 0)
     assert in_header == {'AcquisitionTime'}
+
+
+# ---- Round 2: GE diffusion, physio logs, incomplete series (SB-14, SB-15, SB-20) ------------
+
+GE = {'Manufacturer': 'GE MEDICAL SYSTEMS', 'ManufacturerModelName': 'SIGNA Premier'}
+GE_CREATORS = [((0x0019, 0x0010), 'LO', 'GEMS_ACQU_01'), ((0x0021, 0x0010), 'LO', 'GEMS_RELA_01'),
+               ((0x0043, 0x0010), 'LO', 'GEMS_PARM_01')]
+ACQUISITION = {'ProtocolName': 'test', 'EchoTime': 30, 'RepetitionTime': 2000, 'MRAcquisitionType': '2D',
+               'ImageType': ['ORIGINAL', 'PRIMARY', 'M', 'ND'], 'PixelRepresentation': 1}
+
+
+def with_private(data, private):
+    """The object with these private elements added: [(tag, VR, value), ...]."""
+    ds = pydicom.dcmread(io.BytesIO(data))
+    for tag, vr, value in private:
+        ds.add_new(tag, vr, value)
+    out = io.BytesIO()
+    ds.save_as(out, enforce_file_format=True)
+    return out.getvalue()
+
+
+def volumes_of(tmp_path, volumes, slices=3, common=None, private=None, per_volume=None):
+    """One series of volumes x slices objects; per_volume(v) gives that volume's private elements."""
+    study, series, objects = generate_uid(), generate_uid(), []
+    for v in range(volumes):
+        for s in range(slices):
+            n = len(objects) + 1
+            fields = dict(ACQUISITION, **(common or {}), InstanceNumber=n, ImagePositionPatient=[0.0, 0.0, float(s)])
+            data = dicom_bytes(tmp_path, value=n, study=study, series=series, slice_index=s, fields=fields)
+            extra = list(private or []) + list(per_volume(v) if per_volume else [])
+            objects.append(with_private(data, extra) if extra else data)
+    return objects
+
+
+def test_real_converter_ge_dwi_with_combined_image_converts(project, tmp_path, real_dcm2niix, capsys):
+    """SB-14: a GE diffusion series with T2, the three direction images and the combined image.
+
+    dcm2niix writes the combined images as <volume>_ADC.nii with no sidecar; it
+    is published next to the volume. GE tags follow dcm2niix's nii_dicom.cpp
+    comments; not checked against a real export.
+    """
+    flags, b_values = [14, 3, 4, 5, 15], [0, 1000, 1000, 1000, 1000]
+
+    def diffusion(v):
+        return [((0x0043, 0x1039), 'IS', [b_values[v], 8, 0, 0]), ((0x0019, 0x10BB), 'DS', 0),
+                ((0x0019, 0x10BC), 'DS', 0), ((0x0019, 0x10BD), 'DS', 0), ((0x0019, 0x10E0), 'DS', 0),
+                ((0x0043, 0x1030), 'SS', flags[v])]
+
+    objects = volumes_of(tmp_path, 5, common=dict(GE, ScanningSequence='EP'), private=GE_CREATORS,
+                         per_volume=diffusion)
+    result, output = run_converter(real_dcm2niix, objects, tmp_path)
+    record(capsys, real_dcm2niix, f'GE diffusion with the combined image {output_names(output)}', result.returncode)
+    assert result.returncode == 0 and len(list(output.glob('*_ADC.nii'))) == 1
+    assert not list(output.glob('*_ADC.json'))
+    archive_objects(project, 'S001_20260725.zip', objects)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
+    assert (session_conversion(project)['status'], session_conversion(project)['n_volumes']) == ('converted', 1)
+    folder = project / 'Niftis/Subjects/S001/20260725'
+    [volume] = [p for p in folder.rglob('*.nii.gz') if not p.name.endswith('_ADC.nii.gz')]
+    stem = volume.name[:-len('.nii.gz')]
+    assert all((volume.parent / (stem + suffix)).exists() for suffix in ('_ADC.nii.gz', '.bval', '.bvec', '.json'))
+
+
+def physio_log_object(tmp_path, study):
+    """A Siemens CMRR physio log (cardiac) stored in a CSA Non-Image object, as the PhysioLog series holds it."""
+    lines = ['UUID        = 0f8fad5b-d9cb-469f-a165-70867728950e', 'ScanDate    = 20260725_101112',
+             'LogVersion  = EJA_1', 'LogDataType = PULS', 'SampleTime  = 2', '',
+             ' ACQ_TIME_TICS  CHANNEL  VALUE  SIGNAL'] + [f'  {14000000 + 2 * i}  PULS  {1600 + i}' for i in range(40)]
+    body = ('\n'.join(lines) + '\n').encode()
+    name = b'Physio_20260725_101112_x_PULS.log'
+    blob = ((len(body).to_bytes(4, 'little') + len(name).to_bytes(4, 'little') + name).ljust(1024, b'\0')
+            + body.ljust(3 * 1024, b'\0'))
+    ds = pydicom.dcmread(io.BytesIO(non_image_bytes(tmp_path, CSA_NON_IMAGE_STORAGE, study=study)))
+    ds.Manufacturer, ds.AcquisitionNumber, ds.SeriesDescription = 'SIEMENS', 4, 'fmri_PhysioLog'
+    ds.add_new((0x7FE1, 0x0010), 'LO', 'SIEMENS CSA NON-IMAGE')
+    ds.add_new((0x7FE1, 0x1010), 'OB', blob)
+    out = io.BytesIO()
+    ds.save_as(out, enforce_file_format=True)
+    return out.getvalue()
+
+
+def test_real_converter_physio_log_object_converts(project, tmp_path, real_dcm2niix, capsys):
+    """SB-15: dcm2niix turns a physio log into two files and no image; they no longer make the session partial."""
+    study = generate_uid()
+    _, image = mr_series(tmp_path, study=study, description='T1 MPRAGE', series_number=2,
+                         fields={'Manufacturer': 'SIEMENS'})
+    objects = image + [physio_log_object(tmp_path, study)]
+    result, output = run_converter(real_dcm2niix, objects, tmp_path)
+    record(capsys, real_dcm2niix, f'image series plus a physio log {output_names(output)}', result.returncode)
+    assert result.returncode == 0 and len(list(output.glob('*_physio.tsv.gz'))) == 1
+    archive_objects(project, 'S001_20260725.zip', objects)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
+    assert session_conversion(project)['status'] == 'converted'
+    assert not list((project / 'Niftis').rglob('*physio*'))
+
+
+def test_real_converter_incomplete_4d_series_needs_acceptance(project, tmp_path, real_dcm2niix, capsys):
+    """SB-20: an aborted run (last volume incomplete) makes dcm2niix exit 1 and drop the sidecar.
+
+    The session is partial until a person accepts it with --accept-partial.
+    """
+    objects = volumes_of(tmp_path, 3)[:-1]
+    result, output = run_converter(real_dcm2niix, objects, tmp_path)
+    record(capsys, real_dcm2niix, f'4D series with its last volume incomplete {output_names(output)}',
+           result.returncode)
+    assert result.returncode == 1
+    archive_objects(project, 'S001_20260725.zip', objects)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 2
+    reason = state(project)['issues']['convert:S001/20260725']['reason']
+    assert 'dcm2niix exited with code 1' in reason and 'Missing/invalid JSON sidecar' in reason
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix, '--accept-partial', 'S001/20260725') == 0
+    conversion = session_conversion(project)
+    assert conversion['status'] == 'converted' and 'dcm2niix exited with code 1' in conversion['accepted_errors']
+    assert list((project / 'Niftis/Subjects/S001/20260725/OTHER').glob('*.nii.gz'))
+    assert not state(project)['issues']

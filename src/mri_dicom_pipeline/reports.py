@@ -57,6 +57,8 @@ def reports(state, cfg, pairs, logger):
         conv = entry.get("conversion", {})
         coverage, attempt = conv.get("coverage", {}), entry.get("last_attempt", {})
         conversion_status = conv.get("status", "not_converted")
+        if conv.get("accepted_errors"):
+            conversion_status = "accepted_partial"
         if conv and conv.get("source_sha256") != entry.get("content_sha256"):
             conversion_status = "needs_conversion"
         if "output:" + key in issues:
@@ -70,6 +72,7 @@ def reports(state, cfg, pairs, logger):
             "required_series": ";".join(coverage.get("required", [])),
             "converted_series": ";".join(coverage.get("converted", [])),
             "excused_series": ";".join(coverage.get("excused", [])),
+            "accepted_errors": "; ".join(conv.get("accepted_errors", [])),
             "last_attempt_status": attempt.get("status", ""), "last_attempt_folder": attempt.get("output", "")})
     for path, data, fields in [
             (cfg.reports / "session_status.csv", rows, list(rows[0]) if rows else ["subject_id", "session"]),
@@ -105,8 +108,9 @@ def problem(key, phase, sid, label, reason, path=""):
 
 # An issue is blocking when it counts toward the unresolved total that makes a
 # run exit with code 2. Nonblocking issues are reported only: header dates that
-# differ from the file name, and a canonical ZIP missing from SubjectsSorted.
-NONBLOCKING_PREFIXES = ("date:", "missing:")
+# differ from the file name, a canonical ZIP missing from SubjectsSorted, and
+# uneven slice spacing in a converted series.
+NONBLOCKING_PREFIXES = ("date:", "missing:", "spacing:")
 
 
 def unresolved(state):

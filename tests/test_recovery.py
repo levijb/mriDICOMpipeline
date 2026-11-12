@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import textwrap
@@ -652,3 +653,131 @@ def test_sigterm_stops_converter_group_and_exits_143(project, tmp_path, converte
         time.sleep(0.1)
     assert not process_alive(child)
     assert read_state(project)['sessions']['S001/20260725']['conversion']['status'] == 'interrupted'
+
+
+# ---- Round 2: cleanup intents, read-only folders, more crash points (SB-16, SB-21, H-02, H-04, H-05) ----
+
+@pytest.mark.parametrize('phase', ['prepare', 'convert'])
+def test_cleanup_intent_never_rolls_back(project, tmp_path, converter, monkeypatch, phase):
+    """SB-16: while the previous folder cannot be deleted, later runs never move it back into place."""
+    project_at(project, tmp_path, converter, 'converted')
+    folder = published(project, phase)
+    options = ('--dcm2niix-bin', converter) if phase == 'convert' else ()
+    previous_folder_cannot_be_removed(monkeypatch)
+    assert call(project, phase, *options, FORCED[phase]) == 0
+    [old] = leftover_folders(folder)
+    (old / '.pipeline_complete.json').unlink()  # as a deletion that stopped halfway leaves it
+    shutil.rmtree(folder)  # a person deletes the new folder
+    if phase == 'prepare':
+        assert call(project, 'prepare') == 0  # extracted again
+    else:
+        assert call(project, 'convert', *options) == 2  # held as output: missing; nothing was moved back
+        assert not folder.exists()
+        assert call(project, 'convert', *options, '--force-reconvert', '--session', KEY) == 0
+    assert receipt_id(folder) == recorded_receipt(project, phase)
+    assert leftover_folders(folder) == [old]
+    monkeypatch.undo()
+    assert call(project, phase, *options) == 0
+    assert_recovered(project)
+    assert not read_state(project)['issues']
+
+
+@pytest.mark.parametrize('phase', ['prepare', 'convert'])
+def test_read_only_files_in_the_previous_folder_are_deleted(project, tmp_path, converter, phase):
+    """SB-21: outputs someone made read-only no longer leave the previous folder behind after a forced redo."""
+    project_at(project, tmp_path, converter, 'converted')
+    folder = published(project, phase)
+    options = ('--dcm2niix-bin', converter) if phase == 'convert' else ()
+    target = next(p for p in sorted(folder.rglob('*')) if p.is_file() and not p.name.startswith('.'))
+    if os.name == 'nt':
+        target.chmod(stat.S_IREAD)  # a read-only file
+    else:
+        target.parent.chmod(stat.S_IRUSR | stat.S_IXUSR)  # a read-only folder
+    started = time.monotonic()
+    assert call(project, phase, *options, FORCED[phase]) == 0
+    # No retry of a deletion that cannot succeed (it would run for LOCKED_RETRY_SECONDS and leave the folder).
+    assert time.monotonic() - started < fsutil.LOCKED_RETRY_SECONDS - 5
+    assert_recovered(project)
+    assert receipt_id(folder) == recorded_receipt(project, phase)
+
+
+def test_kill_after_a_partial_attempt_was_published(project, tmp_path, converter, monkeypatch):
+    """Plan H-02: the published attempt folder is kept and never adopted; the session is attempted again."""
+    project_at(project, tmp_path, converter, 'prepared')
+    options = ('--dcm2niix-bin', converter)
+    monkeypatch.setenv('FAKE_CONVERTER_EXIT', '1')
+    assert run_with_crash(project, 'convert', 'swapped', *options) == 137
+    assert call(project, 'convert', *options) == 2
+    assert history_rows(project)[-1]['reconciled'] == '1'
+    assert read_state(project)['sessions'][KEY]['conversion']['status'] == 'partial'
+    monkeypatch.delenv('FAKE_CONVERTER_EXIT')
+    assert call(project, 'convert', *options, '--retry-failed') == 0
+    assert read_state(project)['sessions'][KEY]['conversion']['status'] == 'converted'
+    # Pin: both attempt folders stay in .pending for a person to delete.
+    assert len(list((project / 'Niftis/.pending/S001/20260725').iterdir())) == 2
+
+
+def test_kill_while_the_previous_folder_was_being_deleted(project, tmp_path, converter):
+    """Plan H-04: a forced reconversion killed while deleting the old folder is finished by the next run."""
+    project_at(project, tmp_path, converter, 'converted')
+    options = ('--dcm2niix-bin', converter)
+    assert run_with_crash(project, 'convert', 'swapped', *options, '--force-reconvert', '--session', KEY) == 137
+    [old] = leftover_folders(published(project, 'convert'))
+    files = sorted(p for p in old.rglob('*') if p.is_file())
+    for path in files[:len(files) // 2 + 1]:
+        path.unlink()
+    assert call(project, 'convert', *options) == 0
+    assert history_rows(project)[-1]['reconciled'] == '1'
+    assert_recovered(project)
+    assert receipt_id(published(project, 'convert')) == recorded_receipt(project, 'convert')
+
+
+DIE_IN_EXTRACTION = textwrap.dedent('''
+    import os, sys
+    import pydicom
+    from mri_dicom_pipeline import runner
+    original, calls = pydicom.dcmread, []
+    def dcmread(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 3:
+            os._exit(137)
+        return original(*args, **kwargs)
+    pydicom.dcmread = dcmread
+    sys.exit(runner.main('prepare', ['--project-root', sys.argv[1], '--workers', '1']))
+''')
+
+
+def test_kill_during_extraction(project, tmp_path):
+    """Plan H-05: killed before any intent; the rerun prepares every object. The stage folder remains (pin)."""
+    study = generate_uid()
+    archive_objects(project, 'S001_20260725.zip', [dicom_bytes(tmp_path, study=study) for _ in range(4)])
+    child = subprocess.run([sys.executable, '-c', DIE_IN_EXTRACTION, str(project)], env=child_env(),
+                           capture_output=True)
+    assert child.returncode == 137
+    assert not list((project / 'Reports/.state/intents').glob('*.json'))
+    assert call(project, 'prepare') == 0
+    inventory = json.loads((project / 'DicomExtracted/Subjects/S001/20260725/.inventory.json').read_text())
+    assert inventory['n_dicom'] == 4
+    assert list((project / '.work').glob('prepare_*'))  # the killed run's stage; the runbook says to delete it
+
+
+# ---- Round 2: unexpected files in the journal folder -------------------------------------
+
+@pytest.mark.parametrize('name, content, message', [
+    ('notes.json', '{}', 'Unexpected file in the journal folder'),
+    ('00000000000000ff_abcd.json', '{"seq": 5}', 'does not match its sequence number'),
+], ids=['stray-file', 'wrong-sequence-number'])
+def test_unexpected_journal_file_stops_the_run(project, tmp_path, name, content, message):
+    """State: a file in the journal folder that the run did not write stops it, and the index is unchanged."""
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 0
+    index = project / 'Reports/.state/index.json'
+    before = index.read_bytes()
+    stray = project / 'Reports/.state/pending' / name
+    stray.parent.mkdir(exist_ok=True)
+    stray.write_text(content)
+    assert call(project, 'prepare') == 2
+    assert message in (project / 'Reports/pipeline.log').read_text(encoding='utf-8')
+    assert index.read_bytes() == before
+    stray.unlink()
+    assert call(project, 'prepare') == 0

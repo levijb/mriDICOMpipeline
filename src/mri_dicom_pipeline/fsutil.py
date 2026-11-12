@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
+import sys
 import time
 import uuid
 
@@ -73,8 +75,20 @@ def owned(path, root):
 
 def remove_tree(path, root):
     path = owned(path, root)
+
+    def make_writable(function, failed, _):
+        # A read-only file (Windows) or folder (POSIX) inside the tree, for example outputs someone
+        # protected: the tree is the pipeline's own, so make the entry and its folder writable and retry.
+        for target in {Path(failed), Path(failed).parent} - {path.parent}:
+            try:
+                target.chmod(target.stat().st_mode | stat.S_IWRITE | (stat.S_IRWXU if target.is_dir() else 0))
+            except OSError:
+                pass
+        function(failed)
+
+    hook = {"onexc": make_writable} if sys.version_info >= (3, 12) else {"onerror": make_writable}
     if path.exists():
-        retry_locked(lambda: shutil.rmtree(path))
+        retry_locked(lambda: shutil.rmtree(path, **hook))
 
 
 def swap_names(destination):

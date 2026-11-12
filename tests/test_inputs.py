@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import time
+import warnings
 import zipfile
 
 from pydicom.uid import generate_uid
@@ -569,3 +571,261 @@ def test_dry_run_audit_hashes_but_writes_nothing(project, tmp_path, monkeypatch,
     with pytest.raises(SystemExit):
         config.config_parser('prepare').parse_args(['--help'])
     assert 'hashes files only when combined with --audit' in ' '.join(capsys.readouterr().out.split())
+
+
+# ---- Round 2: damaged objects, slow members, changed ZIPs, letter case (SB-18, SB-19, SB-22, SB-23) ----
+
+def upload_members(project, members, compression=zipfile.ZIP_STORED):
+    """A ZIP in Uploads/ with the given {member name: bytes}."""
+    upload = project / 'DicomUploads/Uploads/S001_20260725.zip'
+    upload.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(upload, 'w', compression) as z:
+        for name, data in members.items():
+            z.writestr(name, data)
+    return upload
+
+
+@pytest.mark.parametrize('cut', ['dicm-mark-only', 'inside-the-file-meta', 'before-rows'])
+def test_object_cut_inside_its_header_fails_the_zip(project, tmp_path, cut):
+    """SB-18: an object truncated before it was zipped (so its CRC is fine) fails the ZIP; it was left out."""
+    _, objects = mr_series(tmp_path, slices=3)
+    data = objects[1]
+    at = {'dicm-mark-only': 132, 'inside-the-file-meta': 150,
+          'before-rows': data.index(b'\x28\x00\x10\x00US', 132)}[cut]
+    objects[1] = data[:at]
+    upload = archive_objects(project, 'S001_20260725.zip', objects)
+    assert call(project, 'prepare') == 2
+    assert upload.exists() and not (project / EXTRACTED).exists()
+    [issue] = prepare_issues(project)
+    assert 'Unreadable DICOM header' in state(project)['issues'][issue]['reason']
+
+
+@pytest.mark.parametrize('content', [bytes(range(256)) * 16, bytes(4096), b'scan notes\n' * 200],
+                         ids=['random', 'zeros', 'text'])
+def test_unreadable_member_named_dcm_fails_the_zip(project, tmp_path, content):
+    """Plan B-11: a member named .dcm must be a readable object."""
+    upload = upload_members(project, {'exam/IM1': dicom_bytes(tmp_path), 'exam/garbage.dcm': content})
+    assert call(project, 'prepare') == 2
+    assert upload.exists() and 'Unreadable DICOM header' in json.dumps(state(project)['issues'])
+
+
+def test_large_zero_filled_member_is_omitted_quickly(project, tmp_path):
+    """SB-22: 20 MB of zeros without a skipped extension took about 10 s to parse; it is now skipped at once."""
+    upload_members(project, {'exam/IM1': dicom_bytes(tmp_path), 'exam/padding': bytes(20 * 1024 * 1024)},
+                   zipfile.ZIP_DEFLATED)
+    started = time.monotonic()
+    assert call(project, 'prepare') == 0
+    assert time.monotonic() - started < 5
+    assert (inventory(project)['n_dicom'], inventory(project)['skipped_files']) == (1, 1)
+
+
+def test_audit_replaces_a_leftover_issue_with_the_changed_zip_hold(project, tmp_path, monkeypatch):
+    """A leftover issue from a failed --force-reextract must not hide a change that --audit finds later."""
+    canonical = prepared(project, tmp_path)
+    usage = namedtuple('usage', 'total used free')
+    with monkeypatch.context() as patch:
+        patch.setattr(shutil, 'disk_usage', lambda path: usage(10**12, 10**12 - 1000, 1000))
+        assert call(project, 'prepare', '--force-reextract') == 2
+    info, data = canonical.stat(), bytearray(canonical.read_bytes())
+    data[len(data) // 2] ^= 0xFF
+    canonical.write_bytes(bytes(data))
+    os.utime(canonical, ns=(info.st_atime_ns, info.st_mtime_ns))
+    assert call(project, 'prepare', '--audit') == 2
+    [issue] = prepare_issues(project)
+    assert state(project)['issues'][issue]['reason'] == prepare.AUDIT_HOLD
+    assert call(project, 'prepare') == 2 and prepare_issues(project) == [issue]
+
+
+def test_changed_zip_hold_survives_plain_runs_until_the_bytes_are_back(project, tmp_path):
+    """SB-19: a same-size, same-time edit found by --force-reextract stays held; restoring the bytes clears it."""
+    canonical = prepared(project, tmp_path)
+    info, original = canonical.stat(), canonical.read_bytes()
+    data = bytearray(original)
+    data[len(data) // 2] ^= 0xFF
+    canonical.write_bytes(bytes(data))
+    os.utime(canonical, ns=(info.st_atime_ns, info.st_mtime_ns))
+    assert call(project, 'prepare', '--force-reextract') == 2
+    [issue] = prepare_issues(project)
+    assert 'Accepted canonical ZIP changed' in state(project)['issues'][issue]['reason']
+    assert call(project, 'prepare') == 2 and prepare_issues(project) == [issue]
+    canonical.write_bytes(original)
+    os.utime(canonical, ns=(info.st_atime_ns, info.st_mtime_ns))
+    assert call(project, 'prepare') == 0 and not state(project)['issues']
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows paths ignore letter case')
+@pytest.mark.parametrize('rename', ['extension', 'folder'])
+def test_canonical_zip_renamed_in_letter_case_stays_cached(project, tmp_path, monkeypatch, rename):
+    """SB-23: renaming a prepared ZIP or its folder in letter case left a permanent missing: issue."""
+    canonical = prepared(project, tmp_path)
+    if rename == 'extension':
+        renamed = canonical.rename(canonical.with_name('S001_20260725.ZIP'))
+    else:
+        renamed = canonical.parent.rename(canonical.parent.with_name('s001')) / canonical.name
+    assert call(project, 'prepare') == 0
+    assert not state(project)['issues'] and state(project)['sessions'][KEY]['archive'] == str(renamed)
+    monkeypatch.setattr(fsutil, 'sha256', fail_if_called)
+    assert call(project, 'prepare') == 0 and not state(project)['issues']
+
+
+# ---- Round 2: member names, DICOMDIR, changing uploads, missing UIDs (plan B-08, B-10, B-13, C-01) ----
+
+def test_member_names_never_become_paths(project, tmp_path):
+    """README: member paths are never used as destination paths; every object gets a numbered name (B-08)."""
+    study = generate_uid()
+    names = ['/abs/IM1', 'C:/drive/IM2', '//server/share/IM3', '../../escape/IM4', 'back\\slash\\IM5', 'dup/IM6',
+             'dup/IM6', 'L' * 300, 'IMe_7xx']
+    upload = project / 'DicomUploads/Uploads/S001_20260725.zip'
+    upload.parent.mkdir(parents=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')  # zipfile warns about the duplicate name
+        with zipfile.ZipFile(upload, 'w') as z:
+            for name in names:
+                z.writestr(name, dicom_bytes(tmp_path, study=study))
+            link = zipfile.ZipInfo('exam/link')
+            link.external_attr = 0o120777 << 16  # a symbolic link member
+            z.writestr(link, '../../../outside')
+    upload.write_bytes(upload.read_bytes().replace(b'IMe_7xx', b'IM\xff_7xx'))  # a name that is not UTF-8
+    before = sorted(tmp_path.iterdir())
+    assert call(project, 'prepare') == 0
+    assert (inventory(project)['n_dicom'], inventory(project)['skipped_files']) == (len(names), 1)
+    assert [Path(f['name']).name for f in inventory(project)['files']] == [f'{i:08d}.dcm' for i in range(1, 10)]
+    assert sorted(tmp_path.iterdir()) == before
+
+
+def test_dicomdir_and_viewer_copies_are_omitted(project, tmp_path):
+    """README: DICOMDIR and viewer folders are omitted; extensions in the skip list are omitted (B-10)."""
+    import pydicom
+    from pydicom.fileset import FileSet
+    study = generate_uid()
+    ds = pydicom.dcmread(io.BytesIO(dicom_bytes(tmp_path, study=study, slice_index=0)))
+    ds.StudyTime, ds.StudyID, ds.PatientSex, ds.PatientBirthDate = '101112', '1', 'O', ''
+    media = tmp_path / 'media'
+    fs = FileSet()
+    fs.add(ds)
+    fs.write(media)
+    members = {p.relative_to(media).as_posix(): p.read_bytes() for p in sorted(media.rglob('*')) if p.is_file()}
+    assert 'DICOMDIR' in members
+    upload_members(project, dict(members, **{'DDV/hidden': dicom_bytes(tmp_path, study=study),
+                                             'exam/x.bin': dicom_bytes(tmp_path, study=study)}))
+    assert call(project, 'prepare') == 0
+    assert (inventory(project)['n_dicom'], inventory(project)['skipped_files']) == (1, 3)
+
+
+@pytest.mark.parametrize('when', ['hashing', 'extraction', 'move'])
+def test_zip_changing_while_processed_fails_then_retries(project, tmp_path, monkeypatch, when):
+    """README: a partly copied ZIP fails and is retried when complete; here its time changes mid-run (B-13)."""
+    upload = archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+
+    def bump():
+        info = upload.stat()
+        os.utime(upload, ns=(info.st_atime_ns, info.st_mtime_ns + 5_000_000_000))
+
+    target, name = {'hashing': (fsutil, 'sha256'), 'extraction': (prepare, 'extract_archive'),
+                    'move': (prepare, 'days_apart')}[when]
+    original = getattr(target, name)
+
+    def then_bump(*args, **kwargs):
+        result = original(*args, **kwargs)
+        bump()
+        return result
+
+    with monkeypatch.context() as patch:
+        patch.setattr(target, name, then_bump)
+        assert call(project, 'prepare') == 2
+    reason = {'hashing': 'Upload changed during hashing', 'extraction': 'Upload changed during extraction',
+              'move': 'Upload changed while being processed'}[when]
+    assert reason in json.dumps(state(project)['issues'])
+    assert upload.exists() and not (project / EXTRACTED).exists()
+    assert call(project, 'prepare') == 0 and not state(project)['issues']
+
+
+@pytest.mark.parametrize('fields, outcome', [
+    ({'SOPInstanceUID': None}, 'DICOM object missing SOPInstanceUID'),
+    ({'SeriesInstanceUID': None}, 'DICOM object missing SeriesInstanceUID'),
+    ({'SeriesInstanceUID': None, 'Modality': None}, 'omitted'),
+    ({'StudyInstanceUID': None}, 'accepted'),
+], ids=['no-sop-instance-uid', 'modality-without-series-uid', 'neither', 'no-study-uid'])
+def test_objects_missing_uids(project, tmp_path, fields, outcome):
+    """Plan C-01; an object without a Study UID is not counted as a study (pin)."""
+    study = generate_uid()
+    upload = upload_members(project, {'exam/good': dicom_bytes(tmp_path, study=study),
+                                      'exam/odd': dicom_bytes(tmp_path, study=study, fields=fields)})
+    if outcome.startswith('DICOM'):
+        assert call(project, 'prepare') == 2
+        assert upload.exists() and outcome in json.dumps(state(project)['issues'])
+        return
+    assert call(project, 'prepare') == 0
+    expected = (1, 1) if outcome == 'omitted' else (2, 0)
+    assert (inventory(project)['n_dicom'], inventory(project)['skipped_files']) == expected
+    assert inventory(project)['study_count'] == 1 and not state(project)['sessions'][KEY]['accepted_multi_study']
+
+
+# ---- Round 2: holds and refusals (plan E-06 and coverage gaps) ------------------------
+
+def test_date_held_zip_renamed_to_an_unlisted_date(project, tmp_path):
+    """Plan E-06: renaming a date-held ZIP to a date the roster lacks gives one new issue, on the new path."""
+    held = archive(project, 'S001_20260801.zip', dicom_bytes(tmp_path))  # the headers say 20260725: 7 days
+    assert call(project, 'prepare') == 2
+    assert '7 days' in state(project)['issues'][f'prepare:{held}']['reason']
+    renamed = held.rename(held.with_name('S001_20260901.zip'))
+    assert call(project, 'prepare') == 2
+    assert list(state(project)['issues']) == [f'prepare:{renamed}']
+    assert state(project)['issues'][f'prepare:{renamed}']['reason'] == prepare.UNLISTED
+
+
+def test_upload_whose_canonical_path_is_taken_fails(project, tmp_path):
+    """Nothing overwrites a canonical ZIP, even one that failed; both files stay."""
+    taken = project / CANONICAL
+    taken.parent.mkdir(parents=True)
+    taken.write_bytes(b'not a zip')
+    upload = archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 2
+    assert 'Canonical ZIP already exists; refusing to overwrite it' in state(project)['issues'][f'prepare:{upload}']['reason']
+    assert upload.exists() and taken.read_bytes() == b'not a zip'
+
+
+def test_extraction_that_does_not_match_the_zip_is_held(project, tmp_path):
+    """With state lost, an extraction on disk is adopted only after the file check; otherwise it is left alone."""
+    prepared(project, tmp_path)
+    shutil.rmtree(project / 'Reports')
+    next((project / EXTRACTED / 'dicom').iterdir()).unlink()
+    assert call(project, 'prepare') == 2
+    [issue] = prepare_issues(project)
+    assert state(project)['issues'][issue]['reason'] == ('The extraction on disk does not match this ZIP and was '
+                                                         'left untouched')
+    assert (project / CANONICAL).exists()
+
+
+def test_audit_finds_an_object_edited_in_place(project, tmp_path, converter):
+    """README: --audit hashes cached outputs; an extracted object edited in place is found and extracted again."""
+    prepared(project, tmp_path)
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 0
+    edited = next((project / EXTRACTED / 'dicom').iterdir())
+    info, data = edited.stat(), bytearray(edited.read_bytes())
+    data[len(data) // 2] ^= 0xFF
+    edited.write_bytes(bytes(data))
+    os.utime(edited, ns=(info.st_atime_ns, info.st_mtime_ns))
+    assert call(project, 'prepare') == 0  # cached: nothing looks changed without hashing
+    assert call(project, 'convert', '--dcm2niix-bin', converter, '--audit') == 2
+    assert 'Extracted input changed or missing' in state(project)['issues'][f'convert:{KEY}']['reason']
+    assert call(project, 'prepare', '--audit') == 2  # extracted again; the convert: issue is still open
+    assert edited.read_bytes() != bytes(data)
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 0 and not state(project)['issues']
+
+
+def test_symbolic_link_zip_is_held(project, tmp_path):
+    """A symbolic-link ZIP is held, and its target is left alone."""
+    target = tmp_path / 'elsewhere.zip'
+    with zipfile.ZipFile(target, 'w') as z:
+        z.writestr('exam/1', dicom_bytes(tmp_path))
+    link = project / 'DicomUploads/Uploads/S001_20260725.zip'
+    link.parent.mkdir(parents=True)
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip('symbolic links cannot be created here')
+    digest = fsutil.sha256(target)
+    assert call(project, 'prepare') == 2
+    assert 'Symbolic-link ZIPs are not accepted' in json.dumps(state(project)['issues'])
+    assert link.is_symlink() and fsutil.sha256(target) == digest

@@ -163,3 +163,10 @@ def test_unusable_roster_exits_2_before_anything_is_written(project, capsys, con
     assert call(project, 'prepare') == 2
     assert capsys.readouterr().err.startswith('ERROR: ')
     assert not (project / 'Reports').exists()
+
+
+@pytest.mark.parametrize('columns', [('x', 'x'), ('', 'scan_date')], ids=['same-name', 'empty-name'])
+def test_roster_column_names_must_be_nonempty_and_distinct(tmp_path, columns):
+    roster = roster_text(tmp_path, 'subject_id,scan_date\nS001,20260725\n')
+    with pytest.raises(ValueError, match='Subject and date column names must be nonempty and distinct'):
+        identity.load_roster(roster, *columns)

@@ -31,6 +31,12 @@ def write_intent(reports_root, **fields):
     return intent_id
 
 
+def mark_cleanup_only(reports_root, intent_id):
+    """The new folder is published and recorded; only deleting the previous folder is left to do."""
+    path = intents_dir(reports_root) / f"{intent_id}.json"
+    fsutil.atomic_json(path, dict(fsutil.read_json(path), cleanup_only=True))
+
+
 def clear_intents(reports_root, ids):
     """Delete intents whose results are saved in state."""
     for intent_id in ids:
@@ -58,9 +64,13 @@ def reconcile(cfg, phase, state, logger, dry_run):
         intent = fsutil.read_json(path)
         if intent.get("stage") != phase or intent.get("ownership_root") not in locked:
             continue
-        action, done = _resolve(intent, state, cfg, dry_run)
-        logger.warning("%s %s %s after an interrupted run: %s", "WOULD RECONCILE" if dry_run else "RECONCILED",
-                       phase, intent["key"], action)
+        if intent.get("cleanup_only"):
+            action, done = _clean_up(intent, cfg, dry_run)
+            logger.warning("%s %s %s: %s", "WOULD CLEAN UP" if dry_run else "CLEANUP", phase, intent["key"], action)
+        else:
+            action, done = _resolve(intent, state, cfg, dry_run)
+            logger.warning("%s %s %s after an interrupted run: %s", "WOULD RECONCILE" if dry_run else "RECONCILED",
+                           phase, intent["key"], action)
         resolved += done
     return resolved
 
@@ -91,6 +101,20 @@ def _adoption_event(intent, state, destination):
         return {"key": key, "session": entry, "clear_issues": ["convert:" + key, "output:" + key]}
     except (OSError, ValueError, KeyError):
         return None
+
+
+def _clean_up(intent, cfg, dry_run):
+    """Retry deleting the previous folder of a finished publish; never move anything back (SB-16)."""
+    root, aside = Path(intent["ownership_root"]), Path(intent["previous"])
+    fsutil.owned(aside, root)
+    if dry_run:
+        return f"would delete the previous folder {aside}", True
+    try:
+        fsutil.remove_tree(aside, root)
+    except OSError as e:
+        return f"could not delete the previous folder {aside} yet ({type(e).__name__}); a later run retries", False
+    clear_intents(cfg.reports, [intent["id"]])
+    return f"deleted the previous folder {aside}", True
 
 
 def _resolve(intent, state, cfg, dry_run):

@@ -81,8 +81,12 @@ def prepared_entry(sid, date, label, canonical, digest, inventory, destination, 
             "conversion": conversion}
 
 
-def conversion_record(destination, status, n_volumes, source_sha256, provenance=None, coverage=None):
-    """The state record for a conversion published at destination."""
+def conversion_record(destination, status, n_volumes, source_sha256, provenance=None, coverage=None,
+                      accepted_errors=None):
+    """The state record for a conversion published at destination.
+
+    accepted_errors lists the errors a person accepted with --accept-partial.
+    """
     destination = Path(destination)
     record = receipt_info(destination, destination / RECEIPT, destination / INVENTORY)
     record.update(status=status, output=str(destination), n_volumes=n_volumes, source_sha256=source_sha256)
@@ -90,6 +94,8 @@ def conversion_record(destination, status, n_volumes, source_sha256, provenance=
         record["provenance"] = provenance
     if coverage is not None:
         record["coverage"] = coverage
+    if accepted_errors:
+        record["accepted_errors"] = list(accepted_errors)
     return record
 
 
@@ -101,7 +107,7 @@ def adopted_conversion(destination, source_sha256):
     if volumes is None:
         volumes = sum(item["name"].endswith(".nii.gz") for item in fsutil.read_json(destination / INVENTORY)["files"])
     return conversion_record(destination, "converted", volumes, source_sha256,
-                             receipt.get("provenance"), receipt.get("coverage"))
+                             receipt.get("provenance"), receipt.get("coverage"), receipt.get("accepted_errors"))
 
 
 def required_series(inventory):

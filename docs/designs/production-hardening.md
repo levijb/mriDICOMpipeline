@@ -309,6 +309,36 @@ section:
         the next plain run (a failed `--force-reextract` left one for good),
         except an `--audit` hold, which only the next `--audit` clears.
     *   A sidecar that is not a JSON object is reported, not a crash.
+*   Fixed 2026-11-12 after the second testing round (`docs/testing/`
+    2026-11-12_FINDINGS2.md), each with a test:
+    *   SB-14: `_ADC` (the combined images of a GE diffusion series) is a
+        companion too.
+    *   SB-15: a Siemens physio log's two `_physio` files are left out
+        without an error; they are not published.
+    *   SB-16: an intent whose publish finished but whose previous folder
+        could not be deleted is marked `cleanup_only`; later runs only retry
+        the deletion and never rename the previous folder back.
+    *   SB-17 (the user's decision): a published `_Eq_` copy raises a
+        nonblocking `spacing:` issue.
+    *   SB-18: a member with the `DICM` mark or a `.dcm` name that cannot be
+        read as an object, or an MR image object without Rows or Columns,
+        fails the ZIP instead of being left out or accepted.
+    *   SB-19: changed-ZIP holds carry `zip_changed`. While one is open,
+        each run hashes that ZIP; the hold clears once the bytes match the
+        recorded hash. This replaces the reason-text comparison above.
+    *   SB-20 (the user's decision): `convert --accept-partial
+        SUBJECT/SESSION` publishes a reviewed partial session with at least
+        one valid volume, recording `accepted_errors` in the receipt and
+        state. A timeout is never accepted. This is the override that
+        invariant 3 lacked.
+    *   SB-21: deleting the pipeline's own previous folder makes read-only
+        entries writable first.
+    *   SB-22: a member without the `DICM` mark is parsed only when it
+        starts with group 0002 or 0008.
+    *   SB-23: the canonical ZIP is compared as a path (letter case on
+        Windows), including in the missing-ZIP check.
+    *   SB-24: `-l o` is passed to dcm2niix, so saved defaults cannot rescale
+        16-bit data.
 *   P7: `--dry-run --audit` keeps hashing, and the help text and README are
     corrected to say so. This keeps a dry integrity check possible.
 *   `prepare --audit` also re-hashes canonical ZIPs, so that a same-size,
@@ -426,7 +456,7 @@ functions are named in the Detailed Implementation Plan.
 |---|---|---|---|---|---|
 | 1 | Identity | Subject and session come only from authorized filenames. IDs that differ only by case, or that equal a Windows reserved name, are rejected. A ZIP with more than one study or conflicting repeated instances is held unless accepted. | Operators assign `_N` suffixes. `--allow-unlisted-dates` admits known IDs. `--accept-multi-study` overrides the study hold. | T01, T02, T05 | 1 |
 | 2 | Input preservation | ZIP bytes are never modified, and ZIPs are never deleted. An accepted canonical ZIP is never replaced, and changed bytes are never extracted. An upload moves only after a hash check, with its size and mtime unchanged through hashing and extraction. | The pipeline cannot stop others from overwriting files. Detection relies on size and mtime unless `--audit` is used. Skipped non-DICOM members exist only in the ZIP. Partial-upload detection depends on the copy tool writing the file in order (Q4). | T03, T05, T06 | 1 |
-| 3 | No false completion | `converted` means the converter exited 0, every required series has at least one valid volume, there are no organization errors, and there are no unexpected files. | Series outside the MR image SOP classes are excused and listed. Whether the conversion itself is correct is up to `dcm2niix` (Q9). A series `dcm2niix` cannot convert leaves its session `partial`, with no override yet (Q6). | T08, T11, T18 | 1 |
+| 3 | No false completion | `converted` means the converter exited 0, every required series has at least one valid volume, there are no organization errors, and there are no unexpected files. | Series outside the MR image SOP classes are excused and listed. Whether the conversion itself is correct is up to `dcm2niix` (Q9). A series `dcm2niix` cannot convert leaves its session `partial` until a person accepts it with `convert --accept-partial` (Q6; added 2026-11-12). | T08, T11, T18 | 1 |
 | 4 | Isolation | Deletion and publication stay inside the configured roots. Two commands that share a root cannot run at the same time on supported storage. Files people add are never deleted. | Storage whose locks only work within one node is unsupported. Processes that do not cooperate with the lock are out of scope. | T10 + site check | 1 |
 | 5 | Recoverability | After an abrupt stop at any persistence step, the next run either returns to the last valid state, redoes the interrupted work, or adopts a published result whose inventory files are all present at their recorded sizes. No session rolls back. An unreadable index is recovered from `.bak` plus journals. | If neither index file can be read, the run stops and names them. A stage on a lost node is replanned. Power loss (unflushed disk caches) is out of scope. | T07, T09 | 1 |
 | 6 | Incrementality | A cached rerun makes no content reads. A complete session is never reconverted automatically. | `--audit` and `--force-*`. | T06 | 1 |
@@ -1932,7 +1962,7 @@ function, so importing the module itself would clash with both.
     *   **Issue table.** An issue is *blocking* when it counts toward the
         unresolved total that makes a run exit with code 2. A nonblocking
         issue is reported but does not change the exit code.
-        `NONBLOCKING_PREFIXES = ("date:", "missing:")` and
+        `NONBLOCKING_PREFIXES = ("date:", "missing:", "spacing:")` and
         `unresolved(state) -> int`.
 
         | Key | Raised by | Blocking | Cleared by |
@@ -1940,6 +1970,7 @@ function, so importing the module itself would clash with both.
         | `prepare:<ZIP path>` | Preparation failures and holds (Q3, Q15, Q20, and the 5-day date hold) | Yes; it also blocks conversion of that session | The next accepted preparation of that path, or the path disappearing (today's stale-issue rule) |
         | `date:<key>` | Header dates that differ from the file name (today) | No | As today |
         | `missing:<key>` | A ready session whose canonical ZIP is not listed (R18) | No | The ZIP being listed again |
+        | `spacing:<key>` | A conversion that published an `_Eq_` copy (uneven slice spacing; added 2026-11-12) | No | A later conversion of that session without one |
         | `convert:<key>` | Conversion failures, partials, and interrupts (today's key) | Yes | The next successful conversion of that session |
         | `output:<key>` | A complete folder that fails its receipt check, or an unreferenced folder that fails adoption (Q7) | Yes | Revalidation with `convert --audit --session KEY`, an explicit reconversion, or the folder passing its check on a later run |
         | `recover:<intent id>` | A reconciliation case that touches nothing (Q12) | Yes | The intent file being gone when the next run reconciles (the runbook says how to resolve it) |

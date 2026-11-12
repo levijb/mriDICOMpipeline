@@ -21,6 +21,8 @@ DICOM_TAGS = ["SOPClassUID", "SOPInstanceUID", "StudyInstanceUID", "SeriesInstan
     "SeriesNumber", "SeriesDescription", "ProtocolName", "Modality", "Rows", "Columns",
     "BitsAllocated", "SamplesPerPixel", "NumberOfFrames", "InstanceNumber", "StudyDate", "ImageType"]
 
+DICOMDIR = "1.2.840.10008.1.3.10"  # media directory; always omitted
+
 # Series with at least one object of these classes must convert (Q6, Q19).
 MR_IMAGE_SOP_CLASSES = {
     "1.2.840.10008.5.1.4.1.1.4",    # MR Image Storage
@@ -55,6 +57,18 @@ AUDIT_HOLD = "Accepted canonical ZIP changed (found by --audit); the prepared se
 
 class HoldError(ValueError):
     """The ZIP is held for review: nothing is published and no session entry changes."""
+
+
+class ZipChanged(HoldError):
+    """An accepted canonical ZIP's bytes changed (Q3). Its issue clears only once the bytes match again."""
+
+
+def hold_issue(issue_key, sid, label, error, path):
+    """The prepare: issue for an error; a changed-ZIP hold is marked so that plain runs check it by hash."""
+    issue = reports.problem(issue_key, "prepare", sid, label, str(error), path)
+    if isinstance(error, ZipChanged):
+        issue["zip_changed"] = True
+    return issue
 
 
 def discover(cfg):
@@ -112,21 +126,40 @@ def extract_archive(source, stage, stop=None, accept_multi_study=False):
                 skipped += 1
                 continue
             with archive.open(member) as f:
-                magic = f.read(132)[128:132] == b"DICM"
+                head = f.read(132)
+                magic = head[128:132] == b"DICM"
+                # A file with the DICM mark or a .dcm name must be a readable object (or a DICOMDIR).
+                claimed = magic or Path(member.filename).suffix.lower() == ".dcm"
+                if not magic and head[:2] not in (b"\x02\x00", b"\x08\x00"):
+                    # Without the mark, a DICOM object starts with group 0002 or 0008. Parsing other
+                    # bytes is pointless, and slow for zeros (SB-22).
+                    if claimed:
+                        raise ValueError("Unreadable DICOM header in archive")
+                    skipped += 1
+                    continue
                 f.seek(0)
                 try:
                     ds = pydicom.dcmread(f, force=not magic, stop_before_pixels=True, specific_tags=DICOM_TAGS)
                 except Exception as e:
-                    if magic or Path(member.filename).suffix.lower() == ".dcm":
+                    if claimed:
                         raise ValueError("Unreadable DICOM header in archive") from e
                     skipped += 1
                     continue
-                if not ds.get("SOPClassUID") or not (ds.get("SeriesInstanceUID") or ds.get("Modality")):
+                media_class = str(getattr(getattr(ds, "file_meta", None), "MediaStorageSOPClassUID", ""))
+                if DICOMDIR in (str(ds.get("SOPClassUID", "")), media_class):
                     skipped += 1
                     continue
-                if str(ds.get("SOPClassUID")) == "1.2.840.10008.1.3.10":
+                if not ds.get("SOPClassUID"):
+                    if claimed:
+                        # For example an object cut off inside its header (SB-18).
+                        raise ValueError("Unreadable DICOM header in archive")
                     skipped += 1
                     continue
+                if not (ds.get("SeriesInstanceUID") or ds.get("Modality")):
+                    skipped += 1
+                    continue
+                if str(ds.SOPClassUID) in MR_IMAGE_SOP_CLASSES and not (ds.get("Rows") and ds.get("Columns")):
+                    raise ValueError("Unreadable DICOM header in archive (an image object without Rows or Columns)")
                 sop_uid = str(ds.get("SOPInstanceUID", ""))
                 if not sop_uid:
                     raise ValueError("DICOM object missing SOPInstanceUID")
@@ -226,15 +259,16 @@ def prepare_one(candidate, previous, cfg, stop=None):
         valid_previous = (previous and previous.get("status") == "ready"
                           and previous.get("extraction", {}).get("root") == str(destination)
                           and receipts.fast_valid(previous["extraction"], "extract", cfg.audit))
-        is_canonical = bool(previous) and str(source) == previous.get("archive")
+        # As paths: on Windows a canonical ZIP renamed in letter case is still the same file.
+        is_canonical = bool(previous) and bool(previous.get("archive")) and source == Path(previous["archive"])
         found, recorded = receipts.receipt_id(destination), (previous or {}).get("extraction", {}).get("receipt_id")
         if is_canonical and digest != previous.get("archive_sha256"):
             # Q3: an accepted canonical ZIP is immutable.
-            raise HoldError("Accepted canonical ZIP changed; the prepared session and its outputs are unchanged. "
+            raise ZipChanged("Accepted canonical ZIP changed; the prepared session and its outputs are unchanged. "
                             "Restore the original ZIP, or upload the new export as a new _N session")
         if is_canonical and valid_previous and not cfg.force_reextract:
             # The same bytes with a new size or mtime (for example restored from a backup).
-            event.update(outcome="refresh", session=dict(previous, archive_signature=fingerprint),
+            event.update(outcome="refresh", session=dict(previous, archive=str(source), archive_signature=fingerprint),
                          note="canonical ZIP unchanged; its new file signature is recorded")
         elif found is not None and found != recorded and not cfg.force_reextract:
             # A published extraction that state does not record (Q12 adoption rule, D6).
@@ -289,6 +323,9 @@ def prepare_one(candidate, previous, cfg, stop=None):
                     expected_digest=digest, attempt=False, subject_id=sid, date=date, label=label,
                     archive=str(canonical))
                 cleaned = fsutil.publish_tree(stage, destination, cfg.dicoms, incoming, aside)
+                if not cleaned:
+                    # Later runs only retry deleting the previous folder; they never roll it back (SB-16).
+                    recovery.mark_cleanup_only(cfg.reports, intent)
                 event["session"] = receipts.prepared_entry(sid, date, label, canonical, digest, inventory, destination,
                                                            previous.get("conversion", {}) if previous else {})
                 # An open intent makes later runs retry deleting the previous folder.
@@ -313,7 +350,7 @@ def prepare_one(candidate, previous, cfg, stop=None):
         event.pop("session", None)
         issue_key = "prepare:" + str(active_source)
         event["clear_issues"].append(issue_key)
-        event["issues"] = [reports.problem(issue_key, "prepare", sid, label, str(e), active_source)]
+        event["issues"] = [hold_issue(issue_key, sid, label, e, active_source)]
         event["source"] = {"path": str(active_source), "signature": fingerprint, "key": key, "outcome": outcome,
                             "against": previous.get("archive_sha256", "") if previous else "", "version": config.SCHEMA_VERSION}
         if not previous and not held:
@@ -344,16 +381,18 @@ def plan_prepare(cfg, state, ids, pairs, logger):
             valid = prior.get("status") == "ready" and prior.get("extraction", {}).get("root") == str(cfg.dicoms / "Subjects" / sid / label) and receipts.fast_valid(prior["extraction"], "extract", cfg.audit)
             if not cfg.force_reextract and unchanged:
                 if valid and str(source) == prior.get("archive") and fingerprint == prior.get("archive_signature"):
-                    if cfg.audit:
-                        # Catches an edit that kept the size and mtime (Q3); runs in dry runs too (P7).
+                    issue = state.data["issues"].get(issue_key)
+                    if cfg.audit or (issue or {}).get("zip_changed"):
+                        # --audit catches an edit that kept the size and mtime (Q3), in dry runs too (P7).
+                        # An open changed-ZIP hold is checked the same way until the bytes match again.
                         if fsutil.sha256(source) != prior.get("archive_sha256"):
-                            raise HoldError(AUDIT_HOLD)
-                        if issue_key in state.data["issues"] and not cfg.dry_run:
-                            state.checkpoint({"clear_issues": [issue_key]})
-                    elif (issue_key in state.data["issues"] and not cfg.dry_run
-                          and state.data["issues"][issue_key].get("reason") != AUDIT_HOLD):
+                            if (issue or {}).get("zip_changed"):
+                                counts["held"] += 1
+                                continue
+                            raise ZipChanged(AUDIT_HOLD)
+                    if issue and not cfg.dry_run:
                         # Left by a failed attempt that kept the valid extraction (for example a
-                        # --force-reextract that failed); only the next --audit clears an audit hold.
+                        # --force-reextract that failed), or a changed-ZIP hold whose bytes match again.
                         state.checkpoint({"clear_issues": [issue_key]})
                     counts["cached"] += 1
                     continue
@@ -379,19 +418,21 @@ def plan_prepare(cfg, state, ids, pairs, logger):
             counts["held"] += 1
             logger.warning("Held %s: %s", source, e)
             if not cfg.dry_run:
-                state.checkpoint({"issues": [reports.problem(issue_key, "prepare", sid, label, str(e), source)]})
+                state.checkpoint({"issues": [hold_issue(issue_key, sid, label, e, source)]})
     if not cfg.dry_run:
         # Removed/renamed incoming conflicts must not remain permanently unresolved.
         stale = [k for k, v in state.data["issues"].items() if k.startswith("prepare:") and v.get("path") and not Path(v["path"]).exists()]
         # R18: a prepared session whose canonical ZIP is not listed gets a nonblocking issue.
-        listed, missing = {str(path) for path in discovered}, []
+        # normcase: on Windows a canonical ZIP renamed in letter case is still listed.
+        listed, missing = {os.path.normcase(path) for path in discovered}, []
         for key, entry in state.data["sessions"].items():
             issue = "missing:" + key
             if entry.get("status") != "ready" or not entry.get("archive"):
                 continue
-            if entry["archive"] in listed and issue in state.data["issues"]:
+            found = os.path.normcase(entry["archive"]) in listed
+            if found and issue in state.data["issues"]:
                 stale.append(issue)
-            elif entry["archive"] not in listed and issue not in state.data["issues"]:
+            elif not found and issue not in state.data["issues"]:
                 missing.append(reports.problem(issue, "prepare", entry["subject_id"], entry["label"],
                                                "Canonical ZIP is missing; the extracted DICOM objects are intact",
                                                entry["archive"]))
