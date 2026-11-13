@@ -781,3 +781,97 @@ def test_unexpected_journal_file_stops_the_run(project, tmp_path, name, content,
     assert index.read_bytes() == before
     stray.unlink()
     assert call(project, 'prepare') == 0
+
+
+# ---- Round 3: cleanup after a crash, several cleanup intents, links (SB-25, SB-28) ---------------
+
+@pytest.mark.parametrize('phase', ['prepare', 'convert'])
+def test_cleanup_failure_during_reconciliation_never_rolls_back(project, tmp_path, converter, monkeypatch, phase):
+    """SB-25: after a crash, a cleanup that fails during reconciliation also makes the intent cleanup-only."""
+    project_at(project, tmp_path, converter, 'converted')
+    folder = published(project, phase)
+    options = ('--dcm2niix-bin', converter) if phase == 'convert' else ()
+    assert run_with_crash(project, phase, 'swapped', *options, FORCED[phase]) == 137
+    with monkeypatch.context() as patch:
+        previous_folder_cannot_be_removed(patch)
+        assert call(project, phase, *options) == 0
+    [intent] = (project / 'Reports/.state/intents').glob('*.json')
+    assert json.loads(intent.read_text())['cleanup_only']
+    [old] = leftover_folders(folder)
+    (old / '.pipeline_complete.json').unlink()  # as a deletion that stopped halfway leaves it
+    shutil.rmtree(folder)  # a person deletes the new folder
+    if phase == 'prepare':
+        assert call(project, 'prepare') == 0  # extracted again
+    else:
+        assert call(project, 'convert', *options) == 2  # held as output: missing; nothing was moved back
+        assert not folder.exists()
+        assert call(project, 'convert', *options, '--force-reconvert', '--session', KEY) == 0
+    assert_recovered(project)
+    assert receipt_id(folder) == recorded_receipt(project, phase)
+    assert not read_state(project)['issues']
+
+
+def test_several_cleanup_intents_and_a_crash_resolve_independently(project, tmp_path, converter, monkeypatch, caplog):
+    project_at(project, tmp_path, converter, 'converted')
+    redo = ('--dcm2niix-bin', converter, '--force-reconvert', '--session', KEY)
+    with monkeypatch.context() as patch:
+        previous_folder_cannot_be_removed(patch)
+        assert call(project, 'convert', *redo) == 0
+        assert call(project, 'convert', '--dcm2niix-bin', converter, '--dry-run') == 0
+        assert 'WOULD CLEAN UP convert S001/20260725' in caplog.text
+        assert call(project, 'convert', *redo) == 0
+    intents = [json.loads(p.read_text()) for p in (project / 'Reports/.state/intents').glob('*.json')]
+    assert len(intents) == 2 and all(intent.get('cleanup_only') for intent in intents)
+    # A third redo is killed after moving the folder aside: its own intent rolls back; the cleanups finish.
+    assert run_with_crash(project, 'convert', 'moved-aside', *redo) == 137
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 0
+    assert_recovered(project)
+    assert receipt_id(published(project, 'convert')) == recorded_receipt(project, 'convert')
+
+
+def test_accepted_session_adopted_after_a_crash(project, tmp_path, converter, monkeypatch):
+    """A kill right after an accepted folder was swapped in: the next run adopts it with its accepted errors."""
+    project_at(project, tmp_path, converter, 'prepared')
+    options = ('--dcm2niix-bin', converter)
+    monkeypatch.setenv('FAKE_CONVERTER_EXIT', '1')
+    assert call(project, 'convert', *options) == 2
+    assert run_with_crash(project, 'convert', 'swapped', *options, '--accept-partial', KEY) == 137
+    assert call(project, 'convert', *options) == 0
+    assert history_rows(project)[-1]['reconciled'] == '1'
+    assert read_state(project)['sessions'][KEY]['conversion']['accepted_errors'] == ['dcm2niix exited with code 1']
+    assert not read_state(project)['issues']
+
+
+def test_remove_tree_leaves_link_targets_alone(tmp_path, monkeypatch):
+    """SB-28: making a protected tree writable never changes what a link inside it points to."""
+    monkeypatch.setattr(fsutil, 'LOCKED_RETRY_SECONDS', 0.2)
+    outside, root = tmp_path / 'outside', tmp_path / 'root'
+    (outside / 'shared_dir').mkdir(parents=True)
+    for name in ('symlink_target.txt', 'hardlink_target.txt'):
+        (outside / name).write_text('x')
+    links = {'hard_link': lambda p: os.link(outside / 'hardlink_target.txt', p)}
+    if os.name != 'nt':
+        links.update(link_to_dir=lambda p: os.symlink(outside / 'shared_dir', p, target_is_directory=True),
+                     link_to_file=lambda p: os.symlink(outside / 'symlink_target.txt', p))
+    tree = root / 'tree'
+    for name, make in links.items():
+        (tree / ('only_' + name)).mkdir(parents=True)  # each link alone, so it is the entry that fails
+        make(tree / ('only_' + name) / name)
+    os.chmod(outside / 'shared_dir', 0o555)
+    for name in ('symlink_target.txt', 'hardlink_target.txt'):
+        os.chmod(outside / name, stat.S_IREAD)
+    for folder in tree.iterdir():
+        if os.name == 'nt':
+            for path in folder.iterdir():
+                os.chmod(path, stat.S_IREAD)  # the read-only attribute is shared with the outside file
+        else:
+            os.chmod(folder, 0o555)  # a read-only folder inside the tree
+    before = {p.name: p.stat().st_mode for p in outside.iterdir()}
+    if os.name == 'nt':
+        # The read-only hard link is left alone, so the deletion gives up instead of unprotecting the file.
+        with pytest.raises(PermissionError):
+            fsutil.remove_tree(tree, root)
+    else:
+        fsutil.remove_tree(tree, root)
+        assert not tree.exists()
+    assert {p.name: p.stat().st_mode for p in outside.iterdir()} == before

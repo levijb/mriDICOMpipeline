@@ -597,7 +597,34 @@ def test_object_cut_inside_its_header_fails_the_zip(project, tmp_path, cut):
     assert call(project, 'prepare') == 2
     assert upload.exists() and not (project / EXTRACTED).exists()
     [issue] = prepare_issues(project)
-    assert 'Unreadable DICOM header' in state(project)['issues'][issue]['reason']
+    reason = state(project)['issues'][issue]['reason']
+    # SB-26: the member is located by position and size, never by its name (P8).
+    assert 'Unreadable DICOM header' in reason and f'(member 2 of 3, {at:,} bytes)' in reason
+    assert 'exam' not in reason
+
+
+def test_dicm_file_without_an_image_class_is_left_out(project, tmp_path):
+    """SB-26: a DICM file with only private elements (a vendor file) is left out, as before round 2."""
+    from pydicom.dataset import FileDataset, FileMetaDataset
+    from pydicom.uid import ExplicitVRLittleEndian
+    meta = FileMetaDataset()
+    meta.MediaStorageSOPClassUID, meta.MediaStorageSOPInstanceUID = '1.2.826.0.1.3680043.8.498.99', generate_uid()
+    meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    vendor = FileDataset(None, {}, file_meta=meta, preamble=b'\0' * 128)
+    vendor.add_new((0x0029, 0x0010), 'LO', 'VENDOR PRIVATE')
+    vendor.add_new((0x0029, 0x1001), 'OB', b'\1\2\3\4')
+    out = io.BytesIO()
+    vendor.save_as(out, enforce_file_format=True)
+    upload_members(project, {'exam/IM1': dicom_bytes(tmp_path), 'exam/vendor': out.getvalue()})
+    assert call(project, 'prepare') == 0
+    assert (inventory(project)['n_dicom'], inventory(project)['skipped_files']) == (1, 1)
+
+
+def test_big_endian_object_without_a_file_header_is_extracted(project, tmp_path):
+    """SB-26: an object with neither preamble nor file meta, in big-endian byte order, is still extracted."""
+    from pydicom.data import get_testdata_file
+    source = upload_members(project, {'exam/IM1': Path(get_testdata_file('ExplVR_BigEndNoMeta.dcm')).read_bytes()})
+    assert prepare.extract_archive(source, tmp_path / 'stage')['n_dicom'] == 1
 
 
 @pytest.mark.parametrize('content', [bytes(range(256)) * 16, bytes(4096), b'scan notes\n' * 200],

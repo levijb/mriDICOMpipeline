@@ -60,6 +60,12 @@ two machines (for example two cluster nodes) on the same storage:
   the original bytes are back clears it. If the new
   export is the one you want, move it out of `SubjectsSorted/` and upload it
   as a new session, for example `S001_20260725_2.zip`.
+* **`prepare:` issue, "Unreadable DICOM header in archive (member N of M,
+  X bytes)".** A file in the ZIP looks cut off, for example by an interrupted
+  export. The ZIP stays where it is. List its members in order
+  (`python -m zipfile -l <ZIP>`), find member N, and export that session
+  again. The reason never shows member names, because they can contain
+  patient names.
 * **`prepare:` issue, "Different DICOM contents for an existing session".**
   An upload carries different images under an existing session name. The ZIP
   stays in `Uploads/`. Rename it with an `_N` suffix if it is a separate

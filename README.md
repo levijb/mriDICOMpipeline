@@ -121,10 +121,12 @@ Viewer software, previews, DICOMDIR indices and non-DICOM files are omitted
 from extracted output; **extensionless DICOM objects are supported**. Archive
 member paths are not used as extraction paths. The original ZIP retains all
 ancillary files. ZIP members are streamed to completion to check their CRCs;
-obviously short uncompressed image objects are also rejected, and so is a
-member with the `DICM` mark or a `.dcm` name that cannot be read as an object
-(for example one cut off inside its header), or an MR image object without
-Rows or Columns. Objects that
+obviously short uncompressed image objects are also rejected, and so is an
+object that looks cut off: a member with the `DICM` mark or a `.dcm` name that
+cannot be read, a `DICM` file without a complete file meta group, or an MR
+image object without its SOP Class UID, Rows or Columns. Other `DICM` files
+without a SOP class (vendor files) are left out. Such a reason names the
+member by its position and size in the ZIP, never by its name. Objects that
 repeat byte for byte are stored once. A ZIP is held when two objects share a
 SOP Instance UID but differ, or when it holds more than one study; accept a
 genuine multi-study session with `--accept-multi-study SUBJECT/SESSION`.
@@ -181,7 +183,10 @@ incomplete, which makes dcm2niix exit with an error), review the issue and
 accept the session with `convert --accept-partial SUBJECT/SESSION`: it is
 converted again and published with every valid volume, the accepted errors
 are recorded in its receipt and in `session_status.csv`, and later runs treat
-it as done. A timeout or a session with no valid volume is never accepted.
+it as done. A timeout, or a session in which no MR image series converted
+(an excused series such as a screen capture does not count), is never
+accepted. The option accepts the errors of the run it is given to, so use it
+only after reviewing them.
 New/changed inputs are
 considered automatically. Interrupted, unfinished work is retried automatically
 on the next invocation, except an interrupted explicit reconversion.
@@ -328,8 +333,9 @@ whose ZIP has an open `prepare:` issue shows `held`),
 `dicom_instances`, `series`, `conversion_status` (`not_converted`,
 `converted`, `accepted_partial`, `partial`, `failed`, `interrupted`,
 `needs_conversion`, `output_modified`), `converted_volumes`, `archive`,
-`nifti_folder`, `required_series`, `converted_series`, `excused_series`
-(semicolon-separated series keys), `accepted_errors` (what
+`nifti_folder`, `required_series`, `converted_series`, `excused_series`,
+`missing_series` (semicolon-separated series keys; `converted_series` also
+lists converted excused series), `accepted_errors` (what
 `--accept-partial` accepted), `last_attempt_status` and
 `last_attempt_folder`. A converted session with a non-empty
 `last_attempt_status` kept its complete folder after a failed reconversion.

@@ -72,6 +72,7 @@ def reports(state, cfg, pairs, logger):
             "required_series": ";".join(coverage.get("required", [])),
             "converted_series": ";".join(coverage.get("converted", [])),
             "excused_series": ";".join(coverage.get("excused", [])),
+            "missing_series": ";".join(coverage.get("missing", [])),
             "accepted_errors": "; ".join(conv.get("accepted_errors", [])),
             "last_attempt_status": attempt.get("status", ""), "last_attempt_folder": attempt.get("output", "")})
     for path, data, fields in [

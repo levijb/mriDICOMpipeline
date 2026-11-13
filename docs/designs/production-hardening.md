@@ -339,6 +339,24 @@ section:
         Windows), including in the missing-ZIP check.
     *   SB-24: `-l o` is passed to dcm2niix, so saved defaults cannot rescale
         16-bit data.
+*   Fixed 2026-11-13 after the third testing round
+    (`docs/testing/2026-11-13_FINDINGS3.md`), each with a test:
+    *   SB-25: a cleanup that fails during reconciliation (after a crash)
+        also marks the intent `cleanup_only`, so a later run never rolls
+        the previous folder back.
+    *   SB-26: only objects that look cut off fail the ZIP (unreadable with
+        the `DICM` mark or a `.dcm` name, no complete file meta group, or an
+        MR image class without SOP Class UID, Rows or Columns); other
+        `DICM` files without a SOP class are left out again. Big-endian
+        objects without a preamble are recognized. Per-member reasons give
+        the member's position and size, never its name.
+    *   SB-27: `--accept-partial` needs at least one converted required
+        series; `session_status.csv` gains `missing_series`.
+    *   SB-28: the cleanup hook never changes a link's target: it skips
+        links, never changes POSIX files, and leaves a Windows file with
+        other hard links alone.
+    *   D-14: the unplaced-artifacts error says "not published" instead of
+        claiming the working files are kept.
 *   P7: `--dry-run --audit` keeps hashing, and the help text and README are
     corrected to say so. This keeps a dry integrity check possible.
 *   `prepare --audit` also re-hashes canonical ZIPs, so that a same-size,

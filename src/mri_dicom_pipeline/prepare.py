@@ -116,7 +116,8 @@ def extract_archive(source, stage, stop=None, accept_multi_study=False):
     files, series, study_keys, dates, seen = [], {}, set(), set(), {}
     skipped, pixel_bytes, repeated = 0, 0, 0
     with zipfile.ZipFile(source) as archive:
-        for member in archive.infolist():
+        members = archive.infolist()
+        for number, member in enumerate(members, 1):
             if stop is not None and stop.is_set():
                 raise InterruptedError("Preparation interrupted")
             if member.is_dir():
@@ -125,44 +126,50 @@ def extract_archive(source, stage, stop=None, accept_multi_study=False):
             if "ddv" in [p.lower() for p in parts] or Path(member.filename).suffix.lower() in SKIP_EXT:
                 skipped += 1
                 continue
+            # Where a refused object is, without its name: member paths can carry patient names (P8).
+            where = f"member {number:,} of {len(members):,}, {member.file_size:,} bytes"
             with archive.open(member) as f:
                 head = f.read(132)
                 magic = head[128:132] == b"DICM"
-                # A file with the DICM mark or a .dcm name must be a readable object (or a DICOMDIR).
-                claimed = magic or Path(member.filename).suffix.lower() == ".dcm"
-                if not magic and head[:2] not in (b"\x02\x00", b"\x08\x00"):
-                    # Without the mark, a DICOM object starts with group 0002 or 0008. Parsing other
-                    # bytes is pointless, and slow for zeros (SB-22).
-                    if claimed:
-                        raise ValueError("Unreadable DICOM header in archive")
+                named = Path(member.filename).suffix.lower() == ".dcm"
+                if not magic and head[:2] not in (b"\x02\x00", b"\x08\x00", b"\x00\x02", b"\x00\x08"):
+                    # Without the mark, a DICOM object starts with group 0002 or 0008 (either byte
+                    # order). Parsing other bytes is pointless, and slow for zeros (SB-22).
+                    if named:
+                        raise ValueError(f"Unreadable DICOM header in archive ({where})")
                     skipped += 1
                     continue
                 f.seek(0)
                 try:
                     ds = pydicom.dcmread(f, force=not magic, stop_before_pixels=True, specific_tags=DICOM_TAGS)
                 except Exception as e:
-                    if claimed:
-                        raise ValueError("Unreadable DICOM header in archive") from e
+                    if magic or named:
+                        raise ValueError(f"Unreadable DICOM header in archive ({where})") from e
                     skipped += 1
                     continue
-                media_class = str(getattr(getattr(ds, "file_meta", None), "MediaStorageSOPClassUID", ""))
+                meta = getattr(ds, "file_meta", None) or {}
+                media_class = str(meta.get("MediaStorageSOPClassUID", ""))
                 if DICOMDIR in (str(ds.get("SOPClassUID", "")), media_class):
                     skipped += 1
                     continue
                 if not ds.get("SOPClassUID"):
-                    if claimed:
-                        # For example an object cut off inside its header (SB-18).
-                        raise ValueError("Unreadable DICOM header in archive")
+                    # Left out like other non-image files, unless it looks like an object cut off inside
+                    # its header: a DICM file without a complete file meta group, or an MR image class in
+                    # the file meta with no SOP Class UID in the data set (SB-18, SB-26).
+                    if magic and (not media_class or not meta.get("TransferSyntaxUID")
+                                  or media_class in MR_IMAGE_SOP_CLASSES):
+                        raise ValueError(f"Unreadable DICOM header in archive ({where})")
                     skipped += 1
                     continue
                 if not (ds.get("SeriesInstanceUID") or ds.get("Modality")):
                     skipped += 1
                     continue
                 if str(ds.SOPClassUID) in MR_IMAGE_SOP_CLASSES and not (ds.get("Rows") and ds.get("Columns")):
-                    raise ValueError("Unreadable DICOM header in archive (an image object without Rows or Columns)")
+                    raise ValueError(f"Unreadable DICOM header in archive: an image object without Rows or "
+                                     f"Columns ({where})")
                 sop_uid = str(ds.get("SOPInstanceUID", ""))
                 if not sop_uid:
-                    raise ValueError("DICOM object missing SOPInstanceUID")
+                    raise ValueError(f"DICOM object missing SOPInstanceUID ({where})")
                 filename = f"{len(files)+1:08d}.dcm"
                 dest = dicom_dir / filename
                 f.seek(0)
@@ -189,12 +196,12 @@ def extract_archive(source, stage, stop=None, accept_multi_study=False):
                     expected_pixels = int(ds.get("Rows", 0)) * int(ds.get("Columns", 0)) * int(ds.get("SamplesPerPixel", 1)) * int(ds.get("BitsAllocated", 16)) // 8 * int(ds.get("NumberOfFrames", 1))
                     syntax = getattr(ds.file_meta, "TransferSyntaxUID", None)
                     if syntax and not syntax.is_compressed and not syntax.is_deflated and size < expected_pixels:
-                        raise ValueError("Uncompressed DICOM is smaller than its declared pixel dimensions")
+                        raise ValueError(f"Uncompressed DICOM is smaller than its declared pixel dimensions ({where})")
                 except (AttributeError, TypeError):
                     expected_pixels = 0
                 uid = str(ds.get("SeriesInstanceUID", ""))
                 if not uid:
-                    raise ValueError("DICOM object missing SeriesInstanceUID")
+                    raise ValueError(f"DICOM object missing SeriesInstanceUID ({where})")
                 key = hashlib.sha256(uid.encode()).hexdigest()[:20]
                 row = series.setdefault(key, {"series_key": key, "series_number": str(ds.get("SeriesNumber", "")),
                     "scan_type": classify.classify(str(ds.get("SeriesDescription", "")), str(ds.get("ProtocolName", "")),

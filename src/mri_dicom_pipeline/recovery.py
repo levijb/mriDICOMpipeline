@@ -130,7 +130,7 @@ def _resolve(intent, state, cfg, dry_run):
         if intent.get("attempt"):
             action = "kept the published attempt folder"
         elif found is not None and found == _recorded_receipt(state, intent):
-            action = "the result was already saved; removed leftover swap folders"
+            action = "the result was already saved"
         elif found is not None and found == intent["receipt_id"]:
             kind = "extract" if intent["stage"] == "prepare" else "convert"
             if receipts.adoptable(destination, kind, intent["expected_digest"]):
@@ -147,10 +147,13 @@ def _resolve(intent, state, cfg, dry_run):
             try:
                 fsutil.remove_tree(aside, root)
             except OSError as e:
-                # A file in it is still held open; the intent stays, so the next run tries again.
+                # A file in it is still held open. The destination is settled, so from now on later runs
+                # only retry the deletion and never move the previous folder back (SB-25).
+                mark_cleanup_only(cfg.reports, intent["id"])
                 return f"{action}; could not delete the previous folder {aside} yet ({type(e).__name__}), " \
                        "a later run retries", False
             fsutil.remove_tree(incoming, root)
+            action += "; removed leftover swap folders"
     elif aside.exists():
         action = "rolled back to the previous folder"
         if not dry_run:

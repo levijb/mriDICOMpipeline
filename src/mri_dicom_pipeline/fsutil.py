@@ -77,11 +77,17 @@ def remove_tree(path, root):
     path = owned(path, root)
 
     def make_writable(function, failed, _):
-        # A read-only file (Windows) or folder (POSIX) inside the tree, for example outputs someone
-        # protected: the tree is the pipeline's own, so make the entry and its folder writable and retry.
+        # A read-only folder (POSIX) or file (Windows) inside the tree, for example outputs someone
+        # protected: the tree is the pipeline's own, so make it writable and retry. Nothing a link points
+        # to is touched (SB-28): links are skipped, POSIX files never need it (deleting an entry needs
+        # write permission on its folder only), and a Windows file with other hard links is left alone.
         for target in {Path(failed), Path(failed).parent} - {path.parent}:
             try:
-                target.chmod(target.stat().st_mode | stat.S_IWRITE | (stat.S_IRWXU if target.is_dir() else 0))
+                info = target.lstat()
+                if stat.S_ISDIR(info.st_mode):
+                    target.chmod(info.st_mode | stat.S_IRWXU)
+                elif os.name == "nt" and stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
+                    target.chmod(info.st_mode | stat.S_IWRITE)
             except OSError:
                 pass
         function(failed)

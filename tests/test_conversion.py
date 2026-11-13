@@ -778,3 +778,83 @@ def test_not_enough_staging_space_fails_the_session(project, tmp_path, converter
     monkeypatch.setattr(convert.shutil, 'disk_usage', lambda path: usage(10**12, 10**12 - 10, 10))
     assert call(project, 'convert', '--dcm2niix-bin', converter) == 2
     assert 'Insufficient free staging space for this session' in state(project)['issues'][f'convert:{KEY}']['reason']
+
+
+# ---- Round 3: --accept-partial limits and lifecycle (SB-27, D-14) ---------------------------
+
+SECONDARY_CAPTURE = '1.2.840.10008.5.1.4.1.1.7'
+
+
+def test_accept_partial_needs_a_converted_required_series(project, tmp_path, converter, monkeypatch):
+    """SB-27: a session where only an excused series (a screen capture) converted is never accepted."""
+    study, mr = generate_uid(), generate_uid()
+    archive_objects(project, 'S001_20260725.zip', [
+        dicom_bytes(tmp_path, study=study, series=mr),
+        dicom_bytes(tmp_path, study=study, sop_class=SECONDARY_CAPTURE, description='Screen Save', series_number=90,
+                    fields={'Modality': 'OT'})])
+    assert call(project, 'prepare') == 0
+    monkeypatch.setenv('FAKE_CONVERTER_SKIP', mr)
+    assert call(project, 'convert', '--dcm2niix-bin', converter, '--accept-partial', KEY) == 2
+    assert conversion(project)['status'] == 'partial' and not (project / NIFTI).exists()
+    row = read_status(project)[KEY]
+    assert row['missing_series'] == row['required_series'] != ''
+
+
+STRAY_CONVERTER = '''
+import pathlib, subprocess, sys
+fake = pathlib.Path(__file__).with_name('fake_converter.py')
+code = subprocess.run([sys.executable, str(fake)] + sys.argv[1:]).returncode
+out = pathlib.Path(sys.argv[sys.argv.index('-o') + 1])
+(out / 'stray_output.txt').write_text('x')
+sys.exit(code)
+'''
+
+
+def test_accepted_unplaced_file_is_not_said_to_be_retained(project, tmp_path, converter):
+    """D-14: an accepted session's working files are deleted, so its recorded error must not say they are kept."""
+    stray = tmp_path / 'stray_converter.py'
+    stray.write_text(STRAY_CONVERTER)
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', stray) == 2
+    assert call(project, 'convert', '--dcm2niix-bin', stray, '--accept-partial', KEY) == 0
+    assert conversion(project)['accepted_errors'] == ['1 unresolved converter artifacts, not published']
+
+
+def accepted(project, tmp_path, converter, monkeypatch):
+    """A session accepted with --accept-partial after the converter exited 1 (it still does)."""
+    archive(project, 'S001_20260725.zip', dicom_bytes(tmp_path))
+    assert call(project, 'prepare') == 0
+    monkeypatch.setenv('FAKE_CONVERTER_EXIT', '1')
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 2
+    return ('--dcm2niix-bin', converter)
+
+
+def test_accept_partial_dry_run_changes_nothing(project, tmp_path, converter, monkeypatch, caplog):
+    options = accepted(project, tmp_path, converter, monkeypatch)
+    index = project / 'Reports/.state/index.json'
+    before = index.read_bytes()
+    assert call(project, 'convert', *options, '--dry-run', '--accept-partial', KEY) == 0
+    assert 'WOULD convert S001/20260725' in caplog.text
+    assert index.read_bytes() == before and not (project / NIFTI).exists()
+
+
+def test_accepted_session_lifecycle(project, tmp_path, converter, monkeypatch):
+    """An accepted session is cached by --audit; a failed reconversion keeps it; it survives state loss."""
+    options = accepted(project, tmp_path, converter, monkeypatch)
+    assert call(project, 'convert', *options, '--accept-partial', KEY) == 0
+    folder_receipt = receipt(project / NIFTI)
+    assert call(project, 'convert', *options, '--audit') == 0
+    assert call(project, 'convert', *options, '--audit', '--session', KEY) == 0
+    # A reconversion without the option fails again; the accepted folder stays.
+    assert call(project, 'convert', *options, '--force-reconvert', '--session', KEY) == 2
+    row = read_status(project)[KEY]
+    assert (row['conversion_status'], row['last_attempt_status']) == ('accepted_partial', 'partial')
+    assert receipt(project / NIFTI) == folder_receipt
+    assert call(project, 'convert', *options) == 0 and not state(project)['issues']  # pin: the issue clears
+    # State lost: both commands adopt the folders, and the acceptance is kept.
+    shutil.rmtree(project / 'Reports')
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', *options) == 0
+    assert conversion(project)['accepted_errors'] == ['dcm2niix exited with code 1']
+    assert read_status(project)[KEY]['conversion_status'] == 'accepted_partial'

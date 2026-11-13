@@ -115,7 +115,7 @@ def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_dat
             errors.append(f"Volume {token}: {type(e).__name__}: {e}")
     unhandled = [p.relative_to(raw).as_posix() for p in raw.rglob("*") if p.is_file() and p.relative_to(raw).as_posix() not in handled]
     if unhandled:
-        errors.append(f"{len(unhandled)} unresolved converter artifacts retained in working directory")
+        errors.append(f"{len(unhandled)} unresolved converter artifacts, not published")
     for p in sorted(output.rglob("*")):
         if p.is_file():
             files.append({"name": p.relative_to(output).as_posix(), "size": p.stat().st_size, "sha256": fsutil.sha256(p)})
@@ -276,9 +276,11 @@ def convert_one(entry, cfg, stop):
             errors.append("No valid NIfTI volumes produced")
         coverage = receipts.coverage(required, excused, converted_keys)
         errors += [f"Missing required series: {series_key}" for series_key in coverage["missing"]]
-        # --accept-partial: after review, a session with at least one valid volume is published with
-        # its errors recorded. A timeout is never accepted: its outcome can differ from run to run.
-        accepted = errors if errors and n_volumes and reason != "timeout" and key in cfg.accept_partial else []
+        # --accept-partial: after review, a session in which at least one required (MR image) series
+        # converted is published with its errors recorded; excused series alone do not count (SB-27).
+        # A timeout is never accepted: its outcome can differ from run to run.
+        some_required = set(coverage["converted"]) & set(coverage["required"])
+        accepted = errors if errors and some_required and reason != "timeout" and key in cfg.accept_partial else []
         complete = not errors or bool(accepted)
         provenance = {"package_version": __version__, "run_id": cfg.run_id,
                       "converter": str(Path(shutil.which(binary) or binary).resolve()),
