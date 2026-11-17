@@ -34,9 +34,13 @@ def run_converter(binary, objects, tmp_path):
     return result, output
 
 
-def converted_uids(output):
-    """SeriesInstanceUIDs of the NIfTI volumes, read from their series_<uid>_... names."""
-    return {p.name.split('_', 2)[1] for p in output.glob('series_*.nii')}
+def converted_uids(output, objects):
+    """SeriesInstanceUIDs of the NIfTI volumes; a name series_<uid>_... carries the UID of the volume's first image."""
+    series_of = {}
+    for data in objects:
+        ds = pydicom.dcmread(io.BytesIO(data), stop_before_pixels=True, force=True)
+        series_of[str(ds.SOPInstanceUID)] = str(ds.SeriesInstanceUID)
+    return {series_of.get(p.name.split('_', 2)[1]) for p in output.glob('series_*.nii')}
 
 
 def record(capsys, binary, case, returncode):
@@ -46,7 +50,7 @@ def record(capsys, binary, case, returncode):
 
 
 def test_real_converter_names_outputs_by_series_uid(project, tmp_path, real_dcm2niix):
-    """Output names carry the SeriesInstanceUID, so output keys equal inventory keys (Q6)."""
+    """Output names carry their first image's UID, which maps to its series, so output keys equal inventory keys (Q6)."""
     study = generate_uid()
     _, first = mr_series(tmp_path, study=study, description='T1 MPRAGE', series_number=2)
     _, second = mr_series(tmp_path, study=study, description='AX FLAIR', series_number=4)
@@ -77,7 +81,7 @@ def test_real_converter_with_non_image_object_converts(project, tmp_path, real_d
     record(capsys, real_dcm2niix, 'image series plus a CSA Non-Image object', result.returncode)
     assert result.returncode == 0, ('dcm2niix exited nonzero with a non-image object present; '
                                     'Q19 must be reopened\n' + result.stdout + result.stderr)
-    assert converted_uids(output) == {uid}
+    assert converted_uids(output, image + [non_image]) == {uid}
     archive_objects(project, 'S001_20260725.zip', image + [non_image])
     assert call(project, 'prepare') == 0
     assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
@@ -99,7 +103,7 @@ def test_real_converter_unconvertible_series_makes_session_partial(project, tmp_
     _, bad = unconvertible_series(tmp_path, kind, study=study, description='AX FLAIR', series_number=4)
     result, output = run_converter(real_dcm2niix, image + bad, tmp_path)
     record(capsys, real_dcm2niix, f'good series plus an unconvertible series ({kind})', result.returncode)
-    assert converted_uids(output) == {good}
+    assert converted_uids(output, image + bad) == {good}
     archive_objects(project, 'S001_20260725.zip', image + bad)
     assert call(project, 'prepare') == 0
     assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 2
@@ -257,7 +261,7 @@ def test_real_converter_with_other_sop_classes_converts(project, tmp_path, real_
     others = other_class_objects(tmp_path, study)
     result, output = run_converter(real_dcm2niix, image + others, tmp_path)
     record(capsys, real_dcm2niix, f'MR series plus {len(others)} objects of other classes', result.returncode)
-    assert result.returncode == 0 and uid in converted_uids(output)
+    assert result.returncode == 0 and uid in converted_uids(output, image + others)
     archive_objects(project, 'S001_20260725.zip', image + others)
     assert call(project, 'prepare') == 0
     assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0

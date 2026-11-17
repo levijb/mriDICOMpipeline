@@ -664,7 +664,17 @@ session that misses any series is `partial`.
 *   This fixes P1 whether or not `dcm2niix` exits 0 when it skips a series.
 *   The check compares inventory `series_key` values with each output's
     `source_series_key`. Both are the first 20 hex characters of SHA-256 of
-    the SeriesInstanceUID, so no image is read again. The fallback in
+    the SeriesInstanceUID. Output names carry the instance UID of each
+    volume's first image (`%o`). `convert` maps it to a series key by reading
+    the SOP Instance UID and SeriesInstanceUID of the extracted headers,
+    without pixel data.
+    *   **Change (2026-11-17):** until then names carried `%j`, which was
+        assumed to be the SeriesInstanceUID, so no image was read again.
+    *   **Why it changed:** for Siemens XA images exported as classic
+        DICOM, `dcm2niix` writes the SeriesTime as `%j` (its issue 394).
+        Series can share a time. In the production run, seven sessions
+        therefore reported every series missing.
+    *   The fallback in
     `organize_conversion`, which uses a stem token when the output name does
     not start with `series_`, cannot match an inventory key. Such an output
     therefore counts toward volumes but not toward series coverage.
@@ -1125,7 +1135,7 @@ responsibility. Supported converter versions are listed by version only.
     scanner-specific conversion bug goes unnoticed by the package.
 *   Smoke tests with the real converter on *synthetic* DICOM objects
     generated with `pydicom` are still needed. They check the pipeline's
-    assumptions about `dcm2niix`: the `series_%j_…` output naming used by
+    assumptions about `dcm2niix`: the `series_%o_…` output naming (`%j` until 2026-11-17) used by
     the Q6 series check, exit codes when a series is skipped (P1), and
     behavior with non-image objects in the input (Q19). They need no
     approved data. They run right after the move-only step, before Q6 and

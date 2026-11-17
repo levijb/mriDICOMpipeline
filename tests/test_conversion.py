@@ -61,6 +61,20 @@ def test_missing_required_series_is_partial(project, tmp_path, converter, monkey
     assert 'Missing required series' in json.dumps(state(project)['issues'])
 
 
+def test_series_sharing_number_and_time_both_convert(project, tmp_path, converter, monkeypatch):
+    """dcm2niix names Siemens XA classic exports by SeriesTime in place of the SeriesInstanceUID (its
+    issue 394), so output names carry each volume's first image UID instead. A scan and its one-image
+    key-image series share a series number and time; both convert (production run of 2026-11-16)."""
+    monkeypatch.setenv('FAKE_CONVERTER_XA', '1')
+    study, scan, key_images, fields = generate_uid(), generate_uid(), generate_uid(), {'SeriesTime': '164343'}
+    objects = [dicom_bytes(tmp_path, study=study, series=uid, series_number=3, description=description, fields=fields)
+               for uid, description in ((scan, 'SAG FLAIR'), (key_images, 'KEY_IMAGES PR'))]
+    folder = converted(project, tmp_path, converter, objects)
+    sidecars = [p for p in folder.rglob('*.json') if not p.name.startswith('.')]
+    assert {json.loads(p.read_text())['source_series_key'] for p in sidecars} == {
+        hashlib.sha256(uid.encode()).hexdigest()[:20] for uid in (scan, key_images)}
+
+
 def test_complete_session_not_reconverted_when_folder_modified(project, tmp_path, converter, monkeypatch):
     """P10: a file added to a complete folder stays, and nothing is reconverted."""
     folder = converted(project, tmp_path, converter)
@@ -203,9 +217,9 @@ def test_converter_that_cannot_start_fails_the_session(project, tmp_path):
 
 # ---- Organizing converter output (plan D-01; the _ROI1 failure of 2026-11-10) -----------
 
-SERIES_UID = '1.2.826.0.1.3680043.8.498.1'
+SERIES_UID, IMAGE_UID = '1.2.826.0.1.3680043.8.498.1', '1.2.826.0.1.3680043.8.498.2'
 SERIES_KEY = hashlib.sha256(SERIES_UID.encode()).hexdigest()[:20]
-STEM = f'series_{SERIES_UID}_5_1'
+STEM = f'series_{IMAGE_UID}_5_1'
 # Suffixes dcm2niix adds to an output name: echo, phase, real and imaginary parts, coil, unstacked
 # image number, name collisions, derived ADC, motion-corrected, equalized spacing, tilt-corrected.
 NAMED_VARIANTS = ['', '_e2', '_ph', '_e2_ph', '_real', '_imaginary', '_c1', '_i00001', 'a', 'b', '_ADC', '_MoCo',
@@ -227,7 +241,7 @@ def raw_output(tmp_path, stems):
 def organize(tmp_path, raw):
     """(volumes, published file names, errors, series keys) for a converter output folder."""
     volumes, files, errors, keys, _ = convert.organize_conversion(raw, tmp_path / 'organized', 'S001', '20260725',
-                                                                 'archive-digest')
+                                                                 'archive-digest', series_of={IMAGE_UID: SERIES_KEY})
     return volumes, sorted(Path(item['name']).name for item in files), errors, keys
 
 

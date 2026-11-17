@@ -23,7 +23,10 @@ from . import __version__, classify, config, fsutil, nifti, receipts, recovery, 
 STOP_RETURN_CODES = set() if os.name == "nt" else {-signal.SIGTERM, -signal.SIGKILL}
 # Options passed to dcm2niix before "-o OUTPUT INPUT"; recorded in provenance (Q8).
 # "-l o" is dcm2niix's default, passed so that defaults saved on the account cannot rescale 16-bit data.
-CONVERTER_OPTIONS = ["-z", "n", "-b", "y", "-ba", "y", "-l", "o", "-c", "", "-d", "9", "-f", "series_%j_%s_%e"]
+# "%o" names each output after its first image's instance UID, which series_by_image maps to a series.
+# The series UID (%j) cannot be used: for Siemens XA images exported as classic DICOM, dcm2niix writes
+# the SeriesTime there (its issue 394), and series can share a time.
+CONVERTER_OPTIONS = ["-z", "n", "-b", "y", "-ba", "y", "-l", "o", "-c", "", "-d", "9", "-f", "series_%o_%s_%e"]
 CONTROL_FILES = {receipts.RECEIPT, receipts.INVENTORY}
 IDENTIFYING = re.compile(r"patient.?name|patient.?id|accession|birth.?date|physician|institution|station.?name|serial.?number", re.I)
 # dcm2niix writes some volumes with no sidecar of their own, each named after
@@ -43,14 +46,33 @@ def _nifti_stem(path):
     return path.name[:-7] if path.name.endswith(".nii.gz") else path.stem
 
 
-def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_date=None, stop=None):
+def series_by_image(root, inventory, stop=None):
+    """The series key of each extracted image, by its instance UID (the %o in an output name)."""
+    import pydicom
+    found = {}
+    for item in inventory["files"]:
+        if stop is not None and stop.is_set():
+            raise InterruptedError("Conversion interrupted")
+        ds = pydicom.dcmread(Path(root) / item["name"], force=True, stop_before_pixels=True,
+                             specific_tags=["SOPInstanceUID", "SeriesInstanceUID"])
+        key = hashlib.sha256(str(ds.get("SeriesInstanceUID", "")).encode()).hexdigest()[:20]
+        for uid in (ds.get("SOPInstanceUID"), ds.file_meta.get("MediaStorageSOPInstanceUID")):
+            if uid:
+                found[str(uid)] = key
+    return found
+
+
+def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_date=None, stop=None, series_of=None):
     """Validate, gzip and file the converter output by scan type.
 
     dicom_study_date is the StudyDate found in the session's DICOM headers,
     kept apart from session_date, which comes from the ZIP name.
+    series_of maps an image's instance UID to its series key: an output named
+    series_<uid>_... belongs to that image's series.
     A stop raises InterruptedError before the next volume (Q12).
     Returns (volumes, files, errors, converted series keys, converter versions).
     """
+    series_of = series_of or {}
     output.mkdir()
     files, errors, volumes, converted_keys, versions = [], [], 0, set(), set()
     handled = {p.name for p in raw.iterdir() if PHYSIO.search(p.name)}
@@ -85,7 +107,7 @@ def organize_conversion(raw, output, sid, label, archive_digest, dicom_study_dat
                 raise ValueError("Colliding converter output name; original retained")
             nifti.validate_and_gzip(nii, dest)
             image_valid = True
-            series_key = hashlib.sha256(stem.split("_", 2)[1].encode()).hexdigest()[:20] if stem.startswith("series_") and "_" in stem[7:] else token
+            series_key = series_of.get(stem.split("_", 2)[1], token) if stem.startswith("series_") and "_" in stem[7:] else token
             enriched = nifti.clean_metadata(metadata)
             enriched.update(subject_id=sid, session=label, session_date=label[:8],
                             dicom_study_date=dicom_study_date, scan_type=scan,
@@ -269,8 +291,9 @@ def convert_one(entry, cfg, stop):
         organized = stage / "organized"
         # Normally one date; several are comma-separated; None when the headers carry no StudyDate.
         dicom_study_date = ",".join(inventory.get("header_dates", [])) or None
+        series_of = series_by_image(entry["extraction"]["root"], inventory, stop)
         n_volumes, file_list, organize_errors, converted_keys, versions = organize_conversion(
-            raw, organized, sid, label, entry["archive_sha256"], dicom_study_date, stop)
+            raw, organized, sid, label, entry["archive_sha256"], dicom_study_date, stop, series_of)
         errors += organize_errors
         if not n_volumes:
             errors.append("No valid NIfTI volumes produced")

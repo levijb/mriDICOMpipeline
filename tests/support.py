@@ -215,7 +215,10 @@ def archive_objects(root, relative, objects):
 
 
 FAKE_CONVERTER = '''
-"""Fake dcm2niix for tests: one volume per input image series, named by its SeriesInstanceUID.
+"""Fake dcm2niix for tests: one volume per input image series, named by the -f pattern.
+
+The pattern's %o is the UID of the series' first image, %j its SeriesInstanceUID, %s its
+series number and %e the echo number 1.
 
 Switches (environment variables):
   FAKE_CONVERTER_EXIT     exit code (default 0)
@@ -226,12 +229,15 @@ Switches (environment variables):
   FAKE_CONVERTER_KEEP     folder to copy the raw .nii output into
   FAKE_CONVERTER_OVERLAY  also write <volume>_ROI1.nii, a mask with no sidecar, as dcm2niix does
                           for a DICOM overlay plane
+  FAKE_CONVERTER_XA       write the SeriesTime for %j, as dcm2niix does for Siemens XA images
+                          exported as classic DICOM (its issue 394)
 """
 import json, os, pathlib, shutil, struct, subprocess, sys, time
 import pydicom
 
 args = sys.argv
 out, source = pathlib.Path(args[args.index('-o') + 1]), pathlib.Path(args[-1])
+pattern = args[args.index('-f') + 1]
 skip = set(filter(None, os.environ.get('FAKE_CONVERTER_SKIP', '').split(',')))
 series = {}
 for path in sorted(source.iterdir()):
@@ -239,7 +245,9 @@ for path in sorted(source.iterdir()):
     if 'Rows' in ds and str(ds.get('SeriesInstanceUID', '')) not in skip:
         series.setdefault(str(ds.SeriesInstanceUID), ds)
 for uid, ds in series.items():
-    stem = 'series_%s_%s_1' % (uid, ds.get('SeriesNumber', 1))
+    series_uid = str(ds.get('SeriesTime', '')) if os.environ.get('FAKE_CONVERTER_XA') else uid
+    stem = (pattern.replace('%o', str(ds.file_meta.get('MediaStorageSOPInstanceUID', '')))
+            .replace('%j', series_uid).replace('%s', str(ds.get('SeriesNumber', 1))).replace('%e', '1'))
     h = bytearray(352)
     struct.pack_into('<i', h, 0, 348)
     struct.pack_into('<8h', h, 40, 3, 2, 2, 1, 1, 1, 1, 1)

@@ -28,5 +28,5 @@ def project(tmp_path):
 
 @pytest.fixture
 def converter(tmp_path):
-    """A fake dcm2niix that names each output by its input SeriesInstanceUID (support.FAKE_CONVERTER)."""
+    """A fake dcm2niix that names each output by the -f pattern (support.FAKE_CONVERTER)."""
     return fake_converter_script(tmp_path / 'fake_converter.py')
