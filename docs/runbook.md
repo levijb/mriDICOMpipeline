@@ -1,9 +1,7 @@
 # Operator runbook
 
-Procedures for running `mri-dicom-pipeline` on study data. The behavior
-behind each procedure is specified in
-[`designs/production-hardening.md`](designs/production-hardening.md); the
-README describes the commands and reports.
+Procedures for running `mri-dicom-pipeline` on study data. The README
+describes the commands and reports.
 
 Every command prints where its logs and reports are. Start with
 `Reports/pipeline.log`, then `Reports/issues.csv`. Exit code 0 means nothing
