@@ -19,7 +19,7 @@ import sys
 import threading
 import time
 
-from . import config, convert, identity, locks, prepare, recovery, reports
+from . import config, convert, identity, locks, prepare, recovery, reports, selection
 from .state import State
 
 
@@ -83,10 +83,15 @@ def main(phase, argv=None):
         # A lock on every root the command touches, so commands that share any
         # root exclude each other whatever their project roots (Q13). Dry runs
         # take no lock.
+        if phase == "select":
+            target = selection.run
+        else:
+            def target(cfg, ids, pairs, roster_warnings, stopper):
+                return run(cfg, phase, ids, pairs, roster_warnings, stopper)
         if cfg.dry_run:
-            return run(cfg, phase, ids, pairs, roster_warnings, stopper)
+            return target(cfg, ids, pairs, roster_warnings, stopper)
         with locks.RootLocks(cfg.lock_roots, phase, cfg.run_id):
-            return run(cfg, phase, ids, pairs, roster_warnings, stopper)
+            return target(cfg, ids, pairs, roster_warnings, stopper)
     except (ValueError, RuntimeError, OSError) as e:
         logger = logging.getLogger("mri_dicom_pipeline")
         if logger.handlers:

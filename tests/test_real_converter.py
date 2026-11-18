@@ -6,6 +6,7 @@ prints the dcm2niix version and the exit code it observed, so a CI log records
 the evidence. Step 1 of the production-hardening plan checks dcm2niix's own
 behavior; step 7 adds the session-level assertions.
 """
+import csv
 import gzip
 import io
 import json
@@ -16,6 +17,7 @@ import pydicom
 from pydicom.uid import generate_uid
 import pytest
 
+from mri_dicom_pipeline import runner
 from mri_dicom_pipeline.convert import CONVERTER_OPTIONS as CONVERTER_ARGS  # what convert_one passes before -o
 from support import (CSA_NON_IMAGE_STORAGE, OTHER_SOP_CLASSES, UNCONVERTIBLE_SYNTAXES, archive_objects, call,
                      csa_non_image_bytes, dicom_bytes, mr_series, non_image_bytes, other_class_objects, state,
@@ -430,3 +432,58 @@ def test_real_converter_incomplete_4d_series_needs_acceptance(project, tmp_path,
     assert conversion['status'] == 'converted' and 'dcm2niix exited with code 1' in conversion['accepted_errors']
     assert list((project / 'Niftis/Subjects/S001/20260725/OTHER').glob('*.nii.gz'))
     assert not state(project)['issues']
+
+
+# ---- scan selection on real converter output (design: scan selection, 10.5) -------------------------------------
+
+SELECT_PROFILE = {'roles': {role: {'min_extent_mm': None} for role in ('T1', 'T1_POST', 'T2', 'FLAIR')}}
+
+
+def run_select(project, tmp_path, *extra):
+    profile = tmp_path / 'profile.json'
+    profile.write_text(json.dumps(SELECT_PROFILE))
+    return runner.main('select', ['--project-root', str(project), '--profile', str(profile), '--publish', *extra])
+
+
+def test_real_converter_select_native_t1_and_reformat(project, tmp_path, real_dcm2niix):
+    """The native 3D T1 is selected, its reformat goes to OTHER/T1, and real output names join their series."""
+    study, frame = generate_uid(), generate_uid()
+    t1 = {'MRAcquisitionType': '3D', 'ScanningSequence': ['GR'], 'SequenceVariant': ['SS'], 'ScanOptions': ['IR_GEMS'],
+          'RepetitionTime': 6.0, 'EchoTime': 2.4, 'InversionTime': 450.0, 'FlipAngle': 13.0, 'FrameOfReferenceUID': frame,
+          'AcquisitionTime': '100500', 'AcquisitionMatrix': [0, 16, 16, 0], 'InPlanePhaseEncodingDirection': 'ROW',
+          'ImageType': ['ORIGINAL', 'PRIMARY', 'OTHER'], **GE}
+    _, native = mr_series(tmp_path, slices=20, study=study, description='SAG 3D T1 BRAVO', series_number=3, rows=16,
+                          columns=16, fields=t1)
+    _, reformat = mr_series(tmp_path, slices=20, study=study, description='AX T1 REFORMAT', series_number=300,
+                            rows=16, columns=16, fields=dict(t1, ImageType=['DERIVED', 'SECONDARY', 'REFORMATTED']))
+    archive_objects(project, 'S001_20260725.zip', native + reformat)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
+    assert run_select(project, tmp_path, '--extras') == 0
+    out = project / 'Selected/Subjects/S001/20260725'
+    assert len(list((out / 'T1').glob('*.nii.gz'))) == 1 and len(list((out / 'OTHER/T1').glob('*.nii.gz'))) == 1
+    with (project / 'Selected/selection.csv').open(newline='') as f:
+        t1_row = next(r for r in csv.DictReader(f) if r['role'] == 'T1')
+    assert (t1_row['outcome'], t1_row['family'], t1_row['series_numbers']) == ('selected', 'T1_3D_IRGRE', '3')
+
+
+def test_real_converter_select_keeps_the_adc_companion_with_its_dwi(project, tmp_path, real_dcm2niix):
+    """The dcm2niix _ADC companion of a GE diffusion series is copied next to its volume, never as a candidate."""
+    flags, b_values = [14, 3, 4, 5, 15], [0, 1000, 1000, 1000, 1000]
+
+    def diffusion(v):
+        return [((0x0043, 0x1039), 'IS', [b_values[v], 8, 0, 0]), ((0x0019, 0x10BB), 'DS', 0),
+                ((0x0019, 0x10BC), 'DS', 0), ((0x0019, 0x10BD), 'DS', 0), ((0x0019, 0x10E0), 'DS', 0),
+                ((0x0043, 0x1030), 'SS', flags[v])]
+
+    objects = volumes_of(tmp_path, 5, common=dict(GE, ScanningSequence='EP', SeriesDescription='AX DWI'),
+                         private=GE_CREATORS, per_volume=diffusion)
+    archive_objects(project, 'S001_20260725.zip', objects)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
+    run_select(project, tmp_path, '--extras')
+    out = project / 'Selected/Subjects/S001/20260725'
+    [volume] = [p for p in out.rglob('*.nii.gz') if not p.name.endswith('_ADC.nii.gz')]
+    stem = volume.name[:-len('.nii.gz')]
+    assert all((volume.parent / (stem + suffix)).exists() for suffix in ('_ADC.nii.gz', '.bval', '.bvec', '.json'))
+    assert volume.parent.name == 'DWI' or volume.parent.parent.name == 'OTHER'

@@ -132,6 +132,110 @@ two machines (for example two cluster nodes) on the same storage:
   A plain `convert` leaves it; convert it again with
   `mri-dicom-pipeline convert --force-reconvert --session S001/20260725`.
 
+## Choosing scans with select
+
+Run `select` on converted sessions, first without publishing:
+
+```bash
+mri-dicom-pipeline select --dry-run      # prints the decisions, writes nothing
+mri-dicom-pipeline select                # writes Selected/selection.csv and selection_volumes.csv
+mri-dicom-pipeline select --publish      # also builds Selected/Subjects/<id>/<session>/
+```
+
+For a project that needs only some subjects, give it its own folder:
+
+```bash
+mri-dicom-pipeline select --publish --subjects project_ids.csv --output-root /data/ProjectX
+```
+
+`project_ids.csv` needs a `subject_id` column (or the column named by
+`--subject-column`). The output folder gets its own `selection.csv`,
+`selection_volumes.csv` and session folders. Sessions already in it from
+another subject list are left as they are. Only the selected scans are
+copied; `--extras` also copies the others into `OTHER/<modality>/`.
+
+Narrow the selection with the options in the README ("Scan selection"), for
+example a project that needs 1 mm isotropic 3D T1 and FLAIR from 3 T
+scanners, in sessions that have both:
+
+```bash
+mri-dicom-pipeline select --publish --subjects project_ids.csv --output-root /data/ProjectX \
+    --modalities T1,FLAIR --3d-only --isotropic --max-voxel-mm 1.2 --field-strength 3 --complete-only
+```
+
+Run it once without `--publish` and read `selection.csv`: `reasons` shows
+which requirement ruled scans out (`not_isotropic(1)`, `voxel_too_large(2)`),
+and the `session_incomplete` warning marks sessions left out by
+`--complete-only`. Use a new output folder when the criteria change, so each
+folder holds one consistent set.
+
+### Reviewing selection.csv
+
+Look at every row whose `outcome` is not `selected`, `kept_all` or `missing`:
+
+* **`selected_fallback`:** the best scan available is below the consensus
+  tier (`tier` names which one, for example `2d_clinical`). Nothing needs
+  doing unless your analysis requires the consensus tier.
+* **`review_required`:** the rules could not choose. The modality folder in
+  the published session is empty and the candidates are in
+  `OTHER/<modality>/`. `reasons` says why:
+  * `repeat_needs_review`: two or more scans of one protocol; `rule_recommendation`
+    is the later one. Look at both and choose.
+  * `duplicate_series`: two series hold the same acquisition, usually an
+    archive copy; choose either.
+  * `derived_unlinked`, `parent_review`, `multiple_derived_for_source`: a
+    scanner map (ADC, EADC, minIP, QSM) could not be tied to one source.
+  * `contrast_unknown`: the T1 may be postcontrast.
+  * `label_parameter_conflict`: the description and the sequence parameters
+    disagree, for example a FLAIR described as T1.
+  * `orphan_phase`: phase images did not group with the magnitude images.
+  * `metadata_unavailable(N)`, `no_gradient_table(N)`, `native_unknown(N)` and
+    similar counts: headers lack a field the rules or a requirement need (for
+    example `--isotropic` without an acquisition matrix). Check the scans in
+    `selection_volumes.csv`; `choose` one if it meets your criteria.
+  * `override_stale`: an override names a candidate that no longer exists
+    (its files changed); update or remove the row.
+* **`no_eligible_candidate`:** every candidate was ruled out; `reasons` counts
+  the reasons, for example `postcontrast(2)`, `not_3d(1)` or `not_isotropic(1)`.
+* **`session_excluded`:** the session's scanner failed `--field-strength` or
+  `--manufacturer`; nothing from it is copied. `field_strength_unknown` and
+  `manufacturer_unknown` (outcome `review_required`) mean the headers do not
+  say; check the scanner and run without that option for the session.
+* **`source_not_ready`:** the session was not evaluated. `not_converted`
+  needs `convert` first; `output_modified` and `extraction_invalid` follow
+  the procedures above.
+
+To decide, add a row to `selection_overrides.csv` in the project folder
+(`--overrides FILE` names another), then run `select` again:
+
+```text
+subject_id,session,role,action,candidate_id,note
+S001,20260725,T1,choose,3f2a9c41b7d0,later repeat has less motion
+S001,20260725,FLAIR,exclude,8e01d2c3a4b5,motion
+S002,20260801,DWI,none,,no usable diffusion
+```
+
+`candidate_id` comes from `selection.csv` (`candidate_id`,
+`rule_recommendation`, `runner_up`) or `selection_volumes.csv`. `choose`
+selects that candidate, `exclude` rules it out (record QC failures this way),
+and `none` leaves the folder empty. Extra columns such as `note` are ignored
+and never copied. An invalid row stops the run with its row number.
+
+### The Selected folder
+
+Files in `Selected/` (or the `--output-root` folder) are copies, so the
+folder can serve as a separate analysis project with `Niftis/` as its
+backup. A later `select --publish` replaces a session whose decisions changed,
+and leaves an unchanged session alone. It refuses to replace a session that
+holds files not in its inventory, such as analysis outputs saved inside it;
+the run exits 2 and names them. Move them out and run again. A folder
+without a selection receipt is never replaced.
+
+If a `--publish` run is killed, the next `--publish` run finishes or undoes
+the interrupted publication before it starts and logs `RECONCILED` when it
+restores a folder. `Reports/.selection_cache/` can be deleted at any time;
+the next run reads the DICOM headers again.
+
 ## Explicit reconversion
 
 A complete session is never reconverted automatically. To reconvert one, for

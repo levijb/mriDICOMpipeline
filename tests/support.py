@@ -231,6 +231,10 @@ Switches (environment variables):
                           for a DICOM overlay plane
   FAKE_CONVERTER_XA       write the SeriesTime for %j, as dcm2niix does for Siemens XA images
                           exported as classic DICOM (its issue 394)
+  FAKE_CONVERTER_DIMS     realistic output for selection tests: dims (Columns, Rows, images in the
+                          series), sidecar timing and sequence fields from the DICOM, and .bval/.bvec
+                          only for a series whose ImageComments is JSON with "bval" and "bvec"
+                          (4D then); a "sidecar" object in that JSON adds sidecar fields
 """
 import json, os, pathlib, shutil, struct, subprocess, sys, time
 import pydicom
@@ -239,25 +243,36 @@ args = sys.argv
 out, source = pathlib.Path(args[args.index('-o') + 1]), pathlib.Path(args[-1])
 pattern = args[args.index('-f') + 1]
 skip = set(filter(None, os.environ.get('FAKE_CONVERTER_SKIP', '').split(',')))
-series = {}
+dims_mode = bool(os.environ.get('FAKE_CONVERTER_DIMS'))
+series, counts = {}, {}
 for path in sorted(source.iterdir()):
     ds = pydicom.dcmread(path, stop_before_pixels=True, force=True)
     if 'Rows' in ds and str(ds.get('SeriesInstanceUID', '')) not in skip:
         series.setdefault(str(ds.SeriesInstanceUID), ds)
+        counts[str(ds.SeriesInstanceUID)] = counts.get(str(ds.SeriesInstanceUID), 0) + 1
 for uid, ds in series.items():
     series_uid = str(ds.get('SeriesTime', '')) if os.environ.get('FAKE_CONVERTER_XA') else uid
     stem = (pattern.replace('%o', str(ds.file_meta.get('MediaStorageSOPInstanceUID', '')))
             .replace('%j', series_uid).replace('%s', str(ds.get('SeriesNumber', 1))).replace('%e', '1'))
+    comments = str(ds.get('ImageComments', ''))
+    extra = json.loads(comments) if dims_mode and comments.startswith('{') else {}
+    shape = (2, 2, 1)
+    if dims_mode:
+        shape = (int(ds.Columns), int(ds.Rows), counts[uid]) + ((len(extra['bval']),) if extra.get('bval') else ())
+    voxels = 1
+    for n in shape:
+        voxels *= n
     h = bytearray(352)
     struct.pack_into('<i', h, 0, 348)
-    struct.pack_into('<8h', h, 40, 3, 2, 2, 1, 1, 1, 1, 1)
+    struct.pack_into('<8h', h, 40, len(shape), *shape, *([1] * (7 - len(shape))))
     struct.pack_into('<h', h, 70, 4)
     struct.pack_into('<h', h, 72, 16)
     struct.pack_into('<f', h, 108, 352)
     h[344:348] = b'n+1\\0'
     h[148:165] = b'FAKE_PRIVATE_NAME'
     h[228:243] = b'FAKE_PRIVATE_ID'
-    (out / (stem + '.nii')).write_bytes(bytes(h) + struct.pack('<4h', 1, 2, 3, 4))
+    data = bytes(2 * voxels) if dims_mode else struct.pack('<4h', 1, 2, 3, 4)
+    (out / (stem + '.nii')).write_bytes(bytes(h) + data)
     if os.environ.get('FAKE_CONVERTER_OVERLAY'):
         struct.pack_into('<hh', h, 70, 2, 8)  # uint8
         (out / (stem + '_ROI1.nii')).write_bytes(bytes(h) + bytes([1, 0, 0, 0]))
@@ -267,9 +282,28 @@ for uid, ds in series.items():
                'ConversionSoftware': 'fake', 'ConversionSoftwareVersion': 'fake-1.0'}
     if 'ImageType' in ds:
         sidecar['ImageType'] = list(ds.ImageType)
+    if dims_mode:
+        sidecar.pop('EchoTime')
+        for key, scale in (('RepetitionTime', 1000.0), ('EchoTime', 1000.0), ('InversionTime', 1000.0),
+                           ('FlipAngle', 1.0)):
+            if key in ds:
+                sidecar[key] = float(ds.get(key)) / scale
+        if 'MRAcquisitionType' in ds:
+            sidecar['MRAcquisitionType'] = str(ds.MRAcquisitionType)
+        for key in ('ScanningSequence', 'SequenceVariant'):
+            if key in ds:
+                value = ds.get(key)
+                sidecar[key] = value if isinstance(value, str) else '_'.join(value)
+        if 'EchoNumbers' in ds:
+            sidecar['EchoNumber'] = int(ds.EchoNumbers)
+        sidecar.update(extra.get('sidecar', {}))
     (out / (stem + '.json')).write_text(json.dumps(sidecar))
-    (out / (stem + '.bval')).write_text('0 1000')
-    (out / (stem + '.bvec')).write_text('0 1\\n0 0\\n0 0\\n')
+    if not dims_mode:
+        (out / (stem + '.bval')).write_text('0 1000')
+        (out / (stem + '.bvec')).write_text('0 1\\n0 0\\n0 0\\n')
+    elif extra.get('bval'):
+        (out / (stem + '.bval')).write_text(' '.join(str(b) for b in extra['bval']))
+        (out / (stem + '.bvec')).write_text('\\n'.join(' '.join(str(x) for x in row) for row in extra['bvec']) + '\\n')
 keep = os.environ.get('FAKE_CONVERTER_KEEP')
 if keep:
     pathlib.Path(keep).mkdir(parents=True, exist_ok=True)
@@ -337,7 +371,8 @@ def run_with_crash(root, phase, point, *extra):
     """
     env = child_env()
     code = 'import sys, support; support._crash_child(sys.argv[1], sys.argv[2], sys.argv[3:])'
-    args = [sys.executable, '-c', code, point, phase, '--project-root', str(root), '--workers', '1', *map(str, extra)]
+    workers = [] if phase == 'select' else ['--workers', '1']  # select has no workers option
+    args = [sys.executable, '-c', code, point, phase, '--project-root', str(root), *workers, *map(str, extra)]
     result = subprocess.run(args, env=env, capture_output=True, text=True)
     if result.returncode != 137:
         print(f'crash point {point!r} not reached; child output:\n{result.stdout[-3000:]}\n{result.stderr[-3000:]}')

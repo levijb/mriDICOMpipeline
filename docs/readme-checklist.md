@@ -63,4 +63,22 @@ establishes it. Review this list whenever the README changes.
 | Other state versions are refused without writing | `test_project_configuration.py::test_old_state_rejected_without_writes` |
 | Session directories without the ownership receipt are never overwritten | `test_inputs.py::test_extraction_folder_without_a_receipt_is_never_replaced`, `test_conversion.py::test_nifti_folder_without_a_receipt_is_never_replaced` |
 | Real dcm2niix behavior (pinned release) | CI `real-converter` job running `test_real_converter.py` |
+| `select` publishes one acquisition per modality folder, extras in `OTHER/<modality>/`; copies are byte-identical; sidecars add the selection fields; upstream folders and state are untouched | `test_selection.py::test_select_reports_and_publishes_one_acquisition_per_folder`, `test_real_converter.py::test_real_converter_select_native_t1_and_reformat` |
+| Selection identity, linking, contrast, tiers, ranking, review and fates follow the design rules | `test_selection_rules.py` (census sessions, diffusion, susceptibility, repeats, duplicates, overrides, profile validation, determinism, folder invariant) |
+| `select` reruns read no DICOM header or NIfTI and change nothing | `test_selection.py::test_rerun_uses_the_cache_and_changes_nothing` |
+| `select --dry-run` writes nothing | `test_selection.py::test_dry_run_writes_nothing` |
+| `--subjects` and `--output-root`; an output root inside another storage folder is refused | `test_selection.py::test_subject_list_and_output_root_outside_the_project` |
+| `--3d-only` leaves the folder empty and reports `not_3d` | `test_selection.py::test_3d_only_leaves_the_2d_folder_empty_and_says_why`, `test_selection_rules.py::test_census_session_d_2d_fallbacks_and_3d_only` |
+| Only selected scans are copied unless `--extras` | `test_selection.py::test_select_reports_and_publishes_one_acquisition_per_folder`, `test_3d_only_leaves_the_2d_folder_empty_and_says_why` |
+| `--modalities` limits reports and copies; `--complete-only` skips sessions missing a listed modality | `test_selection.py::test_modalities_limit_reports_and_copies`, `test_complete_only_skips_sessions_missing_a_listed_modality` |
+| `--isotropic`, `--max-voxel-mm`, `--min-directions`, `--no-fallback` use native resolution and report their reasons; unknown resolution goes to review | `test_selection.py::test_resolution_requirements`, `test_unknown_resolution_goes_to_review`, `test_selection_rules.py::test_resolution_requirements_and_unknown_native`, `test_requirements_apply_only_where_they_make_sense` |
+| `--field-strength` and `--manufacturer` decide whole sessions; unknown values go to review | `test_selection.py::test_scanner_requirements`, `test_selection_rules.py::test_session_requirements` |
+| Invalid criteria stop the run | `test_selection_rules.py::test_criteria_validation`, `test_selection.py::test_scanner_requirements` |
+| `review_required` leaves the folder empty; an override decides and republishes; invalid override rows stop the run | `test_selection.py::test_review_then_override_republishes`, `test_invalid_override_row_aborts`, `test_selection_rules.py::test_overrides` |
+| A published selection is never replaced over added files or without its receipt; a changed source is not published | `test_selection.py::test_added_files_block_an_update`, `test_folder_without_a_receipt_is_never_replaced`, `test_changed_source_is_not_published` |
+| Sessions that are not ready are reported; only not-yet-converted ones leave the exit code at 0 | `test_selection.py::test_sessions_not_ready` |
+| `select` waits for a running `convert` | `test_selection.py::test_select_waits_for_a_running_convert` |
+| Descriptions never reach selection outputs, cache or log | `test_selection.py::test_descriptions_never_reach_outputs`, `test_header_records` |
+| An interrupted publication is finished by the next run | `test_selection.py::test_interrupted_publication_is_finished_by_the_next_run` |
+| The `_ADC` companion travels with its DWI volume | `test_real_converter.py::test_real_converter_select_keeps_the_adc_companion_with_its_dwi` |
 | License | `LICENSE`, `NOTICE`, `pyproject.toml` (`license = "Apache-2.0"`) |

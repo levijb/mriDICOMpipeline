@@ -1,6 +1,8 @@
 # mriDICOMpipeline
 
-Two commands, designed for repeated batches on one allocated compute node.
+Three commands, designed for repeated batches on one allocated compute node:
+`prepare` and `convert` turn DICOM ZIPs into NIfTI, and `select` chooses one
+acquisition per modality for analysis.
 Python 3.11+ and `pydicom` are required. Conversion also requires `dcm2niix`
 on PATH, or an explicit `--dcm2niix-bin /path/to/dcm2niix`. Linux and Windows
 are supported; macOS is not tested. Operator procedures (first production run,
@@ -269,8 +271,8 @@ saying a slice may be missing. A GE diffusion series that holds the combined
 image next to the direction images yields `<image name>_ADC.nii.gz`, published
 the same way. A Siemens physiological log (`…_PhysioLog`) becomes two
 `_physio` files and no image; they are not published (the DICOM object stays
-in DicomExtracted). All converted series/components are retained; no automatic
-best-scan selection is performed. Classification is a heuristic that matches
+in DicomExtracted). All converted series/components are retained in `Niftis/`;
+the separate `select` command chooses among them (see "Scan selection"). Classification is a heuristic that matches
 whole words in the series description (revision 2: for example `AX T2* GRE`
 is GRE, `SWI mIP` is SWI_MINIP, `HEADCOIL T1` is T1); review before analysis.
 
@@ -289,6 +291,105 @@ automatically. Successful temporary work is cleaned up. The default working
 root is project/.work. `--staging-root` on conversion can select node-local
 scratch; failed scratch files may be removed by the cluster after the job,
 while published partial volumes remain in Niftis/.pending.
+
+## Scan selection
+
+`select` chooses one acquisition per modality folder for each converted
+session and explains every choice. With `--publish` it copies the result into
+a separate folder. `Niftis/` stays the complete conversion and is never
+changed.
+
+```bash
+mri-dicom-pipeline select              # reports only, in Selected/
+mri-dicom-pipeline select --publish    # also build Selected/Subjects/<id>/<session>/
+mri-dicom-pipeline select --publish --subjects project_ids.csv --output-root /data/ProjectX \
+    --modalities T1,FLAIR --isotropic --max-voxel-mm 1.2 --field-strength 3 --complete-only
+```
+
+Each published session looks like this:
+
+```text
+Selected/Subjects/S001/20260725/
+  T1/  T1_POST/  T2/  FLAIR/  GRE/   one acquisition each
+  DWI/        the diffusion source with .bval/.bvec (and any _ADC companion
+              or reverse phase-encode b0 scan that belongs to it)
+  ADC/  EADC/ scanner maps computed from that DWI source
+  SWI/  SWI_PHASE/  SWI_MINIP/  QSM/  the selected susceptibility acquisition,
+              its phase images and the products made from it
+  LOCALIZER/  MRA/  MRV/  PERFUSION/  every volume (no selection rules yet)
+  OTHER/<modality>/     with --extras: reformats, alternatives and excluded volumes
+  OTHER/UNCLASSIFIED/   with --extras: volumes no rule could place
+  selection.json
+```
+
+* **One acquisition can be several files:** its echoes, its magnitude and
+  phase images, its gradient files. Scanner products (ADC, minIP, the
+  processed SWI image) join their own folder only when the acquisition they
+  were made from is the one selected.
+* **Identity comes from the DICOM headers,** not only from the description:
+  sequence parameters decide T1, T1_POST, T2 and FLAIR; gradient files decide
+  DWI. Headers are read once per session and cached in
+  `Reports/.selection_cache/`, so reruns open no DICOM file.
+* **"Best" means the best protocol fit,** not image quality: 3D before 2D,
+  native resolution (from the acquisition matrix, not the reconstructed
+  grid), diffusion directions and b-value, phase images and echo count.
+  Scans below the consensus tier (a 2D T1, a 5 mm FLAIR) are selected as
+  `selected_fallback` unless `--no-fallback` is given.
+* **Nothing is guessed.** Repeats of one protocol, duplicate copies, maps that
+  cannot be tied to a unique source, and missing evidence that could change
+  the choice give `review_required`. The folder then stays empty until a
+  reviewer decides in `selection_overrides.csv` (see the runbook).
+
+What to select and copy:
+
+| Option | Effect |
+|---|---|
+| `--output-root DIR` | reports and sessions go to DIR (default `PROJECT_ROOT/Selected`), for example a new analysis project |
+| `--subjects CSV` | only subjects in the CSV's `subject_id` column (or `--subject-column`) |
+| `--modalities T1,FLAIR` | only these folders are selected, reported and copied (folder names, any letter case). SWI brings its phase images; scanner maps such as ADC must be listed to be copied |
+| `--extras` | also copy the scans that were not selected, into `OTHER/<modality>/` (and `OTHER/UNCLASSIFIED/` when no modalities are listed); off by default |
+| `--complete-only` | publish a session only when every modality in `--modalities` has a selection |
+
+Requirements (a scan that fails one cannot be selected; when none passes,
+the folder stays empty and `reasons` names the requirement):
+
+| Option | Scans allowed | Reason when failed |
+|---|---|---|
+| `--3d-only` | 3D T1, T1_POST, T2, FLAIR, SWI, QSM and GRE (DWI is exempt) | `not_3d` |
+| `--isotropic` | native voxel sides within 20% of each other | `not_isotropic` |
+| `--max-voxel-mm MM` | every native voxel side at most MM; "1 mm" scans are often 0.94-1.11 mm natively, so 1.2 means "about 1 mm" | `voxel_too_large` |
+| `--min-directions N` | diffusion scans with at least N directions in one shell | `too_few_directions` |
+| `--no-fallback` | scans in a preferred tier only (no 2D T1, no FLAIR or T2 thicker than 3 mm) | `fallback_only` |
+| `--field-strength 3` or `1.5,3` | sessions from scanners of these field strengths (a header value of 2.89 counts as 3) | session `session_excluded` |
+| `--manufacturer GE` or `GE,SIEMENS` | sessions from these manufacturers | session `session_excluded` |
+
+Native resolution comes from the acquisition matrix and slice thickness,
+never from the reconstructed pixel size. When the headers do not give what a
+requirement needs (for example a missing acquisition matrix), the scan goes
+to review (`native_unknown`, `field_strength_unknown`), never to a guess.
+`--profile FILE` merges a JSON profile over the built-in rules, including a
+`require` block per modality when modalities need different requirements,
+for example `{"roles": {"T1": {"require": {"isotropic": true, "max_voxel_mm": 1.2}}}}`.
+`--session`, `--dry-run` and `--audit` work as for the other commands. Every
+option is recorded in each session's `selection.json` and in the profile
+hash in the reports; use one output folder per set of criteria.
+* **Files are copies.** Each NIfTI and companion is a byte copy of its source;
+  each JSON sidecar is the source sidecar plus `selection_role`,
+  `selection_fate`, `selection_candidate_id`, `selection_profile` and
+  `source_nifti`. A published session is replaced when a decision changes,
+  but never when it holds files that are not in its inventory.
+
+`selection.csv` has one row per session and modality (`outcome`:
+`selected`, `selected_fallback`, `review_required`,
+`no_eligible_candidate`, `missing`, `kept_all`, `session_excluded`,
+`source_not_ready`), with
+the deciding rule, the runner-up, reasons, warnings and the winner's
+facts. `selection_volumes.csv` has one row per volume, with its role, its
+acquisition, its fate and the folder it went to. `select` exits 0 when
+nothing needs attention and 2 when a role needs review, a session could not
+be evaluated (other than not yet converted), or a publication was refused.
+It never writes to `DicomExtracted/`, `Niftis/` or the pipeline state, and
+it runs only while no `prepare` or `convert` holds those folders.
 
 ## Privacy
 
@@ -311,7 +412,9 @@ pipeline does not de-identify any of them:
   reach disk; this matches line patterns and can miss identifiers.
 
 File and folder names inside the ZIPs, which can contain patient names, are
-not written to reports, logs or state.
+not written to reports, logs or state. `select` copies NIfTI files
+unchanged, so its output carries the same channels; its reports and cache
+keep series descriptions only as words from a fixed MRI vocabulary.
 
 ## Where to look
 
@@ -326,6 +429,10 @@ No timestamped report folder is created. Both commands print these paths:
 | Reports/issues.csv | Unresolved problems, with subject/session and relevant path |
 | Reports/run_history.csv | One row per locked invocation, including terminated and aborted runs |
 | Reports/.state | Internal index (`index.json`, `index.json.bak`), result journals and open intents; preserve it |
+| Reports/latest_select.log | Latest selection details |
+| Selected/selection.csv | One row per session and modality: the selection outcome and why (in the `--output-root` folder) |
+| Selected/selection_volumes.csv | One row per converted volume: its role, acquisition, fate and folder |
+| Reports/.selection_cache | Normalized header facts per session for `select`; safe to delete |
 
 `session_status.csv` columns: `subject_id`, `session`, `prepare_status`
 (`awaiting_upload`, `ready`, `held`, `failed`, `interrupted`; a session
