@@ -19,7 +19,7 @@ import sys
 import threading
 import time
 
-from . import config, convert, identity, locks, prepare, recovery, reports, selection
+from . import config, convert, identity, locks, naming, prepare, recovery, reports, selection
 from .state import State
 
 
@@ -139,7 +139,10 @@ def _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summ
     if summary["reconciled"] and not cfg.dry_run:
         logger.info("Resolved %s open operations (interrupted runs or pending cleanups)", summary["reconciled"])
     if phase == "prepare":
-        tasks, counts = prepare.plan_prepare(cfg, state, ids, pairs, logger)
+        # Unnamed ZIPs in subject folders get their ID_YYYYMMDD name first (owner request, 2026-11-18).
+        skip, named_held = naming.name_uploads(cfg, state, ids, pairs, logger)
+        tasks, counts = prepare.plan_prepare(cfg, state, ids, pairs, logger, skip)
+        counts["held"] += named_held
     else:
         tasks, counts = convert.plan_convert(cfg, state, ids, pairs, logger)
     if cfg.limit:

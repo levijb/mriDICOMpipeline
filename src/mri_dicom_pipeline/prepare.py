@@ -34,7 +34,7 @@ MR_IMAGE_SOP_CLASSES = {
 
 # A StudyDate this many days or more from the ZIP-name date is held rather than
 # only reported; a smaller difference is a date: warning. Set by the user.
-DATE_HOLD_DAYS = 5
+DEFAULT_DATE_TOLERANCE = 2  # days; --date-tolerance
 
 
 def days_apart(header_dates, date):
@@ -229,7 +229,7 @@ def extract_archive(source, stage, stop=None, accept_multi_study=False):
     return {"files": files, "series": list(series.values()), "n_dicom": len(files), "n_series": len(series),
             "content_sha256": content, "dicom_bytes": sum(x["size"] for x in files),
             "pixel_bytes": pixel_bytes, "skipped_files": skipped, "study_count": len(study_keys),
-            "header_dates": sorted(dates), "repeated_identical": repeated}
+            "study_keys": sorted(study_keys), "header_dates": sorted(dates), "repeated_identical": repeated}
 
 
 def move_archive(source, destination, cfg, fingerprint):
@@ -312,9 +312,10 @@ def prepare_one(candidate, previous, cfg, stop=None):
                     raise ValueError("Extracted destination is not owned by this pipeline; refusing replacement")
                 gap = days_apart(inventory["header_dates"], date)
                 accepted = key in cfg.accept_date_mismatch or (previous or {}).get("archive_sha256") == digest
-                if gap >= DATE_HOLD_DAYS and not accepted:
-                    raise HoldError(f"DICOM StudyDate is {gap} days from the ZIP-name date; correct the ZIP name, "
-                                    "or accept it with --accept-date-mismatch SUBJECT/SESSION")
+                if gap > cfg.date_tolerance and not accepted:
+                    raise HoldError(f"DICOM StudyDate is {gap} days from the ZIP-name date (more than the "
+                                    f"{cfg.date_tolerance}-day tolerance); correct the ZIP name, or accept it with "
+                                    "--accept-date-mismatch SUBJECT/SESSION")
                 if stop is not None and stop.is_set():
                     raise InterruptedError("Preparation interrupted")
                 move_archive(source, canonical, cfg, fingerprint)
@@ -367,11 +368,14 @@ def prepare_one(candidate, previous, cfg, stop=None):
     return event
 
 
-def plan_prepare(cfg, state, ids, pairs, logger):
+def plan_prepare(cfg, state, ids, pairs, logger, skip=frozenset()):
+    """Work items per subject. skip: unnamed ZIPs the naming step held or (in a dry run) would rename."""
     tasks, counts = {}, {"cached": 0, "held": 0}
     recovering = recovery.blocked_keys(state)
     discovered = discover(cfg)
     for source in discovered:
+        if source in skip:
+            continue
         issue_key = "prepare:" + str(source)
         sid = label = ""
         try:

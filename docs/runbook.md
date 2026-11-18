@@ -17,9 +17,14 @@ mean the run was stopped by SIGTERM or Ctrl+C.
     and scan date is listed.
 3.  Put the ZIPs in `DicomUploads/Uploads/`, or, if they already have their
     final names, in `DicomUploads/SubjectsSorted/<id>/<id>_<YYYYMMDD>.zip`,
-    where they are prepared in place.
+    where they are prepared in place. Unnamed ZIPs (any file name) go in a
+    folder named after their subject below `Uploads/`, for example
+    `Uploads/11_133_upload/S001/`; `prepare` names them from that folder and
+    their DICOM StudyDate (README, "Unnamed ZIPs in subject folders").
 4.  Preview: `mri-dicom-pipeline prepare --dry-run`. The dry run lists what
-    it would do and writes nothing.
+    it would do, including each `WOULD RENAME` for an unnamed ZIP, and writes
+    nothing. Check that no `WOULD RENAME` line reports a second session on a
+    date you did not expect.
 5.  Run `mri-dicom-pipeline prepare`, then `mri-dicom-pipeline convert`.
 6.  Read `Reports/session_status.csv`. A session with
     `conversion_status = converted` has every required series. Look at
@@ -64,6 +69,15 @@ two machines (for example two cluster nodes) on the same storage:
   (`python -m zipfile -l <ZIP>`), find member N, and export that session
   again. The reason never shows member names, because they can contain
   patient names.
+* **`prepare:` issue on an unnamed ZIP.** The ZIP stays where it is,
+  unnamed. "not listed for this subject": add the date to `sessions.csv`, or
+  rerun with `--allow-unlisted-dates`. "within N days of 2 listed dates", "No
+  StudyDate", "several StudyDates" or "already exists in this folder": name
+  the ZIP `ID_YYYYMMDD.zip` (or `_2`) yourself. "not a subject ID": move it
+  into a folder named after its subject. Renames are listed in
+  `Reports/renamed_uploads.csv`; a `second session on this date` note means
+  two different studies share that date, so check that both belong to the
+  subject.
 * **`prepare:` issue, "Different DICOM contents for an existing session".**
   An upload carries different images under an existing session name. The ZIP
   stays in `Uploads/`. Rename it with an `_N` suffix if it is a separate
@@ -73,8 +87,10 @@ two machines (for example two cluster nodes) on the same storage:
   separate `_N` ZIPs, or, if it is one session, accept it:
   `mri-dicom-pipeline prepare --accept-multi-study S001/20260725`.
 * **`prepare:` issue, "DICOM StudyDate is N days from the ZIP-name date".**
-  The scan date in the DICOM headers is 5 or more days from the date in the
-  ZIP name, which usually means the name was mistyped. The ZIP stays where it
+  The scan date in the DICOM headers is more than `--date-tolerance` days
+  (default 2) from the date in the ZIP name, which usually means the name was
+  mistyped. If your exports often differ by a few days, rerun with a larger
+  `--date-tolerance`. The ZIP stays where it
   is and nothing is published. If the name is wrong, rename the ZIP to the
   right date and rerun; the old issue clears itself. If the name is right,
   accept it: `mri-dicom-pipeline prepare --accept-date-mismatch S001/20260725`.

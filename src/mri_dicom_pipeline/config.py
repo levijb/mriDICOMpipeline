@@ -40,7 +40,12 @@ def config_parser(phase):
         p.add_argument("--accept-multi-study", action="append", metavar="SUBJECT/SESSION",
                        help="Accept this session's ZIP although it holds more than one study; repeatable")
         p.add_argument("--accept-date-mismatch", action="append", metavar="SUBJECT/SESSION",
-                       help="Accept this session's ZIP although its DICOM StudyDate is 5+ days from the ZIP-name date; repeatable")
+                       help="Accept this session's ZIP although its DICOM StudyDate is more than --date-tolerance days "
+                            "from the ZIP-name date; repeatable")
+        p.add_argument("--date-tolerance", type=int, default=2, metavar="DAYS",
+                       help="Largest gap in days between the DICOM StudyDate and the session date that only warns; "
+                            "a larger gap holds the ZIP, and an unnamed ZIP takes a listed date this close "
+                            "(default 2)")
     elif phase == "convert":
         p.add_argument("--dicom-root", type=Path, help="DicomExtracted root")
         p.add_argument("--output-root", type=Path, help="Niftis root")
@@ -106,6 +111,8 @@ def configure(args, phase):
         for b in roots[i+1:]:
             if a == b or a.is_relative_to(b) or b.is_relative_to(a):
                 raise ValueError(f"Storage roots overlap: {a} and {b}")
+    if phase == "prepare" and args.date_tolerance < 0:
+        raise ValueError("date-tolerance must be 0 or more days")
     if phase == "select":
         args.workers, args.limit = 1, None
     else:

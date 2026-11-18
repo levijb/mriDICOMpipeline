@@ -61,6 +61,7 @@ study/
   sessions.csv
   DicomUploads/
     Uploads/                         # incoming ZIPs at any nesting depth
+      11_133_upload/S001/x7f3k.zip   # an unnamed ZIP in its subject's folder
     SubjectsSorted/S001/
       S001_20260725.zip
       S001_20260725_2.zip
@@ -75,7 +76,40 @@ study/
 ZIP names determine identity. Dates are eight digits, YYYYMMDD. An explicit
 `_2` suffix means a distinct second session on that date and is carried through
 all outputs/checkpoints. Higher integer suffixes are also accepted. Wrapper
-directory names do not determine subject identity.
+directory names do not determine subject identity, except for unnamed ZIPs
+(below).
+
+### Unnamed ZIPs in subject folders
+
+A ZIP whose name is not `ID_YYYYMMDD.zip` can be put in a folder named after
+its subject anywhere below `Uploads/`, for example
+`Uploads/11_133_upload/S001/x7f3k.zip`. At the start of each run, `prepare`
+names it from the folder and the StudyDate in its DICOM headers, then
+processes it as usual in the same run:
+
+* the folder must be a subject ID in the reference CSV (the headers cannot
+  name the subject);
+* the StudyDate must be one of that subject's dates in the reference CSV, or
+  within `--date-tolerance` days (default 2) of exactly one of them, in which
+  case the listed date is used and the usual `date:` warning follows;
+  `--allow-unlisted-dates` uses an unlisted StudyDate as it is;
+* a different study on a date that already has a session (prepared, or named
+  in the same run) gets the next suffix, `_2`, `_3`, numbered in order of
+  StudyTime; the log says so in a warning;
+* a re-export of a study that already has a session gets that session's name,
+  and preparation then finds it a duplicate (or holds a conflict) as usual.
+
+The ZIP is renamed in place (`S001_20260725.zip` in the same folder) and then
+moved into SubjectsSorted like any accepted ZIP. A ZIP that cannot be named
+(no StudyDate, several StudyDates, no matching listed date, two listed dates
+in range, a folder that is not a subject ID, a name already used in that
+folder) stays unnamed with an issue. Every rename is appended to
+`Reports/renamed_uploads.csv` (old and new path, StudyDate, listed date,
+note), which is also the record for undoing one. `prepare --dry-run` prints
+each proposed name as `WOULD RENAME` and renames nothing. The headers of a
+ZIP are read once (a sample of its DICOM objects) and cached in
+`Reports/.naming_cache.json` until the ZIP changes; preparation still checks
+every object, including every StudyDate, afterwards.
 
 The reference CSV defaults to `sessions.csv` and requires `subject_id` and
 `scan_date`. Dates may be YYYYMMDD, YYYY-MM-DD, or M/D/YYYY. IDs may contain
@@ -144,9 +178,11 @@ quota-managed storage, check your quota as well; the check sees only free
 space.
 
 Header dates are cross-checks only. A StudyDate that differs from the
-ZIP-name date is recorded as a warning. A StudyDate 5 or more days away holds
-the ZIP until its name is corrected, or until the date is accepted with
-`--accept-date-mismatch SUBJECT/SESSION`.
+ZIP-name date by up to `--date-tolerance` days (default 2) is recorded as a
+warning. A StudyDate further away holds the ZIP until its name is corrected,
+or until the date is accepted with `--accept-date-mismatch SUBJECT/SESSION`.
+`prepare --date-tolerance 0` holds any difference; a larger value widens the
+window for both this check and the naming of unnamed ZIPs.
 Subject identity never comes from patient identification fields or a matching
 spreadsheet. Generated sidecars include selected technical fields and the
 validated filename identity. Two date fields sit side by side so they can be
@@ -428,6 +464,7 @@ No timestamped report folder is created. Both commands print these paths:
 | Reports/session_status.csv | All expected sessions plus explicit additional sessions; current prepare/conversion state |
 | Reports/issues.csv | Unresolved problems, with subject/session and relevant path |
 | Reports/run_history.csv | One row per locked invocation, including terminated and aborted runs |
+| Reports/renamed_uploads.csv | Every unnamed upload ZIP that `prepare` named: old and new path, StudyDate, listed date, note |
 | Reports/.state | Internal index (`index.json`, `index.json.bak`), result journals and open intents; preserve it |
 | Reports/latest_select.log | Latest selection details |
 | Selected/selection.csv | One row per session and modality: the selection outcome and why (in the `--output-root` folder) |
