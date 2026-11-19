@@ -14,6 +14,7 @@ establishes it. Review this list whenever the README changes.
 | ZIP names: ID characters, eight-digit calendar dates | `test_identity.py::test_accepted_zip_names`, `test_rejected_zip_names` |
 | `_N` suffix rules | `test_identity.py::test_session_key_grammar`, `test_rejected_zip_names` |
 | Unnamed ZIPs in subject folders are named from the folder and StudyDate checked against the reference CSV; near dates take the listed date; unnamable ZIPs are held unnamed; `_N` for a different study on a used date; the same study keeps its name; renames are logged; dry runs rename nothing; headers are read once | `test_naming.py` |
+| `prepare --dry-run` ends with a summary: counts, held ZIPs with reasons, names to check; date reasons give the dates and subject | `test_naming.py::test_dry_run_ends_with_a_summary_of_held_zips_and_names_to_check`, `test_inputs.py::test_date_3_days_from_zip_name_held_until_accepted` |
 | A partly copied ZIP fails and is retried when complete | `test_inputs.py::test_truncated_upload_fails_then_prepares_when_complete` |
 | A ZIP with no DICOM objects (empty, viewer files only, a nested ZIP) fails and stays in place | `test_inputs.py::test_zip_without_dicom_objects_fails_and_is_retried_when_replaced` |
 | ZIP members are streamed to completion to check their CRCs | `test_inputs.py::test_member_with_bad_crc_fails_the_zip` |

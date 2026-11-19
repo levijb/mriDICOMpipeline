@@ -313,8 +313,9 @@ def prepare_one(candidate, previous, cfg, stop=None):
                 gap = days_apart(inventory["header_dates"], date)
                 accepted = key in cfg.accept_date_mismatch or (previous or {}).get("archive_sha256") == digest
                 if gap > cfg.date_tolerance and not accepted:
-                    raise HoldError(f"DICOM StudyDate is {gap} days from the ZIP-name date (more than the "
-                                    f"{cfg.date_tolerance}-day tolerance); correct the ZIP name, or accept it with "
+                    raise HoldError(f"DICOM StudyDate {', '.join(inventory['header_dates'])} is {gap} days from the "
+                                    f"ZIP-name date {date} for {sid} (more than the {cfg.date_tolerance}-day "
+                                    "tolerance); correct the ZIP name, or accept it with "
                                     "--accept-date-mismatch SUBJECT/SESSION")
                 if stop is not None and stop.is_set():
                     raise InterruptedError("Preparation interrupted")
@@ -346,7 +347,7 @@ def prepare_one(candidate, previous, cfg, stop=None):
                                     if inventory["repeated_identical"] else "")
                                  + ("" if cleaned else f"; previous folder {aside} not deleted yet, later runs retry"))
                 if inventory["header_dates"] and inventory["header_dates"] != [date]:
-                    event["issues"].append(reports.problem("date:" + key, "prepare", sid, label, "Header dates differ from filename; filename date retained", canonical))
+                    event["issues"].append(reports.problem("date:" + key, "prepare", sid, label, f"Header StudyDate {', '.join(inventory['header_dates'])} differs from the ZIP-name date {date} for {sid}; ZIP-name date retained", canonical))
                 else:
                     event["clear_issues"].append("date:" + key)
         event["source"] = {"path": str(source), "signature": fingerprint, "key": key, "outcome": event["outcome"],
@@ -368,11 +369,21 @@ def prepare_one(candidate, previous, cfg, stop=None):
     return event
 
 
-def plan_prepare(cfg, state, ids, pairs, logger, skip=frozenset()):
-    """Work items per subject. skip: unnamed ZIPs the naming step held or (in a dry run) would rename."""
+def plan_prepare(cfg, state, ids, pairs, logger, skip=frozenset(), held=None):
+    """Work items per subject.
+
+    skip: unnamed ZIPs the naming step held or (in a dry run) would rename.
+    held: a list that collects (subject, path, reason) for each held ZIP, for the dry-run summary.
+    """
     tasks, counts = {}, {"cached": 0, "held": 0}
+    held = [] if held is None else held
     recovering = recovery.blocked_keys(state)
     discovered = discover(cfg)
+
+    def hold(reason):
+        counts["held"] += 1
+        held.append((sid, source, reason))
+
     for source in discovered:
         if source in skip:
             continue
@@ -398,7 +409,7 @@ def plan_prepare(cfg, state, ids, pairs, logger, skip=frozenset()):
                         # An open changed-ZIP hold is checked the same way until the bytes match again.
                         if fsutil.sha256(source) != prior.get("archive_sha256"):
                             if (issue or {}).get("zip_changed"):
-                                counts["held"] += 1
+                                hold(issue.get("reason", ""))
                                 continue
                             raise ZipChanged(AUDIT_HOLD)
                     if issue and not cfg.dry_run:
@@ -409,7 +420,7 @@ def plan_prepare(cfg, state, ids, pairs, logger, skip=frozenset()):
                     continue
                 if cached.get("outcome") == "held" and key not in cfg.accept_multi_study | cfg.accept_date_mismatch:
                     # Not hashed again until the ZIP changes; its issue stays open.
-                    counts["held"] += 1
+                    hold(state.data["issues"].get(issue_key, {}).get("reason", "held at an earlier run; see issues.csv"))
                     continue
                 if cached.get("against", "") == prior.get("archive_sha256", "") and cached.get("outcome") in ("duplicate", "failed"):
                     if (cached["outcome"] == "duplicate" and valid) or (cached["outcome"] == "failed" and not cfg.retry_failed):
@@ -421,12 +432,12 @@ def plan_prepare(cfg, state, ids, pairs, logger, skip=frozenset()):
                 raise ValueError(UNLISTED)
             if key in recovering:
                 # A folder crash recovery would not touch waits for a person (Q12).
-                counts["held"] += 1
+                hold(f"unresolved crash-recovery issue for {key}; see issues.csv")
                 logger.warning("Held %s: unresolved crash-recovery issue for %s; see issues.csv", source, key)
                 continue
             tasks.setdefault(sid, []).append((source, sid, date, label, fingerprint))
         except (OSError, ValueError) as e:
-            counts["held"] += 1
+            hold(str(e))
             logger.warning("Held %s: %s", source, e)
             if not cfg.dry_run:
                 state.checkpoint({"issues": [hold_issue(issue_key, sid, label, e, source)]})
@@ -450,3 +461,27 @@ def plan_prepare(cfg, state, ids, pairs, logger, skip=frozenset()):
         if stale or missing:
             state.checkpoint({"clear_issues": stale, "issues": missing})
     return tasks, counts
+
+
+def dry_run_summary(tasks, counts, held, names):
+    """The block that ends prepare --dry-run: what would happen, then everything a person should look at.
+
+    held: [(subject, path, reason)]; names: [(subject, path, new name, note)] proposed by the naming step.
+    """
+    rule = "=" * 72
+    checks = [n for n in names if n[3]]
+    lines = ["", rule, "DRY RUN SUMMARY (nothing was changed)", rule, "",
+             f"  {len(names):>5}  unnamed ZIPs would be named and prepared",
+             f"  {sum(len(items) for items in tasks.values()):>5}  named ZIPs would be prepared",
+             f"  {counts['cached']:>5}  already prepared (no work)",
+             f"  {len(held):>5}  HELD: not prepared until fixed (listed below)"]
+    if held:
+        lines += ["", "", f"HELD ({len(held)})"]
+        for sid, path, reason in sorted(held, key=lambda h: (h[0], str(h[1]))):
+            lines += ["", f"  {sid or '?'}  {path}", f"        {reason}"]
+    if checks:
+        lines += ["", "", f"CHECK THESE NAMES ({len(checks)}: near dates, extra sessions, re-exports)"]
+        for sid, path, name, note in sorted(checks, key=lambda n: (n[0], n[2])):
+            lines += ["", f"  {sid}  {path}", f"        -> {name}: {note}"]
+    lines += ["", "", "Run without --dry-run to name and prepare everything that is not held.", rule]
+    return "\n".join(lines)

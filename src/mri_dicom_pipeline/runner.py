@@ -140,8 +140,9 @@ def _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summ
         logger.info("Resolved %s open operations (interrupted runs or pending cleanups)", summary["reconciled"])
     if phase == "prepare":
         # Unnamed ZIPs in subject folders get their ID_YYYYMMDD name first (owner request, 2026-11-18).
-        skip, named_held = naming.name_uploads(cfg, state, ids, pairs, logger)
-        tasks, counts = prepare.plan_prepare(cfg, state, ids, pairs, logger, skip)
+        skip, held, names = naming.name_uploads(cfg, state, ids, pairs, logger)
+        named_held = len(held)
+        tasks, counts = prepare.plan_prepare(cfg, state, ids, pairs, logger, skip, held)
         counts["held"] += named_held
     else:
         tasks, counts = convert.plan_convert(cfg, state, ids, pairs, logger)
@@ -153,11 +154,15 @@ def _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summ
                 remaining -= len(limited[sid])
         tasks = limited
     pending = sum(len(items) for items in tasks.values())
-    logger.info("Plan: %s work items across %s subjects; %s cached; %s held for review. Cached checks did not read old DICOM headers.", pending, len(tasks), counts["cached"], counts["held"])
+    # In a dry run the unnamed ZIPs are not renamed, so they are planned only once named.
+    once_named = f" (plus {len(names)} unnamed ZIPs once named)" if phase == "prepare" and cfg.dry_run and names else ""
+    logger.info("Plan: %s work items across %s subjects%s; %s cached; %s held for review. Cached checks did not read old DICOM headers.", pending, len(tasks), once_named, counts["cached"], counts["held"])
     if cfg.dry_run:
         for sid, items in tasks.items():
             for item in items:
                 logger.info("WOULD %s %s/%s", phase, sid, item[3] if phase == "prepare" else item["label"])
+        if phase == "prepare":
+            print(prepare.dry_run_summary(tasks, counts, held, names), flush=True)
         return 2 if counts["held"] else 0
     if phase == "convert" and pending and not (Path(cfg.dcm2niix_bin).is_file() or shutil.which(cfg.dcm2niix_bin)):
         raise ValueError("dcm2niix not found; load its module/environment or pass --dcm2niix-bin")

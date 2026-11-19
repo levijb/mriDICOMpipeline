@@ -80,7 +80,8 @@ def _days(a, b):
     return abs((datetime.strptime(a, "%Y%m%d") - datetime.strptime(b, "%Y%m%d")).days)
 
 
-def resolve_date(header_dates, listed, allow_unlisted, tolerance=prepare.DEFAULT_DATE_TOLERANCE):
+def resolve_date(header_dates, listed, allow_unlisted, tolerance=prepare.DEFAULT_DATE_TOLERANCE,
+                 subject="this subject"):
     """(date, note) for the ZIP name, or (None, reason to hold).
 
     tolerance: --date-tolerance, the gap preparation's date check accepts with a warning.
@@ -88,26 +89,28 @@ def resolve_date(header_dates, listed, allow_unlisted, tolerance=prepare.DEFAULT
     if not header_dates:
         return None, "No StudyDate in the DICOM headers; name the ZIP ID_YYYYMMDD.zip by hand"
     if len(header_dates) > 1:
-        return None, (f"The DICOM headers hold {len(header_dates)} StudyDates; split the ZIP, or name it "
-                      "ID_YYYYMMDD.zip by hand")
+        return None, (f"The DICOM headers hold {len(header_dates)} StudyDates ({', '.join(header_dates)}); "
+                      "split the ZIP, or name it ID_YYYYMMDD.zip by hand")
     date = header_dates[0]
     try:
         datetime.strptime(date, "%Y%m%d")
     except ValueError:
-        return None, "The DICOM StudyDate is not a valid date; name the ZIP ID_YYYYMMDD.zip by hand"
+        return None, f"The DICOM StudyDate {date} is not a valid date; name the ZIP ID_YYYYMMDD.zip by hand"
     if date in listed:
         return date, ""
     near = sorted(d for d in listed if _days(d, date) <= tolerance)
     if len(near) == 1:
-        return near[0], f"StudyDate {date} is {_days(near[0], date)} days from the listed date"
+        gap = _days(near[0], date)
+        return near[0], f"StudyDate {date} is {gap} day{'s' * (gap != 1)} from the listed date {near[0]}"
     if len(near) > 1:
-        return None, (f"StudyDate is within {tolerance} days of {len(near)} listed dates for this subject; "
-                      "name the ZIP ID_YYYYMMDD.zip by hand")
+        return None, (f"StudyDate {date} is within {tolerance} days of {len(near)} listed dates for {subject} "
+                      f"({', '.join(near)}); name the ZIP ID_YYYYMMDD.zip by hand")
     if allow_unlisted:
         return date, "StudyDate not in the reference CSV (--allow-unlisted-dates)"
-    nearest = min((_days(d, date) for d in listed), default=None)
-    return None, ("StudyDate is not listed for this subject in the reference CSV"
-                  + (f" (the nearest listed date is {nearest} days away)" if nearest is not None else "")
+    nearest = min(listed, key=lambda d: (_days(d, date), d), default=None)
+    return None, (f"StudyDate {date} is not listed for {subject} in the reference CSV"
+                  + (f"; the nearest listed date is {nearest} ({_days(nearest, date)} days away)" if nearest
+                     else " (no dates listed)")
                   + "; update the reference CSV or use --allow-unlisted-dates")
 
 
@@ -194,12 +197,16 @@ def _append_log(cfg, rows, logger):
 
 
 def name_uploads(cfg, state, ids, pairs, logger):
-    """Rename unnamed upload ZIPs; returns (paths preparation must leave alone this run, number held)."""
+    """Rename unnamed upload ZIPs.
+
+    Returns (paths preparation must leave alone this run, held [(subject, path, reason)],
+    names [(subject, path, new name, note)], renamed or in a dry run proposed).
+    """
     found = candidates(cfg)
     if not found:
-        return set(), 0
+        return set(), [], []
     named = [p for p in prepare.discover(cfg) if p not in set(found)]
-    facts, skip, holds, resolved, log_rows = _Facts(cfg), set(), [], [], []
+    facts, skip, holds, resolved, log_rows, names = _Facts(cfg), set(), [], [], [], []
     listed = {}
     for sid, date in pairs:
         listed.setdefault(sid, set()).add(date)
@@ -220,7 +227,7 @@ def name_uploads(cfg, state, ids, pairs, logger):
             if not info["studies"]:
                 raise prepare.HoldError("No DICOM objects with a StudyInstanceUID found; name the ZIP by hand")
             date, note = resolve_date(info["dates"], listed.get(sid, set()), cfg.allow_unlisted_dates,
-                                      cfg.date_tolerance)
+                                      cfg.date_tolerance, sid)
             if date is None:
                 raise prepare.HoldError(note)
             first_time = min(info["studies"].values()) if info["studies"] else ""
@@ -252,6 +259,7 @@ def name_uploads(cfg, state, ids, pairs, logger):
                 f"{target.name} already exists in this folder; move one of the two ZIPs or name it by hand")))
             continue
         assigned.setdefault((sid, date), {}).setdefault(label, set()).update(studies)
+        names.append((sid, path, target.name, note))
         relative_old, relative_new = path.relative_to(cfg.uploads).as_posix(), target.relative_to(cfg.uploads).as_posix()
         if cfg.dry_run:
             skip.add(path)
@@ -278,4 +286,4 @@ def name_uploads(cfg, state, ids, pairs, logger):
         logger.info("Named %s upload ZIP(s) from their subject folder and StudyDate%s; see %s", renamed,
                     f", {extra_sessions} as a further session on a date that already had one" if extra_sessions else "",
                     cfg.reports / NAME_LOG)
-    return skip, len(holds)
+    return skip, [(sid, path, str(error)) for _, sid, path, error in holds], names

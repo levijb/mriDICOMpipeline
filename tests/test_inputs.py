@@ -399,10 +399,13 @@ def test_date_3_days_from_zip_name_held_until_accepted(project, tmp_path):
     assert call(project, 'prepare', '--allow-unlisted-dates') == 2
     assert upload.exists() and 'S001/20260728' not in state(project)['sessions']
     [issue] = prepare_issues(project)
-    assert '3 days' in state(project)['issues'][issue]['reason']
+    assert ('StudyDate 20260725 is 3 days from the ZIP-name date 20260728 for S001'
+            in state(project)['issues'][issue]['reason'])
     assert call(project, 'prepare', '--allow-unlisted-dates', '--accept-date-mismatch', 'S001/20260728') == 0
     assert state(project)['sessions']['S001/20260728']['status'] == 'ready'
     assert 'date:S001/20260728' in state(project)['issues'] and not prepare_issues(project)
+    assert ('StudyDate 20260725 differs from the ZIP-name date 20260728 for S001'
+            in state(project)['issues']['date:S001/20260728']['reason'])
     # Once accepted, extracting the same ZIP again is not held.
     assert call(project, 'prepare', '--allow-unlisted-dates', '--force-reextract') == 0
 

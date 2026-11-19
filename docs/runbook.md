@@ -23,8 +23,9 @@ mean the run was stopped by SIGTERM or Ctrl+C.
     their DICOM StudyDate (README, "Unnamed ZIPs in subject folders").
 4.  Preview: `mri-dicom-pipeline prepare --dry-run`. The dry run lists what
     it would do, including each `WOULD RENAME` for an unnamed ZIP, and writes
-    nothing. Check that no `WOULD RENAME` line reports a second session on a
-    date you did not expect.
+    nothing. It ends with a `DRY RUN SUMMARY`: read its `HELD` list (each
+    ZIP with its reason) and its `CHECK THESE NAMES` list (near dates, a
+    second session on one date, re-exports) before the real run.
 5.  Run `mri-dicom-pipeline prepare`, then `mri-dicom-pipeline convert`.
 6.  Read `Reports/session_status.csv`. A session with
     `conversion_status = converted` has every required series. Look at
@@ -86,7 +87,7 @@ two machines (for example two cluster nodes) on the same storage:
   which can mean two people's exams were exported together. Split it into
   separate `_N` ZIPs, or, if it is one session, accept it:
   `mri-dicom-pipeline prepare --accept-multi-study S001/20260725`.
-* **`prepare:` issue, "DICOM StudyDate is N days from the ZIP-name date".**
+* **`prepare:` issue, "DICOM StudyDate D is N days from the ZIP-name date".**
   The scan date in the DICOM headers is more than `--date-tolerance` days
   (default 2) from the date in the ZIP name, which usually means the name was
   mistyped. If your exports often differ by a few days, rerun with a larger

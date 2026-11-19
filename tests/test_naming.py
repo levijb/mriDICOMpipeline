@@ -119,6 +119,24 @@ def test_dry_run_renames_nothing(project, tmp_path, capsys):
     assert not (project / 'Reports' / naming.NAME_LOG).exists()
 
 
+def test_dry_run_ends_with_a_summary_of_held_zips_and_names_to_check(project, tmp_path, capsys):
+    upload(project, 'S002_20260725.zip', exam(tmp_path))                     # already named
+    upload(project, 'batch/S001/a.zip', exam(tmp_path))                      # exact date
+    upload(project, 'batch/S001/b.zip', exam(tmp_path, date='20260731'))     # 1 day from 08-01
+    held = upload(project, 'batch/S002/c.zip', exam(tmp_path, date='20260710'))
+    assert call(project, 'prepare', '--dry-run') == 2
+    out = capsys.readouterr().out
+    assert '(plus 2 unnamed ZIPs once named)' in out
+    summary = out[out.index('DRY RUN SUMMARY'):]
+    assert '2  unnamed ZIPs would be named and prepared' in summary
+    assert '1  named ZIPs would be prepared' in summary and '1  HELD' in summary
+    assert f'S002  {held}' in summary
+    assert ('StudyDate 20260710 is not listed for S002 in the reference CSV; the nearest listed date is 20260725 '
+            '(15 days away)') in summary
+    assert 'CHECK THESE NAMES (1:' in summary
+    assert '-> S001_20260801.zip: StudyDate 20260731 is 1 day from the listed date 20260801' in summary
+
+
 def test_held_zip_headers_are_read_once(project, tmp_path, monkeypatch):
     upload(project, 'batch/S001/a.zip', exam(tmp_path, date='20260710'))
     assert call(project, 'prepare') == 2

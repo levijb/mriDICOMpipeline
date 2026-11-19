@@ -106,7 +106,11 @@ in range, a folder that is not a subject ID, a name already used in that
 folder) stays unnamed with an issue. Every rename is appended to
 `Reports/renamed_uploads.csv` (old and new path, StudyDate, listed date,
 note), which is also the record for undoing one. `prepare --dry-run` prints
-each proposed name as `WOULD RENAME` and renames nothing. The headers of a
+each proposed name as `WOULD RENAME` and renames nothing. It ends with a
+summary: how many ZIPs would be named, prepared or skipped, then every held
+ZIP with its reason, and every proposed name worth checking (a near date, an
+extra `_N` session, a re-export). Date reasons give the StudyDate, the listed
+or ZIP-name date and the subject. The headers of a
 ZIP are read once (a sample of its DICOM objects) and cached in
 `Reports/.naming_cache.json` until the ZIP changes; preparation still checks
 every object, including every StudyDate, afterwards.
