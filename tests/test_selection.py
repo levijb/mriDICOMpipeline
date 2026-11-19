@@ -8,7 +8,7 @@ from pathlib import Path
 from pydicom.uid import generate_uid
 import pytest
 
-from mri_dicom_pipeline import locks, runner, selection_metadata
+from mri_dicom_pipeline import locks, runner, selection, selection_metadata
 from support import archive_objects, call, mr_series, run_with_crash
 
 KEY = 'S001/20260725'
@@ -253,6 +253,102 @@ def test_sessions_not_ready(project, tmp_path, converter):
     extra.write_text('x')
     assert select(project, tmp_path) == 2
     assert roles(project)[('S001', '20260725', 'T1')]['reasons'] == 'output_modified'
+
+
+# ---- sessions on one date are one visit (owner request, 2026-11-19) ---------------------------------------------
+
+def first_study(tmp_path):
+    """A morning exam: localizer and 3D T1."""
+    study, frame = generate_uid(), generate_uid()
+    return (series(tmp_path, study, frame, 2, '3-pl Localizer', '090000',
+                   {'ImageType': ['ORIGINAL', 'PRIMARY', 'LOCALIZER']}, slices=3)
+            + series(tmp_path, study, frame, 3, 'SAG 3D T1 BRAVO', '090500', T1))
+
+
+def second_study(tmp_path, extra=()):
+    """An afternoon exam, a different study: 3D FLAIR and 2D T2 (series numbers restart)."""
+    study, frame = generate_uid(), generate_uid()
+    objects = series(tmp_path, study, frame, 3, 'SAG 3D FLAIR', '140500', FLAIR)
+    objects += series(tmp_path, study, frame, 5, 'AX T2 FSE', '141000', T2, positions=[i * 4.0 for i in range(10)])
+    for number, description, time, fields in extra:
+        objects += series(tmp_path, study, frame, number, description, time, fields)
+    return objects
+
+
+def test_two_sessions_on_one_date_are_one_visit(project, tmp_path, converter):
+    convert_sessions(project, tmp_path, converter, {'S001_20260725.zip': first_study(tmp_path),
+                                                    'S001_20260725_2.zip': second_study(tmp_path)})
+    assert select(project, tmp_path, '--publish') == 0
+    decided = roles(project)
+    assert {(s, label) for s, label, _ in decided} == {('S001', '20260725')}
+    t1, flair = decided[('S001', '20260725', 'T1')], decided[('S001', '20260725', 'FLAIR')]
+    assert t1['sessions'] == flair['sessions'] == '20260725;20260725_2'
+    assert t1['outcome'] == flair['outcome'] == 'selected'
+    assert '/20260725/' in t1['source'] and '/20260725_2/' in flair['source']
+    assert decided[('S001', '20260725', 'T2')]['outcome'] == 'selected_fallback'
+    assert not (project / 'Selected/Subjects/S001/20260725_2').exists()
+    out = project / SELECTED
+    assert {f.split('/', 1)[0] for f in tree(out) if '/' in f} == {'LOCALIZER', 'T1', 'FLAIR', 'T2'}
+    assert [s['session'] for s in json.loads((out / 'selection.json').read_text())['sessions']] == \
+        ['20260725', '20260725_2']
+    receipt = json.loads((out / '.pipeline_complete.json').read_text())
+    assert receipt['sessions'] == ['20260725', '20260725_2'] and len(set(receipt['source_receipt_ids'])) == 2
+    assert {v['session'] for v in rows(project / 'Selected/selection_volumes.csv')} == {'20260725'}
+
+
+def test_same_modality_in_both_sessions_is_a_repeat_and_overrides_name_the_date(project, tmp_path, converter):
+    # The first scan of its study: a lower series number and an earlier time than the morning T1 within its study.
+    later_t1 = [(2, 'SAG 3D T1 BRAVO', '140000', T1)]
+    convert_sessions(project, tmp_path, converter, {'S001_20260725.zip': first_study(tmp_path),
+                                                    'S001_20260725_2.zip': second_study(tmp_path, later_t1)})
+    assert select(project, tmp_path) == 2
+    t1 = roles(project)[('S001', '20260725', 'T1')]
+    assert (t1['outcome'], t1['reasons']) == ('review_required', 'repeat_needs_review')
+    volumes = {v['candidate_id']: v for v in rows(project / 'Selected/selection_volumes.csv') if v['role'] == 'T1'}
+    assert '/20260725_2/' in volumes[t1['rule_recommendation']]['source']  # the later session's scan
+    earlier = next(c for c, v in volumes.items() if '/20260725/' in v['source'])
+    (project / 'selection_overrides.csv').write_text(
+        f'subject_id,session,role,action,candidate_id\nS001,20260725,T1,choose,{earlier}\n')
+    assert select(project, tmp_path, '--publish') == 0
+    t1 = roles(project)[('S001', '20260725', 'T1')]
+    assert (t1['outcome'], t1['decided_by']) == ('selected', 'override') and '/20260725/' in t1['source']
+
+
+def test_contrast_in_the_second_session_makes_its_t1_the_t1_post(project, tmp_path, converter):
+    # Within its study the post T1 comes first, so only the visit order shows the morning T1 is before it.
+    post = [(2, 'SAG 3D T1 BRAVO', '140000', dict(T1, ContrastBolusAgent='GADAVIST'))]
+    convert_sessions(project, tmp_path, converter, {'S001_20260725.zip': first_study(tmp_path),
+                                                    'S001_20260725_2.zip': second_study(tmp_path, post)})
+    assert select(project, tmp_path) == 0
+    decided = roles(project)
+    t1, t1_post = decided[('S001', '20260725', 'T1')], decided[('S001', '20260725', 'T1_POST')]
+    assert (t1['outcome'], t1_post['outcome']) == ('selected', 'selected')
+    assert '/20260725/' in t1['source'] and '/20260725_2/' in t1_post['source']
+    assert (t1['contrast_evidence'], t1_post['contrast_evidence']) == ('timing', 'agent_tag')
+
+
+def test_visit_waits_until_every_session_is_converted(project, tmp_path, converter):
+    archive_objects(project, 'S001_20260725.zip', first_study(tmp_path))
+    archive_objects(project, 'S001_20260725_2.zip', second_study(tmp_path))
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', converter, '--session', KEY) == 0
+    assert select(project, tmp_path) == 0  # waiting for conversion is not a problem
+    t1 = roles(project)[('S001', '20260725', 'T1')]
+    assert (t1['outcome'], t1['reasons'], t1['sessions']) == \
+        ('source_not_ready', '20260725_2: not_converted', '20260725;20260725_2')
+
+
+def test_visit_series_orders_the_later_session_after_the_earlier():
+    first = {'a': {'series_key': 'a', 'series_number': 3, 'acq_rel_s': 300.0, 'bolus_rel_s': None}}
+    second = {'b': {'series_key': 'b', 'series_number': 3, 'acq_rel_s': 60.0, 'bolus_rel_s': 30.0}}
+    assert selection.visit_series([first]) is first  # one session: records unchanged
+    merged = selection.visit_series([first, second])
+    assert merged['a'] == dict(first['a'], visit_part=0)
+    assert (merged['b']['acq_rel_s'], merged['b']['bolus_rel_s'], merged['b']['series_number'],
+            merged['b']['visit_part']) == (86460.0, 86430.0, 1_000_003, 1)
+    assert second['b']['acq_rel_s'] == 60.0  # the cached records are not changed
+    assert sorted(['20260725_10', '20260725_2', '20260725'], key=selection.session_order) == \
+        ['20260725', '20260725_2', '20260725_10']
 
 
 def test_select_waits_for_a_running_convert(project, tmp_path, converter):

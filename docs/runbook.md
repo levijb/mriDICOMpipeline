@@ -220,7 +220,9 @@ Look at every row whose `outcome` is not `selected`, `kept_all` or `missing`:
   say; check the scanner and run without that option for the session.
 * **`source_not_ready`:** the session was not evaluated. `not_converted`
   needs `convert` first; `output_modified` and `extraction_invalid` follow
-  the procedures above.
+  the procedures above. For a visit of several sessions on one date, the
+  reason names the session that is not ready, for example
+  `20260725_2: not_converted`; the visit waits for it.
 
 To decide, add a row to `selection_overrides.csv` in the project folder
 (`--overrides FILE` names another), then run `select` again:
@@ -236,7 +238,9 @@ S002,20260801,DWI,none,,no usable diffusion
 `rule_recommendation`, `runner_up`) or `selection_volumes.csv`. `choose`
 selects that candidate, `exclude` rules it out (record QC failures this way),
 and `none` leaves the folder empty. Extra columns such as `note` are ignored
-and never copied. An invalid row stops the run with its row number.
+and never copied. An invalid row stops the run with its row number. For
+sessions on one date (`20260725` and `20260725_2`), which are selected as one
+visit, `session` is the date.
 
 ### The Selected folder
 

@@ -539,13 +539,18 @@ def link_group(group, acquisitions):
 def series_phases(series_records):
     """Contrast rules 1-3 for every series (5.7): {series_key: (phase, evidence)}."""
     records = [s for s in series_records if not s.get("mixed")]
-    exam_wide = bool(records) and all(s.get("contrast_agent") for s in records)
+    # An agent tag on every series of an exam says nothing per series; in a visit, each session is an exam.
+    exams = {}
+    for s in records:
+        exams.setdefault(s.get("visit_part"), []).append(s)
+    exam_wide = {part: all(s.get("contrast_agent") for s in exam) for part, exam in exams.items()}
     phases = {}
     for s in records:
         if s.get("bolus_rel_s") is not None and s.get("acq_rel_s") is not None:
             phases[s["series_key"]] = ("post" if s["bolus_rel_s"] < s["acq_rel_s"] else "pre", "bolus_time")
         elif s.get("contrast_agent"):
-            phases[s["series_key"]] = ("unknown", "agent_tag_exam_wide") if exam_wide else ("post", "agent_tag")
+            phases[s["series_key"]] = (("unknown", "agent_tag_exam_wide") if exam_wide[s.get("visit_part")]
+                                       else ("post", "agent_tag"))
         elif s.get("desc_phase"):
             phases[s["series_key"]] = (s["desc_phase"], "description")
     return phases

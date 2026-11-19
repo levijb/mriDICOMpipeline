@@ -174,6 +174,15 @@ def test_structural_family_vendor_conventions(params, family):
     assert si.structural_family(params) == family
 
 
+def test_agent_tag_on_every_series_is_judged_per_session_of_a_visit():
+    """In a visit each session is its own exam: the agent tag on all of one session's series is exam-wide."""
+    plain = {'series_key': 'a', 'contrast_agent': False}
+    tagged = [{'series_key': k, 'contrast_agent': True} for k in ('b', 'c')]
+    assert si.series_phases([plain, *tagged])['b'] == ('post', 'agent_tag')  # one exam
+    visit = [dict(plain, visit_part=0), *(dict(s, visit_part=1) for s in tagged)]
+    assert si.series_phases(visit)['b'] == ('unknown', 'agent_tag_exam_wide')
+
+
 def test_native_sampling_phase_direction_and_missing_fields():
     flair = rec("f", 1, rows=256, cols=224, pixel_mm=[1.0, 1.0], acq_matrix=[256, 0, 0, 202], phase_dir="ROW",
                 thick_mm=1.05)

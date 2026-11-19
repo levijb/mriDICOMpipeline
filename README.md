@@ -379,6 +379,15 @@ Selected/Subjects/S001/20260725/
   cannot be tied to a unique source, and missing evidence that could change
   the choice give `review_required`. The folder then stays empty until a
   reviewer decides in `selection_overrides.csv` (see the runbook).
+* **Sessions on one date are one visit.** Two studies of a subject on one day
+  (`20260725` and `20260725_2`) usually hold different modalities, so their
+  scans are ranked together and published to one folder,
+  `Selected/Subjects/S001/20260725/`. `Niftis/` keeps one folder per session.
+  The visit is evaluated once every session of that date is converted.
+  The same modality in both studies is a repeat, decided by the usual rules.
+  For contrast timing and repeat order, the `_2` session's scans count as
+  later. In the reports, `session` is the date and `sessions` lists the
+  visit's sessions; overrides also name the date as `session`.
 
 What to select and copy:
 
@@ -410,7 +419,8 @@ to review (`native_unknown`, `field_strength_unknown`), never to a guess.
 `--profile FILE` merges a JSON profile over the built-in rules, including a
 `require` block per modality when modalities need different requirements,
 for example `{"roles": {"T1": {"require": {"isotropic": true, "max_voxel_mm": 1.2}}}}`.
-`--session`, `--dry-run` and `--audit` work as for the other commands. Every
+`--session`, `--dry-run` and `--audit` work as for the other commands
+(`--session` naming any session of a visit evaluates the whole visit). Every
 option is recorded in each session's `selection.json` and in the profile
 hash in the reports; use one output folder per set of criteria.
 * **Files are copies.** Each NIfTI and companion is a byte copy of its source;

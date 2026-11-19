@@ -5,6 +5,10 @@ reports (selection.csv, selection_volumes.csv) to the output root. With
 --publish it also builds the output tree: each modality folder holds one
 acquisition, and every other volume goes to OTHER/<modality>/ or
 OTHER/UNCLASSIFIED/. Files are copies of the published NIfTI outputs.
+
+The sessions of one subject on one date (20260725, 20260725_2) are one visit:
+their scans are ranked together and published to Selected/Subjects/<id>/<date>/
+(owner request, 2026-11-19).
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ from .state import State
 OVERRIDE_ROLES = set(rules.RANKED) | set(rules.FOLLOWING)
 SELECTOR_VERSION = f"{__version__}+rules{rules.RULES_REVISION}"
 SELECTION_FIELDS = [
-    "subject_id", "session", "role", "outcome", "decided_by", "candidate_id", "source", "n_files",
+    "subject_id", "session", "sessions", "role", "outcome", "decided_by", "candidate_id", "source", "n_files",
     "rule_recommendation", "runner_up", "n_candidates", "n_eligible", "reasons", "warnings", "series_numbers",
     "family", "tier", "contrast_phase", "contrast_evidence", "orientation", "mr_acq", "native_mm", "n_echoes",
     "has_phase", "n_dirs", "b_max", "link_rung", "manufacturer", "model", "field_t", "software", "protocol_change",
@@ -42,6 +46,38 @@ VOLUME_FIELDS = [
     "contrast_evidence", "desc_tokens", "manufacturer", "model", "field_t", "software", "variant",
     "has_acq_matrix", "has_phase_dir", "has_image_type_text", "warnings"]
 CHANGE_FIELDS = ("manufacturer", "model", "field_t", "family", "mr_acq")
+# Header times are seconds after each session's first scan. In a visit, each later session's times and
+# series numbers are moved past the earlier ones', so timing rules (contrast phase, repeat order) see the
+# _2 session as the later one, as preparation names it, without storing times of day.
+VISIT_GAP_S = 86400
+VISIT_NUMBER_GAP = 1_000_000
+
+
+def session_order(label):
+    """Position of a session within its date: 20260725 is 1, 20260725_2 is 2."""
+    _, _, suffix = label.partition("_")
+    return int(suffix) if suffix.isdigit() else 1
+
+
+def visit_series(parts):
+    """One visit's series records, from each session's records in session order.
+
+    Each record of a multi-session visit names its session's position as visit_part.
+    """
+    if len(parts) == 1:
+        return parts[0]
+    merged = {}
+    for k, series in enumerate(parts):
+        for key, record in series.items():
+            record = dict(record, visit_part=k)
+            if k:
+                for field in ("acq_rel_s", "series_rel_s", "bolus_rel_s"):
+                    if record.get(field) is not None:
+                        record[field] += k * VISIT_GAP_S
+                if record.get("series_number") is not None:
+                    record["series_number"] += k * VISIT_NUMBER_GAP
+            merged[key] = record
+    return merged
 
 
 class SourceChanged(ValueError):
@@ -260,7 +296,7 @@ def copied(v, fate, profile):
     return fate["fate"] in COPY_FATES or profile["extras"]
 
 
-def _manifest(subject, label, session, decisions, fates, conversion, profile, digest_profile):
+def _manifest(subject, label, sessions, session, decisions, fates, conversions, profile, digest_profile):
     roles = {}
     for role, d in sorted(decisions.items()):
         if not rules.listed(role, profile):
@@ -279,8 +315,10 @@ def _manifest(subject, label, session, decisions, fates, conversion, profile, di
                           "source": str(Path(v.relpath).parent.as_posix() + "/" + Path(c["name"]).name),
                           "source_sha256": c["sha256"], "role": v.role or "", "fate": fate["fate"]})
     return {"profile": profile["name"], "profile_version": profile["version"], "profile_sha256": digest_profile,
-            "selector_version": SELECTOR_VERSION, "conversion_receipt_id": conversion.get("receipt_id"),
-            "subject_id": subject, "session": label, "roles": roles, "files": sorted(files, key=lambda f: f["path"])}
+            "selector_version": SELECTOR_VERSION, "subject_id": subject, "session": label,
+            "sessions": [{"session": s, "conversion_receipt_id": c.get("receipt_id")}
+                         for s, c in zip(sessions, conversions)],
+            "roles": roles, "files": sorted(files, key=lambda f: f["path"])}
 
 
 def _suffix(v, companion):
@@ -288,8 +326,9 @@ def _suffix(v, companion):
     return Path(companion["name"]).name[len(stem):]
 
 
-def publish_session(cfg, subject, label, session, decisions, fates, conversion, profile, digest_profile, logger):
-    """Build or update one session in the output root (7.5).
+def publish_session(cfg, subject, label, sessions, session, decisions, fates, conversions, profile, digest_profile,
+                    logger):
+    """Build or update one visit in the output root (7.5); sessions and conversions are its sessions'.
 
     Returns 'published', 'unchanged', 'skipped: ...' (nothing to copy) or 'refused: ...'.
     """
@@ -297,7 +336,8 @@ def publish_session(cfg, subject, label, session, decisions, fates, conversion, 
     chosen = [v for v in session.volumes if copied(v, fates[v], profile)]
     if not chosen:
         return "skipped: nothing selected in the listed modalities"
-    manifest = _dump(_manifest(subject, label, session, decisions, fates, conversion, profile, digest_profile))
+    manifest = _dump(_manifest(subject, label, sessions, session, decisions, fates, conversions, profile,
+                               digest_profile))
     digest = hashlib.sha256(manifest).hexdigest()
     if destination.exists():
         try:
@@ -312,7 +352,6 @@ def publish_session(cfg, subject, label, session, decisions, fates, conversion, 
         extra = convert.files_outside_inventory(destination)
         if extra:
             return "refused: files not in its inventory: " + ", ".join(extra[:20])
-    nifti_folder = Path(conversion["root"])
     destination.parent.mkdir(parents=True, exist_ok=True)
     stage = destination.parent / (".staging_" + uuid.uuid4().hex[:12])
     stage.mkdir()
@@ -321,6 +360,7 @@ def publish_session(cfg, subject, label, session, decisions, fates, conversion, 
         for v in chosen:
             fate = fates[v]
             source = cfg.niftis / v.relpath
+            nifti_folder = cfg.niftis / Path(*Path(v.relpath).parts[:3])  # Subjects/<id>/<its own session>
             stem = source.name[:-7]
             name = _new_name(subject, label, fate["folder"], v, ".nii.gz")
             files.append((name, *_copy_verified(source, stage / name, v.sha256)))
@@ -341,8 +381,8 @@ def publish_session(cfg, subject, label, session, decisions, fates, conversion, 
         fsutil.atomic_json(stage / receipts.INVENTORY, {"files": inventory})
         fsutil.atomic_json(stage / receipts.RECEIPT, {
             "version": config.SCHEMA_VERSION, "complete": True, "receipt_id": uuid.uuid4().hex, "run_id": cfg.run_id,
-            "kind": "select", "subject_id": subject, "session": label, "selection_sha256": digest,
-            "source_receipt_id": conversion.get("receipt_id"),
+            "kind": "select", "subject_id": subject, "session": label, "sessions": sessions,
+            "selection_sha256": digest, "source_receipt_ids": [c.get("receipt_id") for c in conversions],
             "provenance": {"package_version": __version__, "selector_version": SELECTOR_VERSION,
                            "profile": profile["name"], "profile_version": profile["version"],
                            "profile_sha256": digest_profile}})
@@ -385,7 +425,7 @@ def cleanup_output(cfg, logger):
                 logger.warning("Could not clean up %s: %s", p, e)
 
 
-def _role_rows(subject, label, decisions, fates, prov, profile):
+def _role_rows(subject, label, sessions, decisions, fates, prov, profile):
     rows = []
     counts = {}
     for v, fate in fates.items():
@@ -396,7 +436,7 @@ def _role_rows(subject, label, decisions, fates, prov, profile):
             continue
         d = decisions[role]
         facts = rules.role_facts(d)
-        row = {"subject_id": subject, "session": label, "role": role, "outcome": d["outcome"],
+        row = {"subject_id": subject, "session": label, "sessions": sessions, "role": role, "outcome": d["outcome"],
                "decided_by": d["decided_by"], "candidate_id": d["candidate_id"], "n_files": counts.get(role, 0),
                "rule_recommendation": d["rule_recommendation"], "runner_up": d["runner_up"],
                "n_candidates": d["n_candidates"], "n_eligible": d["n_eligible"], "reasons": d["reasons"],
@@ -407,8 +447,8 @@ def _role_rows(subject, label, decisions, fates, prov, profile):
     return rows
 
 
-def _session_rows(subject, label, outcome, reason, prov, profile):
-    return [{"subject_id": subject, "session": label, "role": role, "outcome": outcome,
+def _session_rows(subject, label, sessions, outcome, reason, prov, profile):
+    return [{"subject_id": subject, "session": label, "sessions": sessions, "role": role, "outcome": outcome,
              "reasons": [reason], "_change": None, **prov} for role in rules.REPORT_ROLES if rules.listed(role, profile)]
 
 
@@ -471,39 +511,58 @@ def _run(cfg, roster_warnings, stopper, logger, summary):
               "unchanged": 0, "skipped": 0, "refused": 0}
     blocking_not_ready, review = 0, 0
     seen = set()
+    visits = {}
     for key, entry in sorted(state.data["sessions"].items()):
+        subject, label = entry.get("subject_id"), entry.get("label")
+        if subject and label:
+            visits.setdefault((subject, entry.get("date") or label.split("_", 1)[0]), []).append((key, entry))
+    for (subject, label), members in sorted(visits.items()):
         if stop.is_set():
             break
-        subject, label = entry.get("subject_id"), entry.get("label")
-        if not subject or not label or (subjects is not None and subject not in subjects):
+        if subjects is not None and subject not in subjects:
             continue
-        if cfg.sessions is not None and key not in cfg.sessions:
+        members.sort(key=lambda m: session_order(m[1]["label"]))
+        if cfg.sessions is not None and not any(k in cfg.sessions for k, _ in members):
             continue
         seen.add(subject)
-        reason, conversion = readiness(entry, cfg, blocked, intent_keys, profile)
-        if not reason:
-            try:
-                series, records, hit = meta.session_metadata(entry, conversion, cfg, stop)
-            except InterruptedError:
-                break
-            except Exception as e:  # one unreadable session never stops the run (7.6)
-                reason = f"metadata_read_failed:{type(e).__name__}"
-                logger.error("Could not read %s for selection: %s: %s", key, type(e).__name__, e)
-        if reason:
+        sessions = [entry["label"] for _, entry in members]
+        key = f"{subject}/{label}" + (f" (sessions {', '.join(sessions)})" if len(sessions) > 1 else "")
+        # Every session of the visit must be ready; the visit waits for the last one (7.2).
+        problems, parts = [], []
+        try:
+            for member_key, entry in members:
+                reason, conversion = readiness(entry, cfg, blocked, intent_keys, profile)
+                if not reason:
+                    try:
+                        parts.append((conversion, *meta.session_metadata(entry, conversion, cfg, stop)))
+                    except InterruptedError:
+                        raise
+                    except Exception as e:  # one unreadable session never stops the run (7.6)
+                        reason = f"metadata_read_failed:{type(e).__name__}"
+                        logger.error("Could not read %s for selection: %s: %s", member_key, type(e).__name__, e)
+                if reason:
+                    problems.append((entry["label"], reason))
+        except InterruptedError:
+            break
+        if problems:
             counts["not_ready"] += 1
-            blocking_not_ready += reason != "not_converted"
+            blocking_not_ready += any(r != "not_converted" for _, r in problems)
+            reason = problems[0][1] if len(sessions) == 1 else "; ".join(f"{s}: {r}" for s, r in problems)
             logger.warning("Not evaluated %s: %s", key, reason)
-            role_rows += _session_rows(subject, label, "source_not_ready", reason, prov, profile)
+            role_rows += _session_rows(subject, label, sessions, "source_not_ready", reason, prov, profile)
             continue
+        conversions = [conversion for conversion, _, _, _ in parts]
+        series = visit_series([s for _, s, _, _ in parts])
+        records = [r for _, _, volume_records, _ in parts for r in volume_records]
         counts["evaluated"] += 1
-        counts["cached"] += hit
+        counts["cached"] += all(hit for _, _, _, hit in parts)
         scanner = rules.session_requirement(list(series.values()), profile)
         if scanner:
             outcome, reason = scanner
             counts["excluded"] += outcome == "session_excluded"
             review += sum(1 for r in rules.REPORT_ROLES if rules.listed(r, profile)) if outcome == "review_required" else 0
             logger.warning("%s %s: %s", "Excluded" if outcome == "session_excluded" else "Review", key, reason)
-            role_rows += _session_rows(subject, label, outcome, reason, prov, profile)
+            role_rows += _session_rows(subject, label, sessions, outcome, reason, prov, profile)
             continue
         volumes = [sid_.Volume(relpath=r["relpath"], sha256=r["sha256"], folder=r["folder"], token=r["token"],
                                companions=r["companions"], sidecar=r["sidecar"], dims=r["dims"],
@@ -512,14 +571,15 @@ def _run(cfg, roster_warnings, stopper, logger, summary):
                    for r in records]
         session = sid_.analyze(series, volumes, profile["roles"]["DWI"].get("min_tensor_directions", 6),
                                profile["contrast_unknown"])
-        decisions, fates, info = rules.decide_session(session, profile, overrides.get((subject, label)),
-                                                      accepted_partial=bool(conversion.get("accepted_errors")))
+        decisions, fates, info = rules.decide_session(
+            session, profile, overrides.get((subject, label)),
+            accepted_partial=any(conversion.get("accepted_errors") for conversion in conversions))
         review += sum(d["outcome"] == "review_required" for r, d in decisions.items() if rules.listed(r, profile))
         missing = rules.incomplete_roles(decisions, profile) if profile["complete_only"] else []
         if missing:
             for d in decisions.values():
                 d["warnings"] = sorted(set(d["warnings"]) | {"session_incomplete"})
-        role_rows += _role_rows(subject, label, decisions, fates, prov, profile)
+        role_rows += _role_rows(subject, label, sessions, decisions, fates, prov, profile)
         for v in session.volumes:
             fate = fates[v]
             if v.role is None and profile["modalities"] is not None or v.role and not rules.listed(v.role, profile):
@@ -534,13 +594,14 @@ def _run(cfg, roster_warnings, stopper, logger, summary):
             logger.info("NOT PUBLISHED %s: incomplete (%s)", key,
                         ", ".join(f"{r}={decisions[r]['outcome']}" for r in missing))
         elif cfg.publish and not cfg.dry_run:
-            result = publish_session(cfg, subject, label, session, decisions, fates, conversion, profile,
+            result = publish_session(cfg, subject, label, sessions, session, decisions, fates, conversions, profile,
                                      digest_profile, logger)
             counts[result.split(":", 1)[0]] += 1
             (logger.error if result.startswith("refused") else logger.info)("PUBLISH %s: %s", key, result)
     for key in sorted(overrides):
-        if f"{key[0]}/{key[1]}" not in state.data["sessions"]:
-            logger.warning("Overrides name a session that is not in state: %s/%s", *key)
+        if key not in visits:
+            logger.warning("Overrides name a session that is not in state: %s/%s (sessions on one date share the "
+                           "date as their session)", *key)
     if subjects is not None:
         for subject in sorted(subjects - seen):
             logger.warning("Listed subject %s has no prepared session", subject)
