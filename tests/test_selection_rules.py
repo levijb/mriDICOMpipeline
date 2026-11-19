@@ -147,6 +147,33 @@ def test_ge_3d_t1_native_family_and_native_resolution():
     assert sampling["inplane"] == [(1.0, 1.0)] and sampling["max"] == 1.0 and sampling["interpolated"]
 
 
+@pytest.mark.parametrize('params, family', [
+    # Siemens MPRAGE exported without IR or MP: the inversion time shows the preparation.
+    ({'mr_acq': '3D', 'scan_seq': ['GR'], 'seq_var': ['SK'], 'tr': 1600.0, 'te': 2.68, 'ti': 900.0}, 'T1_3D_IRGRE'),
+    # GE research mode gives RM instead of GR.
+    ({'mr_acq': '3D', 'scan_seq': ['RM', 'IR'], 'seq_var': ['NONE'], 'tr': 2462.1, 'te': 2.84, 'ti': 1000.0},
+     'T1_3D_IRGRE'),
+    # Philips 3D T1 TFE: magnetization prepared, no inversion time, the TR of one shot.
+    ({'mr_acq': '3D', 'scan_seq': ['GR'], 'seq_var': ['MP'], 'tr': 6.5, 'te': 2.95, 'ti': None}, 'T1_3D_IRGRE'),
+    # Philips inversion-recovery spin echo gives IR without SE: T1-FLAIR and FLAIR.
+    ({'mr_acq': '2D', 'scan_seq': ['IR'], 'seq_var': ['SK'], 'tr': 2000.0, 'te': 20.0, 'ti': 800.0}, 'T1_2D_IR'),
+    ({'mr_acq': '2D', 'scan_seq': ['IR'], 'seq_var': ['SK'], 'tr': 11000.0, 'te': 125.0, 'ti': 2800.0}, 'FLAIR_2D'),
+    # Siemens SPACE FLAIR exported without IR: an inversion time is not a T2.
+    ({'mr_acq': '3D', 'scan_seq': ['SE'], 'seq_var': ['SP', 'SK'], 'tr': 7000.0, 'te': 428.0, 'ti': 2050.0}, 'FLAIR_3D'),
+    # GE research-mode fast spin echo.
+    ({'mr_acq': '2D', 'scan_seq': ['RM'], 'seq_var': ['OSP'], 'tr': 4976.0, 'te': 124.0, 'ti': None}, 'T2_2D_TSE'),
+    # Unchanged: TI 0 is no inversion; a short-TE spin echo, a T2* GRE and a 2D FLASH are no structural family.
+    ({'mr_acq': '2D', 'scan_seq': ['SE'], 'seq_var': ['SK'], 'tr': 4500.0, 'te': 100.0, 'ti': 0.0}, 'T2_2D_TSE'),
+    ({'mr_acq': '2D', 'scan_seq': ['SE'], 'seq_var': ['SK'], 'tr': 4050.0, 'te': 9.0, 'ti': 0.0}, None),
+    ({'mr_acq': '2D', 'scan_seq': ['GR'], 'seq_var': ['SP'], 'tr': 603.0, 'te': 20.0, 'ti': None}, None),
+    ({'mr_acq': '2D', 'scan_seq': ['GR'], 'seq_var': ['SP'], 'tr': 250.0, 'te': 2.46, 'ti': None}, None),
+    ({'mr_acq': '3D', 'scan_seq': ['GR'], 'seq_var': ['SP'], 'tr': 25.0, 'te': 4.0, 'ti': None}, 'T1_3D_GRE'),
+])
+def test_structural_family_vendor_conventions(params, family):
+    """Header conventions from real GE, Siemens and Philips exports (2026-11-19)."""
+    assert si.structural_family(params) == family
+
+
 def test_native_sampling_phase_direction_and_missing_fields():
     flair = rec("f", 1, rows=256, cols=224, pixel_mm=[1.0, 1.0], acq_matrix=[256, 0, 0, 202], phase_dir="ROW",
                 thick_mm=1.05)

@@ -13,7 +13,7 @@ import re
 
 from .selection_identity import KEPT_ROLES, close, native_sampling, native_text
 
-RULES_REVISION = 1
+RULES_REVISION = 2  # 2: rotated 3D slice counts, vendor sequence conventions (2026-11-19)
 RANKED = ("T1", "T1_POST", "T2", "FLAIR", "DWI", "SWI", "QSM", "GRE")
 FOLLOWING = {"ADC": "DWI", "EADC": "DWI", "SWI_MINIP": "SWI"}
 REPORT_ROLES = ("LOCALIZER", "T1", "T1_POST", "T2", "FLAIR", "DWI", "ADC", "EADC", "SWI", "SWI_MINIP", "QSM", "GRE",
@@ -317,6 +317,18 @@ def _dims(v):
     return [d[i] if i <= n and i < len(d) else 1 for i in range(1, 4)]
 
 
+def slices_match(v):
+    """True when the NIfTI grid holds the series' rows, columns and slice positions.
+
+    dcm2niix rotates 3D acquisitions to the nearest orthogonal orientation (its -x default), so the
+    slices of a sagittal or coronal 3D scan can lie along any NIfTI axis.
+    """
+    rows, cols = v.s("rows"), v.s("cols")
+    if rows and cols:
+        return sorted(_dims(v)) == sorted([rows, cols, v.s("n_positions")])
+    return v.s("n_positions") in _dims(v)
+
+
 def gate(acq, role, rp, profile, excluded):
     """(reasons, tier) for one candidate acquisition in a ranked role (6.2)."""
     p = acq.primary
@@ -340,7 +352,7 @@ def gate(acq, role, rp, profile, excluded):
         reasons.append("b0_only")
     if p.dims and min(_dims(p)) < 10:
         reasons.append("not_a_volume")
-    elif (p.s("n_positions") and not p.s("mosaic") and p.dims and _dims(p)[2] != p.s("n_positions")):
+    elif p.s("n_positions") and not p.s("mosaic") and p.dims and not slices_match(p):
         reasons.append("slice_count_mismatch")
     if any(any(c["kind"] == "eq" for c in m.companions) for m in acq.members) or p.s("uniform_spacing") is False:
         reasons.append("uneven_spacing")

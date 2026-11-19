@@ -202,7 +202,8 @@ def _volume_row(subject, label, v, fate, info, folder_name):
         "seq_var": s.get("seq_var"), "seq_name": s.get("seq_name"), "tr_ms": s.get("tr_ms"), "te_ms": v.te,
         "ti_ms": s.get("ti_ms"), "flip_deg": s.get("flip_deg"), "orientation": s.get("orientation"),
         "grid_mm": grid, "native_mm": sid_.native_text(sampling), "gap_mm": sampling["gap"],
-        "n_slices": dims[3] if len(dims) > 3 and dims[0] >= 3 else "",
+        # The series' slice count: dcm2niix can rotate a 3D volume, so its slices need not be the third axis.
+        "n_slices": s.get("n_positions") or (dims[3] if len(dims) > 3 and dims[0] >= 3 else ""),
         "n_volumes": dims[4] if len(dims) > 4 and dims[0] >= 4 else 1, "extent_mm": s.get("extent_mm"),
         "uniform_spacing": s.get("uniform_spacing"),
         "eq_companion": any(c["kind"] == "eq" for c in v.companions), "b0": g.get("b0"),

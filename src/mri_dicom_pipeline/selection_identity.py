@@ -128,27 +128,40 @@ def native_text(sampling):
 
 
 def structural_family(p):
-    """The T1/FLAIR/T2 sequence family of a parameter set, or None (5.4 table). Times in ms."""
+    """The T1/FLAIR/T2 sequence family of a parameter set, or None (5.4 table). Times in ms.
+
+    Vendor conventions in real exports (2026-11-19): Siemens can omit IR when it gives an inversion
+    time (MPRAGE, SPACE FLAIR); Philips gives IR without SE for an inversion-recovery spin echo and
+    no inversion time for a 3D T1 TFE; GE research-mode sequences give RM instead of the sequence
+    type, so the timing decides.
+    """
     mr, seq, var, opt = p.get("mr_acq"), set(p.get("scan_seq") or ()), set(p.get("seq_var") or ()), \
         set(p.get("scan_opt") or ())
     tr, te, ti = p.get("tr"), p.get("te"), p.get("ti")
-    prepared = "IR" in seq or "MP" in var or "IR_GEMS" in opt
+    research = "RM" in seq
+    inversion = "IR" in seq or bool(ti)
+    prepared = inversion or "MP" in var or "IR_GEMS" in opt
+    gradient_echo, spin_echo = "GR" in seq or research, "SE" in seq or research
+    inversion_spin_echo = inversion and (spin_echo or "IR" in seq) and not seq & {"GR", "EP"}
 
     def known(*values):
         return all(v is not None for v in values)
 
-    if mr == "3D" and "GR" in seq and prepared and known(ti, te, tr) and 300 <= ti <= 1300 and te <= 10 and tr < 3000:
+    if mr == "3D" and gradient_echo and prepared and known(ti, te, tr) and 300 <= ti <= 1300 and te <= 10 \
+            and tr < 3000:
         return "T1_3D_IRGRE"
+    if mr == "3D" and "GR" in seq and "MP" in var and ti is None and known(te, tr) and te <= 10 and tr <= 50:
+        return "T1_3D_IRGRE"  # Philips 3D T1 TFE; its TR is one shot's
     if mr == "3D" and "GR" in seq and not prepared and p.get("single_echo", True) and known(te, tr) \
             and te <= 10 and tr <= 50:
         return "T1_3D_GRE"
-    if mr == "2D" and {"SE", "IR"} <= seq and known(ti, te) and 600 <= ti <= 1300 and te <= 40:
+    if mr == "2D" and inversion_spin_echo and known(ti, te) and 600 <= ti <= 1300 and te <= 40:
         return "T1_2D_IR"
-    if mr == "2D" and "SE" in seq and "IR" not in seq and known(tr, te) and tr <= 1000 and te <= 30:
+    if mr == "2D" and "SE" in seq and not inversion and known(tr, te) and tr <= 1000 and te <= 30:
         return "T1_2D_SE"
-    if {"SE", "IR"} <= seq and known(ti, tr, te) and 1400 <= ti <= 3000 and tr >= 4000 and te >= 70:
+    if inversion_spin_echo and known(ti, tr, te) and 1400 <= ti <= 3000 and tr >= 4000 and te >= 70:
         return {"3D": "FLAIR_3D", "2D": "FLAIR_2D"}.get(mr)
-    if "SE" in seq and "IR" not in seq and "EP" not in seq and known(tr, te):
+    if spin_echo and not inversion and "EP" not in seq and known(tr, te):
         if mr == "3D" and tr >= 1500 and 60 <= te <= 500:
             return "T2_3D_TSE"
         if mr == "2D" and tr >= 2000 and 60 <= te <= 200:

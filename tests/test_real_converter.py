@@ -17,7 +17,7 @@ import pydicom
 from pydicom.uid import generate_uid
 import pytest
 
-from mri_dicom_pipeline import runner
+from mri_dicom_pipeline import runner, selection_metadata
 from mri_dicom_pipeline.convert import CONVERTER_OPTIONS as CONVERTER_ARGS  # what convert_one passes before -o
 from support import (CSA_NON_IMAGE_STORAGE, OTHER_SOP_CLASSES, UNCONVERTIBLE_SYNTAXES, archive_objects, call,
                      csa_non_image_bytes, dicom_bytes, mr_series, non_image_bytes, other_class_objects, state,
@@ -465,6 +465,30 @@ def test_real_converter_select_native_t1_and_reformat(project, tmp_path, real_dc
     with (project / 'Selected/selection.csv').open(newline='') as f:
         t1_row = next(r for r in csv.DictReader(f) if r['role'] == 'T1')
     assert (t1_row['outcome'], t1_row['family'], t1_row['series_numbers']) == ('selected', 'T1_3D_IRGRE', '3')
+
+
+def test_real_converter_select_sagittal_3d_t1(project, tmp_path, real_dcm2niix):
+    """dcm2niix rotates a sagittal 3D acquisition, so its slices become the first NIfTI axis; the slice count
+    check still matches it (real data, 2026-11-19: every sagittal 3D T1 and FLAIR was slice_count_mismatch)."""
+    study, series = generate_uid(), generate_uid()
+    t1 = {'MRAcquisitionType': '3D', 'ScanningSequence': ['GR'], 'SequenceVariant': ['SS'], 'ScanOptions': ['IR_GEMS'],
+          'RepetitionTime': 6.0, 'EchoTime': 2.4, 'InversionTime': 450.0, 'FlipAngle': 13.0,
+          'AcquisitionMatrix': [0, 16, 16, 0], 'InPlanePhaseEncodingDirection': 'ROW',
+          'ImageType': ['ORIGINAL', 'PRIMARY', 'OTHER'], 'ImageOrientationPatient': [0, 1, 0, 0, 0, -1], **GE}
+    objects = [dicom_bytes(tmp_path, value=i + 1, study=study, series=series, slice_index=i, series_number=3,
+                           description='SAG 3D T1 BRAVO', rows=16, columns=16,
+                           fields=dict(t1, ImagePositionPatient=[float(i), 0.0, 0.0])) for i in range(20)]
+    archive_objects(project, 'S001_20260725.zip', objects)
+    assert call(project, 'prepare') == 0
+    assert call(project, 'convert', '--dcm2niix-bin', real_dcm2niix) == 0
+    [nifti] = (project / 'Niftis/Subjects/S001/20260725/T1').glob('*.nii.gz')
+    assert list(selection_metadata.nifti_header(nifti)[0][1:4]) == [20, 16, 16]  # rotated: slices first
+    assert run_select(project, tmp_path) == 0
+    with (project / 'Selected/selection.csv').open(newline='') as f:
+        t1_row = next(r for r in csv.DictReader(f) if r['role'] == 'T1')
+    assert (t1_row['outcome'], t1_row['family'], t1_row['reasons']) == ('selected', 'T1_3D_IRGRE', '')
+    with (project / 'Selected/selection_volumes.csv').open(newline='') as f:
+        assert next(r for r in csv.DictReader(f) if r['role'] == 'T1')['n_slices'] == '20'
 
 
 def test_real_converter_select_keeps_the_adc_companion_with_its_dwi(project, tmp_path, real_dcm2niix):
