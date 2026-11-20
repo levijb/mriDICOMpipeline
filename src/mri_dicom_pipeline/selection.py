@@ -9,6 +9,9 @@ OTHER/UNCLASSIFIED/. Files are copies of the published NIfTI outputs.
 The sessions of one subject on one date (20260725, 20260725_2) are one visit:
 their scans are ranked together and published to Selected/Subjects/<id>/<date>/
 (owner request, 2026-11-19).
+
+With --bids the same decisions are named and arranged as a BIDS dataset instead,
+sub-<id>/ses-<date>/ under PROJECT_ROOT/BIDS (bids.py; design: BIDS output).
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ import signal
 import time
 import uuid
 
-from . import __version__, config, convert, fsutil, identity, receipts, recovery, reports
+from . import __version__, bids, config, convert, fsutil, identity, receipts, recovery, reports
 from . import selection_identity as sid_
 from . import selection_metadata as meta
 from . import selection_rules as rules
@@ -40,6 +43,7 @@ VOLUME_FIELDS = [
     "subject_id", "session", "volume_id", "source", "folder", "role", "role_rule", "family", "kind", "part",
     "echo_te_ms", "acquisition_id", "duplicate_of", "derived_group_id", "link_state", "link_rung", "link_parent",
     "link_candidates", "candidate_id", "tier", "eligible", "exclusion_reasons", "rank", "fate", "selected_path",
+    "export_status", "export_reason", "published",
     "series_number", "image_type", "mr_acq", "scan_seq", "seq_var", "seq_name", "tr_ms", "te_ms", "ti_ms",
     "flip_deg", "orientation", "grid_mm", "native_mm", "gap_mm", "n_slices", "n_volumes", "extent_mm",
     "uniform_spacing", "eq_companion", "b0", "shells", "b_max", "n_dirs", "pe_dir", "contrast_phase",
@@ -201,6 +205,40 @@ def readiness(entry, cfg, blocked, intent_keys, profile):
     return "", conversion
 
 
+def bids_root(cfg, profile, logger):
+    """The contrast agent of a --bids run after its checks (BIDS design 5.2), or None without --bids.
+
+    A BIDS run refuses extras and roles it doesn't export, and writes only to an empty root or one
+    with its marker; the first run records the agent and later runs reuse it. The default layout
+    refuses a BIDS root.
+    """
+    if not cfg.bids:
+        if (cfg.output / bids.MARKER).exists():
+            raise ValueError(f"{cfg.output} holds a BIDS export; add --bids or choose another --output-root")
+        return None
+    if profile["extras"]:
+        raise ValueError("--bids exports selections only; remove extras from the command line or the profile")
+    refused = sorted(set(profile["modalities"] or ()) & bids.NOT_EXPORTED)
+    if refused:
+        raise ValueError(f"--bids does not export {', '.join(refused)}; leave it out of --modalities")
+    marker = bids.read_marker(cfg.output)
+    bids.check_root(cfg.output, marker)
+    recorded = (marker or {}).get("contrast_agent")
+    agent = cfg.bids_contrast_agent or recorded or "unknown"
+    if recorded and recorded != agent:
+        logger.warning("Contrast agent changed from %s to %s: post-contrast T1w files are renamed", recorded, agent)
+    if not cfg.dry_run:
+        bids.write_marker(cfg.output, agent)
+    return agent
+
+
+def _grid(cfg, v):
+    try:
+        return meta.nifti_grid(cfg.niftis / v.relpath)
+    except (OSError, ValueError, EOFError):
+        return None
+
+
 def _open_intent_keys(cfg):
     keys = set()
     for path in sorted(recovery.intents_dir(cfg.reports).glob("*.json")):
@@ -296,13 +334,18 @@ def copied(v, fate, profile):
     return fate["fate"] in COPY_FATES or profile["extras"]
 
 
-def _manifest(subject, label, sessions, session, decisions, fates, conversions, profile, digest_profile):
+def _roles(decisions, profile):
     roles = {}
     for role, d in sorted(decisions.items()):
         if not rules.listed(role, profile):
             continue
         roles[role] = {"outcome": d["outcome"], "decided_by": d["decided_by"], "candidate_id": d["candidate_id"],
                        "reasons": d["reasons"], "warnings": d["warnings"], "override": d["decided_by"] == "override"}
+    return roles
+
+
+def _manifest(subject, label, sessions, session, decisions, fates, conversions, profile, digest_profile):
+    roles = _roles(decisions, profile)
     files = []
     for v in session.volumes:
         fate = fates[v]
@@ -326,18 +369,102 @@ def _suffix(v, companion):
     return Path(companion["name"]).name[len(stem):]
 
 
+def _bids_manifest(subject, label, sessions, plan, decisions, conversions, profile, digest_profile, agent):
+    """What a BIDS visit folder holds; its digest is the visit's fingerprint (BIDS design 5.3)."""
+    files, omitted = [], []
+    for e in plan:
+        v = e["volume"]
+        if e["status"] == "omitted":
+            omitted.append({"source": v.relpath, "reason": e["reason"]})
+            continue
+        stem, folder = e["path"][:-7], Path(v.relpath).parent.as_posix()
+        files.append({"path": e["path"], "source": v.relpath, "source_sha256": v.sha256, "role": v.role,
+                      "fate": e["fate"], "candidate_id": e["candidate_id"], "status": e["status"]})
+        files.append({"path": stem + ".json", "source": v.relpath[:-7] + ".json", "source_sha256": v.json_sha256,
+                      "added": e["extra"]})
+        for c in v.companions:
+            source = f"{folder}/{Path(c['name']).name}"
+            if e["suffix"] == "dwi" and c["kind"] in ("bval", "bvec"):
+                files.append({"path": f"{stem}.{c['kind']}", "source": source, "source_sha256": c["sha256"]})
+            else:
+                omitted.append({"source": source, "reason": "companion_not_exported"})
+    return {"layout": "bids", "exporter_revision": bids.EXPORTER_REVISION, "bids_version": bids.BIDS_VERSION,
+            "contrast_agent": agent, "profile": profile["name"], "profile_version": profile["version"],
+            "profile_sha256": digest_profile, "selector_version": SELECTOR_VERSION, "subject_id": subject,
+            "session": label, "sessions": [{"session": s, "conversion_receipt_id": c.get("receipt_id")}
+                                           for s, c in zip(sessions, conversions)],
+            "roles": _roles(decisions, profile), "files": sorted(files, key=lambda f: f["path"]),
+            "omitted": sorted(omitted, key=lambda f: f["source"])}
+
+
+def _default_outputs(cfg, subject, label, chosen, fates, profile):
+    outputs = []
+    for v in chosen:
+        fate = fates[v]
+        source = cfg.niftis / v.relpath
+        nifti_folder = cfg.niftis / Path(*Path(v.relpath).parts[:3])  # Subjects/<id>/<its own session>
+        outputs.append(("copy", _new_name(subject, label, fate["folder"], v, ".nii.gz"), source, v.sha256))
+        for c in v.companions:
+            outputs.append(("copy", _new_name(subject, label, fate["folder"], v, _suffix(v, c)),
+                            nifti_folder / c["name"], c["sha256"]))
+        added = {"selection_role": v.role or "", "selection_fate": fate["fate"],
+                 "selection_candidate_id": fate["candidate_id"], "selection_profile": profile["name"],
+                 "source_nifti": v.relpath}
+        outputs.append(("sidecar", _new_name(subject, label, fate["folder"], v, ".json"),
+                        source.with_name(source.name[:-7] + ".json"), v.json_sha256,
+                        lambda raw, added=added: dict(json.loads(raw), **added)))
+    return outputs
+
+
+def _bids_outputs(cfg, subject, label, plan):
+    outputs = []
+    for e in plan:
+        if e["status"] == "omitted":
+            continue
+        v = e["volume"]
+        source = cfg.niftis / v.relpath
+        nifti_folder = cfg.niftis / Path(*Path(v.relpath).parts[:3])
+        stem = e["path"][:-7]
+        outputs.append(("copy", e["path"], source, v.sha256))
+        outputs.append(("sidecar", stem + ".json", source.with_name(source.name[:-7] + ".json"), v.json_sha256,
+                        lambda raw, extra=e["extra"]: bids.sidecar(raw, extra)))
+        if e["suffix"] == "dwi":
+            for c in v.companions:
+                if c["kind"] in ("bval", "bvec"):
+                    outputs.append(("copy", f"{stem}.{c['kind']}", nifti_folder / c["name"], c["sha256"]))
+    scans = f"sub-{subject}_ses-{label}_scans"
+    outputs.append(("bytes", scans + ".tsv", bids.scans_tsv(plan)))
+    outputs.append(("bytes", scans + ".json", _dump(bids.SCANS_JSON)))
+    return outputs
+
+
 def publish_session(cfg, subject, label, sessions, session, decisions, fates, conversions, profile, digest_profile,
-                    logger):
+                    logger, plan=None, agent=None):
     """Build or update one visit in the output root (7.5); sessions and conversions are its sessions'.
 
+    With a BIDS plan (bids.plan_visit) the visit becomes sub-<id>/ses-<date>/ instead.
     Returns 'published', 'unchanged', 'skipped: ...' (nothing to copy) or 'refused: ...'.
     """
-    destination = cfg.output / "Subjects" / subject / label
-    chosen = [v for v in session.volumes if copied(v, fates[v], profile)]
-    if not chosen:
-        return "skipped: nothing selected in the listed modalities"
-    manifest = _dump(_manifest(subject, label, sessions, session, decisions, fates, conversions, profile,
-                               digest_profile))
+    if plan is None:
+        destination = cfg.output / "Subjects" / subject / label
+        chosen = [v for v in session.volumes if copied(v, fates[v], profile)]
+        if not chosen:
+            return "skipped: nothing selected in the listed modalities"
+        manifest = _dump(_manifest(subject, label, sessions, session, decisions, fates, conversions, profile,
+                                   digest_profile))
+        outputs = _default_outputs(cfg, subject, label, chosen, fates, profile)
+        outputs.append(("bytes", "selection.json", manifest))
+        layout = {}
+    else:
+        destination = cfg.output / f"sub-{subject}" / f"ses-{label}"
+        if all(e["status"] == "omitted" for e in plan):
+            return "skipped: nothing exportable in the listed modalities"
+        manifest = _dump(_bids_manifest(subject, label, sessions, plan, decisions, conversions, profile,
+                                        digest_profile, agent))
+        outputs = _bids_outputs(cfg, subject, label, plan)
+        outputs.append(("bytes", bids.MANIFEST, manifest))
+        # Crash recovery restores this exact folder (cleanup_output).
+        layout = {"layout": "bids", "destination": destination.relative_to(cfg.output).as_posix()}
     digest = hashlib.sha256(manifest).hexdigest()
     if destination.exists():
         try:
@@ -357,26 +484,16 @@ def publish_session(cfg, subject, label, sessions, session, decisions, fates, co
     stage.mkdir()
     try:
         files = []
-        for v in chosen:
-            fate = fates[v]
-            source = cfg.niftis / v.relpath
-            nifti_folder = cfg.niftis / Path(*Path(v.relpath).parts[:3])  # Subjects/<id>/<its own session>
-            stem = source.name[:-7]
-            name = _new_name(subject, label, fate["folder"], v, ".nii.gz")
-            files.append((name, *_copy_verified(source, stage / name, v.sha256)))
-            for c in v.companions:
-                name = _new_name(subject, label, fate["folder"], v, _suffix(v, c))
-                files.append((name, *_copy_verified(nifti_folder / c["name"], stage / name, c["sha256"])))
-            raw = (source.parent / (stem + ".json")).read_bytes()
-            if hashlib.sha256(raw).hexdigest() != v.json_sha256:
-                raise SourceChanged(f"{stem}.json changed since conversion")
-            sidecar = json.loads(raw)
-            sidecar.update(selection_role=v.role or "", selection_fate=fate["fate"],
-                           selection_candidate_id=fate["candidate_id"], selection_profile=profile["name"],
-                           source_nifti=v.relpath)
-            name = _new_name(subject, label, fate["folder"], v, ".json")
-            files.append((name, *_write_bytes(stage / name, _dump(sidecar))))
-        files.append(("selection.json", *_write_bytes(stage / "selection.json", manifest)))
+        for kind, name, *item in outputs:
+            if kind == "copy":
+                files.append((name, *_copy_verified(item[0], stage / name, item[1])))
+            elif kind == "sidecar":
+                raw = item[0].read_bytes()
+                if hashlib.sha256(raw).hexdigest() != item[1]:
+                    raise SourceChanged(f"{item[0].name} changed since conversion")
+                files.append((name, *_write_bytes(stage / name, _dump(item[2](raw)))))
+            else:
+                files.append((name, *_write_bytes(stage / name, item[0])))
         inventory = [{"name": n, "size": size, "sha256": sha} for n, size, sha in sorted(files)]
         fsutil.atomic_json(stage / receipts.INVENTORY, {"files": inventory})
         fsutil.atomic_json(stage / receipts.RECEIPT, {
@@ -385,7 +502,7 @@ def publish_session(cfg, subject, label, sessions, session, decisions, fates, co
             "selection_sha256": digest, "source_receipt_ids": [c.get("receipt_id") for c in conversions],
             "provenance": {"package_version": __version__, "selector_version": SELECTOR_VERSION,
                            "profile": profile["name"], "profile_version": profile["version"],
-                           "profile_sha256": digest_profile}})
+                           "profile_sha256": digest_profile}, **layout})
         incoming, previous = fsutil.swap_names(destination)
         if not fsutil.publish_tree(stage, destination, cfg.output, incoming, previous):
             logger.warning("Published %s/%s; the previous folder %s could not be deleted yet, the next "
@@ -401,19 +518,22 @@ def publish_session(cfg, subject, label, sessions, session, decisions, fates, co
 
 
 def cleanup_output(cfg, logger):
-    """Finish or undo publications a crash interrupted (7.5, rule 6)."""
+    """Finish or undo publications a crash interrupted (7.5, rule 6), in either layout."""
     subjects = cfg.output / "Subjects"
-    if not subjects.is_dir():
-        return
-    for folder in sorted(p for p in subjects.iterdir() if p.is_dir()):
+    folders = sorted(p for p in subjects.iterdir() if p.is_dir()) if subjects.is_dir() else []
+    folders += sorted(p for p in cfg.output.glob("sub-*") if p.is_dir()) if cfg.output.is_dir() else []
+    for folder in folders:
         for p in sorted(folder.iterdir()):
             try:
                 if p.name.startswith((".staging_", ".incoming_")):
                     fsutil.remove_tree(p, cfg.output)
                 elif p.name.startswith(".previous_"):
                     try:
-                        target = folder / fsutil.read_json(p / receipts.RECEIPT)["session"]
-                    except (OSError, ValueError, KeyError, TypeError):
+                        receipt = fsutil.read_json(p / receipts.RECEIPT)
+                        # A BIDS receipt records its folder; a Selected/ visit folder is named by its date.
+                        target = cfg.output / receipt["destination"] if receipt.get("destination") \
+                            else folder / receipt["session"]
+                    except (OSError, ValueError, KeyError, TypeError, AttributeError):
                         logger.warning("Left %s in place: it has no readable selection receipt", p)
                         continue
                     if target.exists():
@@ -498,6 +618,7 @@ def _run(cfg, roster_warnings, stopper, logger, summary):
             "selector_version": SELECTOR_VERSION}
     subjects = load_subjects(cfg.subjects, cfg.subject_column) if cfg.subjects else None
     overrides = load_overrides(cfg.overrides)
+    agent = bids_root(cfg, profile, logger)
     state = State(cfg.reports, cfg.run_id)
     if state.recovered_from_backup:
         logger.error("State index %s could not be read; using %s and its journals (read only)", state.path,
@@ -575,29 +696,58 @@ def _run(cfg, roster_warnings, stopper, logger, summary):
             session, profile, overrides.get((subject, label)),
             accepted_partial=any(conversion.get("accepted_errors") for conversion in conversions))
         review += sum(d["outcome"] == "review_required" for r, d in decisions.items() if rules.listed(r, profile))
-        missing = rules.incomplete_roles(decisions, profile) if profile["complete_only"] else []
+        chosen = [v for v in session.volumes if copied(v, fates[v], profile)]
+        plan, plan_error = None, ""
+        if cfg.bids:
+            try:
+                plan = bids.plan_visit(subject, label, chosen, fates, decisions, agent, lambda v: _grid(cfg, v))
+            except bids.PlanError as e:
+                plan_error = str(e)
+        missing = {r: decisions[r]["outcome"] for r in rules.incomplete_roles(decisions, profile)} \
+            if profile["complete_only"] else {}
+        if profile["complete_only"] and plan is not None:
+            missing.update((r, "not_exported") for r in bids.unexported_roles(plan, decisions, profile)
+                           if r not in missing)
         if missing:
             for d in decisions.values():
                 d["warnings"] = sorted(set(d["warnings"]) | {"session_incomplete"})
         role_rows += _role_rows(subject, label, sessions, decisions, fates, prov, profile)
+        entries = {id(e["volume"]): e for e in plan or ()}
+        chosen_ids = {id(v) for v in chosen}
+        planned = []  # rows whose file is in the plan: published only once the visit is in the root
         for v in session.volumes:
             fate = fates[v]
             if v.role is None and profile["modalities"] is not None or v.role and not rules.listed(v.role, profile):
                 continue
-            path = _new_name(subject, label, fate["folder"], v, ".nii.gz") if copied(v, fate, profile) else ""
-            volume_rows.append(_volume_row(subject, label, v, fate, info, path))
+            if cfg.bids:
+                e = entries.get(id(v))
+                row = _volume_row(subject, label, v, fate, info, e["path"] if e else "")
+                if id(v) in chosen_ids:
+                    row.update(export_status=e["status"] if e else "omitted",
+                               export_reason=e["reason"] if e else "plan_refused")
+                    if row["export_status"] != "omitted":
+                        row["published"] = False
+                        planned.append(row)
+            else:
+                path = _new_name(subject, label, fate["folder"], v, ".nii.gz") if id(v) in chosen_ids else ""
+                row = _volume_row(subject, label, v, fate, info, path)
+            volume_rows.append(row)
         outcome_text = ", ".join(f"{role}={decisions[role]['outcome']}" for role in rules.REPORT_ROLES
                                  if decisions[role]["outcome"] != "missing" and rules.listed(role, profile))
         logger.info("SELECTED %s: %s", key, outcome_text or "no volumes")
-        if missing:
+        if plan_error:
+            counts["refused"] += 1
+            logger.error("NOT EXPORTED %s: %s", key, plan_error)
+        elif missing:
             counts["incomplete"] += 1
-            logger.info("NOT PUBLISHED %s: incomplete (%s)", key,
-                        ", ".join(f"{r}={decisions[r]['outcome']}" for r in missing))
+            logger.info("NOT PUBLISHED %s: incomplete (%s)", key, ", ".join(f"{r}={o}" for r, o in missing.items()))
         elif cfg.publish and not cfg.dry_run:
             result = publish_session(cfg, subject, label, sessions, session, decisions, fates, conversions, profile,
-                                     digest_profile, logger)
+                                     digest_profile, logger, plan, agent)
             counts[result.split(":", 1)[0]] += 1
             (logger.error if result.startswith("refused") else logger.info)("PUBLISH %s: %s", key, result)
+            for row in planned if result in ("published", "unchanged") else ():
+                row["published"] = True
     for key in sorted(overrides):
         if key not in visits:
             logger.warning("Overrides name a session that is not in state: %s/%s (sessions on one date share the "
@@ -605,6 +755,12 @@ def _run(cfg, roster_warnings, stopper, logger, summary):
     if subjects is not None:
         for subject in sorted(subjects - seen):
             logger.warning("Listed subject %s has no prepared session", subject)
+    if cfg.bids and cfg.publish and not cfg.dry_run:
+        try:
+            bids.write_dataset_files(cfg.output, cfg.project_root.name, agent, logger)
+        except OSError as e:
+            logger.error("Could not update the BIDS dataset files in %s: %s", cfg.output, e)
+            counts["refused"] += 1
     _protocol_changes(role_rows)
     for row in role_rows:
         row.pop("_change", None)

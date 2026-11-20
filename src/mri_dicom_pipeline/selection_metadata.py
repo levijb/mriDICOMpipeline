@@ -287,6 +287,40 @@ def nifti_header(path):
     return list(struct.unpack_from(endian + "8q", head, 16)), [round(x, 6) for x in struct.unpack_from(endian + "8d", head, 104)]
 
 
+def nifti_grid(path):
+    """(spatial dims, voxel-to-world rows) of a gzipped NIfTI-1 or NIfTI-2 file.
+
+    The rows are three [a, b, c, offset] lists from the sform, else the qform, else the voxel sizes.
+    """
+    with gzip.open(path, "rb") as f:
+        head = f.read(540)
+    if len(head) < 348:
+        raise ValueError("Truncated NIfTI header")
+    endian = "<" if struct.unpack("<i", head[:4])[0] in (348, 540) else ">"
+    if struct.unpack(endian + "i", head[:4])[0] == 348:
+        dims, pixdim = struct.unpack_from(endian + "8h", head, 40), struct.unpack_from(endian + "8f", head, 76)
+        qcode, scode = struct.unpack_from(endian + "2h", head, 252)
+        quatern, srows = struct.unpack_from(endian + "6f", head, 256), struct.unpack_from(endian + "12f", head, 280)
+    else:
+        if len(head) < 540:
+            raise ValueError("Truncated NIfTI header")
+        dims, pixdim = struct.unpack_from(endian + "8q", head, 16), struct.unpack_from(endian + "8d", head, 104)
+        qcode, scode = struct.unpack_from(endian + "2i", head, 344)
+        quatern, srows = struct.unpack_from(endian + "6d", head, 352), struct.unpack_from(endian + "12d", head, 400)
+    size = [int(d) if i < dims[0] else 1 for i, d in enumerate(dims[1:4])]
+    if scode > 0:
+        return size, [list(srows[i * 4:i * 4 + 4]) for i in range(3)]
+    zoom = [pixdim[1], pixdim[2], pixdim[3] * (-1 if pixdim[0] < 0 else 1)]
+    if qcode <= 0:
+        return size, [[zoom[i] if j == i else 0.0 for j in range(3)] + [0.0] for i in range(3)]
+    b, c, d, *offset = quatern
+    a = math.sqrt(max(0.0, 1 - b * b - c * c - d * d))
+    rotation = [[a * a + b * b - c * c - d * d, 2 * (b * c - a * d), 2 * (b * d + a * c)],
+                [2 * (b * c + a * d), a * a + c * c - b * b - d * d, 2 * (c * d - a * b)],
+                [2 * (b * d - a * c), 2 * (c * d + a * b), a * a + d * d - c * c - b * b]]
+    return size, [[rotation[i][j] * zoom[j] for j in range(3)] + [offset[i]] for i in range(3)]
+
+
 def _numbers(path):
     return [float(x) for x in Path(path).read_text().split()]
 

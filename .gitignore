@@ -3,6 +3,7 @@
 /DicomExtracted/
 /Niftis/
 /Selected/
+/BIDS/
 /Reports/
 /.work/
 /.mri_dicom_pipeline.lock

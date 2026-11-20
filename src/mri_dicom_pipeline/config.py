@@ -6,6 +6,7 @@ import argparse
 from datetime import datetime
 import os
 from pathlib import Path
+import re
 import uuid
 
 from . import __version__, identity
@@ -61,7 +62,7 @@ def config_parser(phase):
         p.add_argument("--nifti-root", type=Path, help="Niftis root (read only)")
         p.add_argument("--output-root", type=Path,
                        help="Folder for the selection reports and, with --publish, the selected sessions; "
-                            "default: PROJECT_ROOT/Selected")
+                            "default: PROJECT_ROOT/Selected, or PROJECT_ROOT/BIDS with --bids")
         p.add_argument("--subjects", type=Path, metavar="CSV",
                        help="Only select sessions of subjects listed in this CSV (column --subject-column)")
         p.add_argument("--profile", type=Path, help="JSON profile merged over the built-in selection profile")
@@ -89,6 +90,12 @@ def config_parser(phase):
                        help="Only sessions from scanners of these field strengths in tesla, for example 3 or 1.5,3")
         p.add_argument("--manufacturer", metavar="LIST",
                        help="Only sessions from these manufacturers, for example GE or GE,SIEMENS")
+        p.add_argument("--bids", action="store_true",
+                       help="Name and arrange the selection as a BIDS dataset instead of the Selected/ layout; "
+                            "--publish copies the files")
+        p.add_argument("--bids-contrast-agent", metavar="AGENT", type=str.lower,
+                       help="With --bids: the contrast agent of post-contrast T1w files (ce-AGENT), for example "
+                            "gadolinium; default: the agent the BIDS root recorded, else unknown")
     return p
 
 
@@ -104,7 +111,11 @@ def configure(args, phase):
     # These roots must never contain one another. Work may be node-local.
     roots = [args.uploads, args.dicoms, args.niftis, args.reports, args.work]
     if phase == "select":
-        args.output = (args.output_root or args.project_root / "Selected").resolve()
+        if args.bids_contrast_agent is not None and not args.bids:
+            raise ValueError("--bids-contrast-agent needs --bids")
+        if args.bids_contrast_agent is not None and not re.fullmatch(r"[a-z0-9]+", args.bids_contrast_agent):
+            raise ValueError("--bids-contrast-agent must be letters and digits only, for example gadolinium")
+        args.output = (args.output_root or args.project_root / ("BIDS" if args.bids else "Selected")).resolve()
         args.overrides = (args.overrides or args.project_root / "selection_overrides.csv").resolve()
         roots.append(args.output)
     for i, a in enumerate(roots):

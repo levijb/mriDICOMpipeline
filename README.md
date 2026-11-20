@@ -441,6 +441,71 @@ be evaluated (other than not yet converted), or a publication was refused.
 It never writes to `DicomExtracted/`, `Niftis/` or the pipeline state, and
 it runs only while no `prepare` or `convert` holds those folders.
 
+### BIDS output
+
+`--bids` names and arranges the same selections as a
+[BIDS](https://bids-specification.readthedocs.io/) dataset instead of the
+`Selected/` layout, so that BIDS apps (sMRIPrep, `fMRIPrep --anat-only`,
+MRIQC, QSIPrep, the FreeSurfer BIDS app) can read it. The choices are the same
+as without `--bids`; only names and arrangement change.
+
+```bash
+mri-dicom-pipeline select --bids                 # reports with the planned BIDS paths, in BIDS/
+mri-dicom-pipeline select --bids --publish --bids-contrast-agent gadolinium
+```
+
+```text
+BIDS/
+  dataset_description.json  README.md  participants.tsv  .bidsignore
+  code/bids_filter_precontrast.json
+  sub-S001/sub-S001_sessions.tsv
+  sub-S001/ses-20260725/
+    anat/  sub-S001_ses-20260725_T1w.nii.gz (+ .json), _ce-gadolinium_T1w, _T2w, _FLAIR,
+           _acq-swi_part-mag_T2starw, _acq-swi_part-phase_T2starw, _echo-1_MEGRE, _angio ...
+    dwi/   sub-S001_ses-20260725_dwi.nii.gz (+ .json .bval .bvec), _ADC, _expADC
+    fmap/  sub-S001_ses-20260725_acq-dwi_dir-j_epi.nii.gz (+ .json with IntendedFor)
+    sub-S001_ses-20260725_scans.tsv
+```
+
+* **Sessions are visit dates** (`ses-20260725`); the sessions of one date are
+  one BIDS session, as in the default layout. Subject IDs must be letters and
+  digits only; a visit of any other ID is refused, never renamed.
+* **Sidecars** keep the converted sidecar's technical fields only; the
+  pipeline's keys (subject, session, dates, source hashes) are removed.
+* **Post-contrast T1w files** are `ce-<agent>_T1w`. The agent is a dataset
+  setting, `unknown` until `--bids-contrast-agent` sets it; the root records
+  it and later runs reuse it. NiPreps apps take post-contrast T1w images too
+  unless given `--bids-filter-file code/bids_filter_precontrast.json`.
+* **Reverse phase-encoding b0 scans** become `fmap/..._epi` field maps for the
+  DWI only when both scans have `PhaseEncodingDirection` and
+  `TotalReadoutTime` and share one voxel grid. They have not been tested with
+  QSIPrep yet.
+* **Scanner maps** (ADC, trace, MIPs, processed SWI, QSM maps) share their
+  source scan's name parts only when that scan is in the export. Any other
+  map gets `unlinked` in its `acq-` label, for example `_acq-unlinked_ADC`.
+* **Phase images** always carry `part-phase` (and the magnitude of the same
+  scan `part-mag`), with `"Units": "arbitrary"` in the sidecar.
+* **Not standard BIDS:** the scanner's processed SWI (`_acq-swi_swi`), minIP
+  (`_acq-swi_minIP`) and QSM maps (`_acq-qsm_QSM`; BIDS's `Chimap` means ppm,
+  which the vendor scaling has not been checked for). They are published and
+  listed in `.bidsignore`.
+* **Not exported:** localizers, perfusion, unclassified scans, a structural
+  scan's other echoes, and dcm2niix's `_Eq`, `_ROI` and `_Tilt` companions.
+  `selection_volumes.csv` gives each file's `export_status` in the plan
+  (`standard`, `conventional` or `omitted`) and `export_reason`. Its
+  `published` column is `true` only when this run left the file in the root
+  (the visit was published or already up to date); a report-only run, a held
+  or refused visit, and `--complete-only` leave it `false`. `--extras` and
+  `--modalities` naming LOCALIZER or PERFUSION are refused.
+* **The root** must be empty or made by `--bids`, and the default layout
+  refuses a BIDS root. The dataset files are rebuilt from every published
+  visit after each `--publish` run; rows and columns added to
+  `participants.tsv` and the sessions files, an edited `README` or
+  `dataset_description.json`, and lines outside the marked block of
+  `.bidsignore` are kept.
+* **Validation:** CI runs `bids-validator-deno` on a published synthetic
+  dataset and requires zero errors. Images are not defaced.
+
 ## Privacy
 
 The outputs carry identifiers and dates through these channels, and the

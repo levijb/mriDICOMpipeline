@@ -257,6 +257,34 @@ the interrupted publication before it starts and logs `RECONCILED` when it
 restores a folder. `Reports/.selection_cache/` can be deleted at any time;
 the next run reads the DICOM headers again.
 
+### A BIDS dataset
+
+To give BIDS apps the same selections, publish them with `--bids` into their
+own root (default `PROJECT_ROOT/BIDS`, which must be empty the first time):
+
+```bash
+mri-dicom-pipeline select --bids                 # writes BIDS/selection.csv and selection_volumes.csv
+mri-dicom-pipeline select --bids --publish --bids-contrast-agent gadolinium
+```
+
+* Read `export_status` and `export_reason` in `BIDS/selection_volumes.csv`
+  first: files the export leaves out are `omitted` with a reason, for example
+  a field map whose readout time is missing (`missing_readout_metadata`).
+  `published` turns `true` only after the `--publish` run that puts the
+  visit in the root.
+* Set `--bids-contrast-agent` on the first publish if your post-contrast
+  scans use a known agent; it is recorded, and changing it later renames the
+  post-contrast files.
+* A visit whose subject ID has `-` or `_` is refused (`NOT EXPORTED` in the
+  log): BIDS labels are letters and digits only.
+* Add your own columns to `participants.tsv` and the sessions files, and
+  your own text to `README.md` and `dataset_description.json` (for example
+  Authors and License); later runs keep them.
+* Check the dataset with the BIDS validator before running an app:
+  `pip install bids-validator-deno`, then `bids-validator-deno BIDS`.
+* Write app outputs outside the root or under `BIDS/derivatives/`, which
+  `select` never touches.
+
 ## Explicit reconversion
 
 A complete session is never reconverted automatically. To reconvert one, for

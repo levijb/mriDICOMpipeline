@@ -84,4 +84,12 @@ establishes it. Review this list whenever the README changes.
 | Descriptions never reach selection outputs, cache or log | `test_selection.py::test_descriptions_never_reach_outputs`, `test_header_records` |
 | An interrupted publication is finished by the next run | `test_selection.py::test_interrupted_publication_is_finished_by_the_next_run` |
 | The `_ADC` companion travels with its DWI volume | `test_real_converter.py::test_real_converter_select_keeps_the_adc_companion_with_its_dwi` |
+| `--bids --publish` builds `sub-<id>/ses-<date>/anat\|dwi\|fmap/` with technical sidecars, `scans.tsv` and the dataset files; `export_status` in the reports | `test_bids_export.py::test_publish_builds_a_bids_dataset` |
+| BIDS names per role: `ce-<agent>`, SWI/QSM/GRE echoes and parts, `part-phase` on phase-only scans, `acq-unlinked` on maps without their source, conventional SWI/minIP/QSM files, angio runs, structural other echoes omitted | `test_bids.py`, `test_bids_export.py::test_susceptibility_and_angiography_names` |
+| Reverse b0 field maps need readout times on both scans and one voxel grid; omissions leave no dangling `IntendedFor` | `test_bids.py::test_reverse_b0_becomes_a_field_map_for_the_dwi`, `test_field_map_checks` |
+| A BIDS rerun is unchanged; a new contrast agent rebuilds and is then reused; extras, unexported modalities, foreign roots and the default layout on a BIDS root are refused | `test_bids_export.py::test_rerun_agent_change_and_refusals` |
+| `--bids` without `--publish` plans paths with `published` false; `--dry-run` writes nothing; `--complete-only` counts exported selections and leaves held visits unpublished | `test_bids_export.py::test_report_only_and_dry_run`, `test_complete_only_with_bids`, `test_bids.py::test_complete_only_counts_exported_selections` |
+| Dataset files are rebuilt from every published visit and keep user rows and columns | `test_bids_export.py::test_subset_runs_keep_other_participants_and_user_columns`, `test_two_sessions_on_one_date_are_one_bids_session`, `test_bids.py::test_merge_tsv_keeps_user_rows_columns_and_values` |
+| An interrupted BIDS publication is finished by the next run | `test_bids_export.py::test_interrupted_bids_publication_is_finished_by_the_next_run` |
+| The published dataset passes the BIDS validator; the filter file keeps only the pre-contrast T1w | `test_bids_export.py::test_published_dataset_passes_the_bids_validator`, `test_filter_file_selects_the_precontrast_t1w` (CI job `bids`) |
 | License | `LICENSE`, `NOTICE`, `pyproject.toml` (`license = "Apache-2.0"`) |

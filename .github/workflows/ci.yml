@@ -68,6 +68,22 @@ jobs:
               env.write(f'MRI_PIPELINE_DCM2NIIX={exe}\n')
       - run: python -m pytest tests/test_real_converter.py -rs
 
+  bids:
+    # select --bids output: the published synthetic dataset must pass the BIDS validator with
+    # zero errors, and the pre-contrast filter file must work with pybids.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e ".[test]" "bids-validator-deno==3.0.2" "pybids==0.22.0"
+      - name: Fail here rather than let the checks skip silently
+        run: |
+          bids-validator-deno --version
+          python -c "import bids.layout"
+      - run: python -m pytest tests/test_bids_export.py -rs
+
   package:
     runs-on: ubuntu-latest
     steps:
