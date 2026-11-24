@@ -1,0 +1,1111 @@
+{
+ "catalog": "naming",
+ "description": "Naming of unnamed upload ZIPs and the header date check (TG-NAM, R-NAM-1 to R-NAM-9). Each session is one ZIP holding one small 2D series (16 x 16 x 10). 'upload_path' and every path in an expected outcome is relative to DicomUploads/. A session label 'held' means the ZIP is expected to stay unnamed. 'steps' lists the prepare runs a test makes, in order; 'zip' fields name sessions by label or by their 'key'. 'corrupt' asks the test to damage the ZIP after building it. All expectations are policy (P only, oracle rule 2).",
+ "protocols_from": [
+  "structural"
+ ],
+ "sources": {
+  "UN-1": "upload-naming.md rule 1 (which ZIPs are named)",
+  "UN-2": "upload-naming.md rule 2 (date)",
+  "UN-3": "upload-naming.md rule 3 (suffix)",
+  "UN-4": "upload-naming.md rule 4 (rename and log)",
+  "UN-5": "upload-naming.md rule 5 (holds and cache)",
+  "README-UNNAMED": "README, Unnamed ZIPs in subject folders",
+  "README-DATES": "README, Uploads and canonical ZIPs (header date check)",
+  "README-MULTI": "README, Uploads and canonical ZIPs (multi-study ZIPs)"
+ },
+ "protocols": {
+  "NAM_SMALL": {
+   "base": "GE_T2_FSE",
+   "slices": 10,
+   "geometry": {
+    "rows": 16,
+    "cols": 16,
+    "pixel_spacing": [
+     15.0,
+     15.0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -20.0
+    ]
+   },
+   "tags": {
+    "SeriesNumber": [
+     2,
+     "R4"
+    ],
+    "SeriesTime": [
+     "090000",
+     "R4"
+    ],
+    "AcquisitionTime": [
+     "090010",
+     "R4"
+    ]
+   }
+  }
+ },
+ "exams": [
+  {
+   "id": "NAM-02-LISTED-DATE",
+   "uid_exam": 701,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S701",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261101",
+     "upload_path": "Uploads/batch1/S701/x7f3k.zip",
+     "study_date": "20261101",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-1": {
+     "outcome": {
+      "renames": {
+       "Uploads/batch1/S701/x7f3k.zip": "Uploads/batch1/S701/S701_20261101.zip"
+      },
+      "sorted": [
+       "SubjectsSorted/S701/S701_20261101.zip"
+      ],
+      "held": []
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rules 1-2, 4; README Unnamed ZIPs"
+    },
+    "R-NAM-4": {
+     "outcome": {
+      "log_rows": 1,
+      "log_row": {
+       "subject": "S701",
+       "session": "20261101",
+       "study_date": "20261101",
+       "listed_date": "20261101",
+       "note": ""
+      }
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 4 (the columns of the rename log)"
+    }
+   }
+  },
+  {
+   "id": "NAM-03-NEAR-DATE",
+   "uid_exam": 702,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S702",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261101",
+     "upload_path": "Uploads/batch1/S702/a1.zip",
+     "study_date": "20261103",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-2": {
+     "outcome": {
+      "renames": {
+       "Uploads/batch1/S702/a1.zip": "Uploads/batch1/S702/S702_20261101.zip"
+      },
+      "note_states_gap": true,
+      "issues": [
+       {
+        "blocking": false,
+        "kind": "date"
+       }
+      ]
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 2 (one listed date within tolerance 2: the listed date is used, then the usual date: warning)"
+    }
+   }
+  },
+  {
+   "id": "NAM-04-TWO-DATES-IN-RANGE",
+   "uid_exam": 703,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S703",
+     "11/1/2026"
+    ],
+    [
+     "S703",
+     "11/5/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "held",
+     "upload_path": "Uploads/batch1/S703/a1.zip",
+     "study_date": "20261103",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare",
+      "--date-tolerance",
+      "4"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-2": {
+     "outcome": {
+      "renames": {},
+      "held": [
+       "Uploads/batch1/S703/a1.zip"
+      ],
+      "issues": [
+       {
+        "blocking": true,
+        "names_dates": [
+         "20261101",
+         "20261105"
+        ]
+       }
+      ],
+      "zip_sha256_unchanged": true
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rules 2 and 5 (two listed dates in range: held)"
+    }
+   }
+  },
+  {
+   "id": "NAM-05-UNLISTED-DATE",
+   "uid_exam": 704,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S704",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261110",
+     "upload_path": "Uploads/batch1/S704/a1.zip",
+     "study_date": "20261110",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ],
+     "expect": "held"
+    },
+    {
+     "run": [
+      "prepare",
+      "--allow-unlisted-dates"
+     ],
+     "expect": "named"
+    }
+   ],
+   "expected": {
+    "R-NAM-2": {
+     "outcome": {
+      "step1": {
+       "held": [
+        "Uploads/batch1/S704/a1.zip"
+       ],
+       "issues": [
+        {
+         "blocking": true
+        }
+       ]
+      },
+      "step2": {
+       "renames": {
+        "Uploads/batch1/S704/a1.zip": "Uploads/batch1/S704/S704_20261110.zip"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 2 (none in range: held; --allow-unlisted-dates uses the StudyDate)"
+    }
+   }
+  },
+  {
+   "id": "NAM-06-TWO-STUDIES-ONE-DATE",
+   "uid_exam": 705,
+   "family": "naming",
+   "description": "a.zip holds the 14:00 study and b.zip the 09:00 study, so path order and StudyTime order disagree (seeded fault F-NAM-2).",
+   "roster_rows": [
+    [
+     "S705",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261101_2",
+     "key": "a",
+     "upload_path": "Uploads/batch1/S705/a.zip",
+     "study_date": "20261101",
+     "study_time": "140000",
+     "uid_study": 9501,
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL",
+       "tags": {
+        "SeriesTime": [
+         "140000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "140010",
+         "R4"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "label": "20261101",
+     "key": "b",
+     "upload_path": "Uploads/batch1/S705/b.zip",
+     "study_date": "20261101",
+     "study_time": "090000",
+     "uid_study": 9502,
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-3": {
+     "outcome": {
+      "renames": {
+       "Uploads/batch1/S705/b.zip": "Uploads/batch1/S705/S705_20261101.zip",
+       "Uploads/batch1/S705/a.zip": "Uploads/batch1/S705/S705_20261101_2.zip"
+      },
+      "warning_for": [
+       "S705_20261101_2"
+      ],
+      "log_note_for": [
+       "S705_20261101_2"
+      ]
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 3 (first free label in order of earliest StudyTime; a suffix above 1 is warned and noted)"
+    }
+   }
+  },
+  {
+   "id": "NAM-07-NEW-STUDY-ON-PREPARED-DATE",
+   "uid_exam": 706,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S706",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261101",
+     "key": "first",
+     "zip_name": "S706_20261101.zip",
+     "study_date": "20261101",
+     "study_time": "090000",
+     "uid_study": 9601,
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    },
+    {
+     "label": "20261101_2",
+     "key": "second",
+     "upload_path": "Uploads/batch2/S706/later.zip",
+     "study_date": "20261101",
+     "study_time": "150000",
+     "uid_study": 9602,
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "NAM_SMALL",
+       "tags": {
+        "SeriesTime": [
+         "150000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "150010",
+         "R4"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "place": [
+      "first"
+     ],
+     "run": [
+      "prepare"
+     ]
+    },
+    {
+     "place": [
+      "second"
+     ],
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-3": {
+     "outcome": {
+      "step2": {
+       "renames": {
+        "Uploads/batch2/S706/later.zip": "Uploads/batch2/S706/S706_20261101_2.zip"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 3 (prepared sessions count, from inventory study_keys)"
+    }
+   }
+  },
+  {
+   "id": "NAM-08-REEXPORT-OF-PREPARED-STUDY",
+   "uid_exam": 707,
+   "family": "naming",
+   "description": "The second ZIP holds the same DICOM objects as the first, packed in reverse member order.",
+   "roster_rows": [
+    [
+     "S707",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261101",
+     "key": "first",
+     "zip_name": "S707_20261101.zip",
+     "study_date": "20261101",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    },
+    {
+     "label": "20261101",
+     "key": "reexport",
+     "upload_path": "Uploads/batch2/S707/reexport.zip",
+     "study_date": "20261101",
+     "study_time": "090000",
+     "same_objects_as": "first",
+     "member_order": "reverse",
+     "series": []
+    }
+   ],
+   "steps": [
+    {
+     "place": [
+      "first"
+     ],
+     "run": [
+      "prepare"
+     ]
+    },
+    {
+     "place": [
+      "reexport"
+     ],
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-3": {
+     "outcome": {
+      "step2": {
+       "renames": {
+        "Uploads/batch2/S707/reexport.zip": "Uploads/batch2/S707/S707_20261101.zip"
+       },
+       "no_session": [
+        "20261101_2"
+       ],
+       "preparation": "duplicate (same DICOM contents): skipped, the copy stays in Uploads"
+      }
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 3 (a shared study takes that name); README Fast repeated runs (a differently packaged ZIP with the same contents is skipped)"
+    }
+   }
+  },
+  {
+   "id": "NAM-09A-NO-STUDYDATE",
+   "uid_exam": 708,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S708",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "held",
+     "upload_path": "Uploads/batch1/S708/a1.zip",
+     "study_date": "20261101",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL",
+       "tags": {
+        "StudyDate": [
+         null,
+         "R4"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-5": {
+     "outcome": {
+      "held": [
+       "Uploads/batch1/S708/a1.zip"
+      ],
+      "issues": [
+       {
+        "blocking": true
+       }
+      ],
+      "zip_sha256_unchanged": true
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 5 (no StudyDate)"
+    }
+   }
+  },
+  {
+   "id": "NAM-09B-TWO-STUDYDATES",
+   "uid_exam": 709,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S709",
+     "11/1/2026"
+    ],
+    [
+     "S709",
+     "11/2/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "held",
+     "upload_path": "Uploads/batch1/S709/a1.zip",
+     "study_date": "20261101",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      },
+      {
+       "uid_series": 3,
+       "protocol": "NAM_SMALL",
+       "tags": {
+        "StudyDate": [
+         "20261102",
+         "R4"
+        ],
+        "SeriesNumber": [
+         3,
+         "R4"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-5": {
+     "outcome": {
+      "held": [
+       "Uploads/batch1/S709/a1.zip"
+      ],
+      "issues": [
+       {
+        "blocking": true
+       }
+      ],
+      "zip_sha256_unchanged": true
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 2 (exactly one valid StudyDate is required) and rule 5"
+    }
+   }
+  },
+  {
+   "id": "NAM-09C-INVALID-STUDYDATE",
+   "uid_exam": 710,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S710",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "held",
+     "upload_path": "Uploads/batch1/S710/a1.zip",
+     "study_date": "20261340",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-5": {
+     "outcome": {
+      "held": [
+       "Uploads/batch1/S710/a1.zip"
+      ],
+      "issues": [
+       {
+        "blocking": true
+       }
+      ],
+      "zip_sha256_unchanged": true
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 5 (an invalid StudyDate)"
+    }
+   }
+  },
+  {
+   "id": "NAM-09D-FOLDER-NOT-AN-ID",
+   "uid_exam": 711,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S711",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "held",
+     "upload_path": "Uploads/batch1/NOTANID/a1.zip",
+     "study_date": "20261101",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-5": {
+     "outcome": {
+      "held": [
+       "Uploads/batch1/NOTANID/a1.zip"
+      ],
+      "issues": [
+       {
+        "blocking": true
+       }
+      ],
+      "zip_sha256_unchanged": true
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rules 1 and 5 (the parent folder must be a roster ID)"
+    }
+   }
+  },
+  {
+   "id": "NAM-09E-DIRECTLY-IN-UPLOADS",
+   "uid_exam": 712,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S712",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "held",
+     "upload_path": "Uploads/x7f3k.zip",
+     "study_date": "20261101",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-5": {
+     "outcome": {
+      "held": [
+       "Uploads/x7f3k.zip"
+      ],
+      "renames": {},
+      "issues": [
+       {
+        "blocking": true
+       }
+      ],
+      "zip_sha256_unchanged": true
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 1 (never directly in Uploads/); README (an unparseable name is held)"
+    }
+   }
+  },
+  {
+   "id": "NAM-09F-TARGET-NAME-TAKEN",
+   "uid_exam": 713,
+   "family": "naming",
+   "description": "The folder holds S713_20261101.zip and an unnamed re-export of the same study; the re-export's target name is taken in that folder.",
+   "roster_rows": [
+    [
+     "S713",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261101",
+     "key": "named",
+     "upload_path": "Uploads/batch1/S713/S713_20261101.zip",
+     "study_date": "20261101",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    },
+    {
+     "label": "held",
+     "key": "copy",
+     "upload_path": "Uploads/batch1/S713/copy.zip",
+     "study_date": "20261101",
+     "same_objects_as": "named",
+     "member_order": "reverse",
+     "series": []
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-5": {
+     "outcome": {
+      "held": [
+       "Uploads/batch1/S713/copy.zip"
+      ],
+      "renames": {},
+      "issues": [
+       {
+        "blocking": true
+       }
+      ],
+      "zip_sha256_unchanged": true
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 4 (never over an existing file) and rule 5 (the target name already in the folder)"
+    }
+   }
+  },
+  {
+   "id": "NAM-09G-SYMBOLIC-LINK",
+   "uid_exam": 714,
+   "family": "naming",
+   "platform": "L",
+   "roster_rows": [
+    [
+     "S714",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "held",
+     "upload_path": "Uploads/batch1/S714/link.zip",
+     "symlink_target": "outside/real.zip",
+     "study_date": "20261101",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-5": {
+     "outcome": {
+      "held": [
+       "Uploads/batch1/S714/link.zip"
+      ],
+      "renames": {},
+      "issues": [
+       {
+        "blocking": true
+       }
+      ]
+     },
+     "oracle": "P",
+     "source": "spec R-NAM-5 (a symbolic link stays unnamed with a blocking issue)"
+    }
+   }
+  },
+  {
+   "id": "NAM-10-DAMAGED-ZIPS",
+   "uid_exam": 715,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S715",
+     "11/1/2026"
+    ],
+    [
+     "S716",
+     "11/1/2026"
+    ],
+    [
+     "S717",
+     "11/1/2026"
+    ],
+    [
+     "S718",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "held",
+     "key": "truncated",
+     "upload_path": "Uploads/batch1/S715/a1.zip",
+     "study_date": "20261101",
+     "corrupt": "truncate",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    },
+    {
+     "label": "held",
+     "key": "bad_crc",
+     "upload_path": "Uploads/batch1/S716/a1.zip",
+     "study_date": "20261101",
+     "corrupt": "bad_crc",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    },
+    {
+     "label": "held",
+     "key": "encrypted",
+     "upload_path": "Uploads/batch1/S717/a1.zip",
+     "study_date": "20261101",
+     "corrupt": "encryption_flag",
+     "series": [
+      {
+       "uid_series": 4,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    },
+    {
+     "label": "20261101",
+     "key": "growing",
+     "upload_path": "Uploads/batch1/S718/a1.zip",
+     "study_date": "20261101",
+     "corrupt": "truncate_then_complete",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    },
+    {
+     "complete": [
+      "growing"
+     ],
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-5": {
+     "outcome": {
+      "step1": {
+       "held": [
+        "Uploads/batch1/S715/a1.zip",
+        "Uploads/batch1/S716/a1.zip",
+        "Uploads/batch1/S717/a1.zip",
+        "Uploads/batch1/S718/a1.zip"
+       ]
+      },
+      "step2": {
+       "renames": {
+        "Uploads/batch1/S718/a1.zip": "Uploads/batch1/S718/S718_20261101.zip"
+       },
+       "held": [
+        "Uploads/batch1/S715/a1.zip",
+        "Uploads/batch1/S716/a1.zip",
+        "Uploads/batch1/S717/a1.zip"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 5 (a damaged or encrypted ZIP is held); README (a partly copied ZIP is retried once its size or time changes)"
+    }
+   }
+  },
+  {
+   "id": "NAM-11-TWO-STUDY-ZIP",
+   "uid_exam": 719,
+   "family": "naming",
+   "roster_rows": [
+    [
+     "S719",
+     "11/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261101",
+     "upload_path": "Uploads/batch1/S719/a1.zip",
+     "study_date": "20261101",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      },
+      {
+       "uid_series": 3,
+       "protocol": "NAM_SMALL",
+       "uid_study": 9719,
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-8": {
+     "outcome": {
+      "renames": {
+       "Uploads/batch1/S719/a1.zip": "Uploads/batch1/S719/S719_20261101.zip"
+      },
+      "preparation": "held as multi-study (blocking issue)",
+      "not_in_SubjectsSorted_extracted": true
+     },
+     "oracle": "P",
+     "source": "upload-naming.md rule 2 (preparation's multi-study check still applies); README (a ZIP holding more than one study is held)"
+    }
+   }
+  },
+  {
+   "id": "NAM-15-NAMED-DATE-TOLERANCE",
+   "uid_exam": 720,
+   "family": "naming",
+   "description": "Template for R4-NAM-15: a named ZIP S720_20261110.zip whose StudyDate is the name date shifted by 'gap' days (both signs) for gap 0..tolerance+1 at tolerances 0, 2 and 4. The test builds one ZIP per case from this session, changing only StudyDate.",
+   "roster_rows": [
+    [
+     "S720",
+     "11/10/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261110",
+     "zip_name": "S720_20261110.zip",
+     "study_date": "20261110",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "matrix": {
+    "tolerances": [
+     0,
+     2,
+     4
+    ],
+    "gaps": "0..tolerance+1",
+    "signs": [
+     -1,
+     1
+    ]
+   },
+   "expected": {
+    "R-NAM-9": {
+     "outcome": {
+      "rule": "held exactly when |gap| > tolerance; a nonblocking date: warning exactly when 0 < |gap| <= tolerance; nothing when gap = 0"
+     },
+     "oracle": "P",
+     "source": "README, header date check (symmetric in sign; with tolerance 0 every difference is held)"
+    }
+   }
+  }
+ ]
+}

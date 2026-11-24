@@ -1,0 +1,948 @@
+{
+ "catalog": "visits",
+ "description": "Same-day visits (spec 4.1, TG-VIS, R4-CON-04): two and three sessions with the modalities spread over them; one T1 protocol in sessions 1 and 3 with contrast given only in session 2; a visit with an unconverted third session; and a visit whose second session tags every series with a contrast agent. Facts are per session (own StudyInstanceUID, times after that session's earliest AcquisitionTime). On the visit timeline (scan-selection.md 7.2) session k (0-based, suffix order) gains k x 86400 s and k x 1,000,000.",
+ "protocols_from": [
+  "structural",
+  "diffusion"
+ ],
+ "sources": {
+  "SS-7.2-VIS": "scan-selection.md 7.2, Visits",
+  "README-VIS": "README, Scan selection (visits)"
+ },
+ "exams": [
+  {
+   "id": "VIS-01-TWO-SESSIONS",
+   "uid_exam": 1001,
+   "family": "visits",
+   "description": "Session 1 holds T1 and FLAIR, session _2 (StudyTime 14:00) holds T2 and a tensor DWI.",
+   "roster_rows": [
+    [
+     "S1001",
+     "10/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261001",
+     "zip_name": "S1001_20261001.zip",
+     "study_date": "20261001",
+     "study_time": "090000",
+     "uid_study": 9011,
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 4,
+       "protocol": "GE_CUBE_FLAIR",
+       "tags": {
+        "SeriesNumber": [
+         4,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 230,
+        "pos_min": -57.5,
+        "pos_max": 57.0,
+        "step_mm": 0.5,
+        "extent_mm": 115.5,
+        "uniform_spacing": true,
+        "acq_rel_s": 300.0,
+        "series_rel_s": 290.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "CUBE",
+         "FLAIR",
+         "SAG"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "label": "20261001_2",
+     "zip_name": "S1001_20261001_2.zip",
+     "study_date": "20261001",
+     "study_time": "140000",
+     "uid_study": 9012,
+     "series": [
+      {
+       "uid_series": 102,
+       "protocol": "GE_T2_FSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "140100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "140110",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 105,
+       "protocol": "GE_DWI",
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "140500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "140510",
+         "R4"
+        ]
+       },
+       "gradients": {
+        "bvals": [
+         0,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000
+        ],
+        "bvecs": [
+         [
+          0,
+          0,
+          0
+         ],
+         [
+          1,
+          0,
+          0
+         ],
+         [
+          0,
+          1,
+          0
+         ],
+         [
+          0,
+          0,
+          1
+         ],
+         [
+          0.7071067811865476,
+          0.7071067811865476,
+          0
+         ],
+         [
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+         ],
+         [
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+         ]
+        ],
+        "source": "SS-5.2"
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 240.0,
+        "series_rel_s": 230.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "DWI"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-VIS-1": {
+     "outcome": {
+      "visit_folders": [
+       "Subjects/S1001/20261001"
+      ],
+      "session": "20261001",
+      "sessions": [
+       "20261001",
+       "20261001_2"
+      ],
+      "rows_per_role": 1
+     },
+     "oracle": "P",
+     "source": "README Scan selection; scan-selection.md 7.2"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected",
+        "winner": [
+         "3"
+        ]
+       },
+       "FLAIR": {
+        "outcome": "selected",
+        "winner": [
+         "4"
+        ]
+       },
+       "T2": {
+        "outcome": "selected_fallback",
+        "winner": [
+         "102"
+        ]
+       },
+       "DWI": {
+        "outcome": "selected",
+        "winner": [
+         "105"
+        ],
+        "tier": "tensor"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 7.2 (scans of both sessions ranked together), 6.4"
+    },
+    "R-VIS-3": {
+     "outcome": {
+      "timeline_offsets": {
+       "20261001": {
+        "acq_s": 0,
+        "series_number": 0
+       },
+       "20261001_2": {
+        "acq_s": 86400,
+        "series_number": 1000000
+       }
+      }
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 7.2 Timeline"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "VIS-02-THREE-SESSIONS-CONTRAST-IN-SECOND",
+   "uid_exam": 1002,
+   "family": "visits",
+   "description": "Session 1: precontrast T1 (series 3). Session _2: an untagged T2, then an agent-tagged T1 (+C). Session _3: the same T1 protocol, untagged. On the visit timeline session _3's T1 comes after the session _2 post series in both orders, so rule 5 makes it post.",
+   "roster_rows": [
+    [
+     "S1002",
+     "10/2/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261002",
+     "zip_name": "S1002_20261002.zip",
+     "study_date": "20261002",
+     "study_time": "080000",
+     "uid_study": 9021,
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "080500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "080510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "label": "20261002_2",
+     "zip_name": "S1002_20261002_2.zip",
+     "study_date": "20261002",
+     "study_time": "110000",
+     "uid_study": 9022,
+     "series": [
+      {
+       "uid_series": 202,
+       "protocol": "GE_T2_FSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "110100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "110110",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 203,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "111000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "111010",
+         "R4"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-2.1-4"
+        ],
+        "SeriesDescription": [
+         "SAG T1 BRAVO +C",
+         "R4"
+        ]
+       },
+       "folder": [
+        "T1_POST",
+        "CLS"
+       ],
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 540.0,
+        "series_rel_s": 530.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "C",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "label": "20261002_3",
+     "zip_name": "S1002_20261002_3.zip",
+     "study_date": "20261002",
+     "study_time": "150000",
+     "uid_study": 9023,
+     "series": [
+      {
+       "uid_series": 303,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "150500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "150510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-VIS-3": {
+     "outcome": {
+      "timeline_offsets": {
+       "20261002": {
+        "acq_s": 0,
+        "series_number": 0
+       },
+       "20261002_2": {
+        "acq_s": 86400,
+        "series_number": 1000000
+       },
+       "20261002_3": {
+        "acq_s": 172800,
+        "series_number": 2000000
+       }
+      },
+      "phases": {
+       "3": [
+        "pre",
+        "timing"
+       ],
+       "202": [
+        "pre",
+        "timing"
+       ],
+       "203": [
+        "post",
+        "agent_tag"
+       ],
+       "303": [
+        "post",
+        "timing"
+       ]
+      }
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 7.2 Timeline and Contrast; 5.7 rules 2 and 5"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "3"
+        ]
+       },
+       "T1_POST": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "repeat_needs_review"
+        ],
+        "rule_recommendation": [
+         "303"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "spec R4-VIS-03 (expected roles and repeat recommendation for this layout); scan-selection.md 6.4 step 4"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   },
+   "owner_decisions": [
+    "2026-11-24 (G1): accepted as written."
+   ],
+   "notes": [
+    "Session _3's T1 is labelled T1 by the classifier but has role T1_POST by rule 5 timing, so 5.4 rule 4 adds label_parameter_conflict to it. The repeat review comes first (6.4 step 4 before step 5), so the outcome above does not depend on it."
+   ]
+  },
+  {
+   "id": "VIS-03-THIRD-SESSION-NOT-CONVERTED",
+   "uid_exam": 1003,
+   "family": "visits",
+   "description": "Three sessions on one date; the test prepares all three and converts only the first two (convert --session for each).",
+   "roster_rows": [
+    [
+     "S1003",
+     "10/3/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261003",
+     "zip_name": "S1003_20261003.zip",
+     "study_date": "20261003",
+     "study_time": "080000",
+     "uid_study": 9031,
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "080500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "080510",
+         "R4"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "label": "20261003_2",
+     "zip_name": "S1003_20261003_2.zip",
+     "study_date": "20261003",
+     "study_time": "110000",
+     "uid_study": 9032,
+     "series": [
+      {
+       "uid_series": 202,
+       "protocol": "GE_T2_FSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "110100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "110110",
+         "R4"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "label": "20261003_3",
+     "zip_name": "S1003_20261003_3.zip",
+     "study_date": "20261003",
+     "study_time": "150000",
+     "uid_study": 9033,
+     "series": [
+      {
+       "uid_series": 304,
+       "protocol": "GE_CUBE_FLAIR",
+       "tags": {
+        "SeriesNumber": [
+         4,
+         "R4"
+        ],
+        "SeriesTime": [
+         "150500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "150510",
+         "R4"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "run": [
+      "prepare"
+     ]
+    },
+    {
+     "run": [
+      "convert",
+      "--session",
+      "S1003/20261003",
+      "--session",
+      "S1003/20261003_2"
+     ]
+    },
+    {
+     "run": [
+      "select"
+     ]
+    }
+   ],
+   "expected": {
+    "R-VIS-2": {
+     "outcome": {
+      "every_role": "source_not_ready",
+      "reasons_include": [
+       "20261003_3: not_converted"
+      ]
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 7.2, Visits readiness (each unready session is named in the reason)"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection (not yet converted is not attention)"
+    }
+   }
+  },
+  {
+   "id": "CON-04-AGENT-TAG-ONLY-SECOND-SESSION",
+   "uid_exam": 1004,
+   "family": "visits",
+   "description": "Session 1: untagged T2 and T1. Session _2: T2 and T1, every series tagged with ContrastBolusAgent.",
+   "roster_rows": [
+    [
+     "S1004",
+     "10/4/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261004",
+     "zip_name": "S1004_20261004.zip",
+     "study_date": "20261004",
+     "study_time": "090000",
+     "uid_study": 9041,
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "GE_T2_FSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090110",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 240.0,
+        "series_rel_s": 230.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "label": "20261004_2",
+     "zip_name": "S1004_20261004_2.zip",
+     "study_date": "20261004",
+     "study_time": "140000",
+     "uid_study": 9042,
+     "series": [
+      {
+       "uid_series": 102,
+       "protocol": "GE_T2_FSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "140100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "140110",
+         "R4"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-2.1-4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 103,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "140500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "140510",
+         "R4"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-2.1-4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 240.0,
+        "series_rel_s": 230.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-CON-1": {
+     "outcome": {
+      "phases": {
+       "2": [
+        "pre",
+        "presumed"
+       ],
+       "3": [
+        "pre",
+        "presumed"
+       ],
+       "102": [
+        "unknown",
+        "agent_tag_exam_wide"
+       ],
+       "103": [
+        "unknown",
+        "agent_tag_exam_wide"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 7.2 Contrast (exam-wide judged per session); 5.7 rules 2 and 6 (no series has post evidence from rules 1-4)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "repeat_needs_review"
+        ],
+        "rule_recommendation": [
+         "103"
+        ]
+       },
+       "T2": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "repeat_needs_review"
+        ],
+        "rule_recommendation": [
+         "102"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 4 (same-protocol repeats; contrast ranks pre and unknown equal for prefer_pre roles and is no ranking component of T1)"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  }
+ ]
+}

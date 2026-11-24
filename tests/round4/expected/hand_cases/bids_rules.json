@@ -1,0 +1,166 @@
+{
+ "description": "Hand-worked cases for oracles/bids_rules.py (oracle rule 5). Each path is relative to the dataset root; 'problems' lists the kinds of problem expected (empty for a valid standard or conventional name). Source: BIDS 1.11 entity table and anat/dwi/fmap templates; bids-output-research.md 2.1-2.4, 4.1-4.2.",
+ "oracle": "S",
+ "cases": [
+  {
+   "id": "B01",
+   "path": "sub-S101/ses-20260725/anat/sub-S101_ses-20260725_T1w.nii.gz",
+   "problems": [],
+   "status": "standard"
+  },
+  {
+   "id": "B02",
+   "path": "sub-S104/ses-20260803/anat/sub-S104_ses-20260803_ce-gadolinium_T1w.nii.gz",
+   "problems": [],
+   "status": "standard"
+  },
+  {
+   "id": "B03",
+   "path": "sub-S501/ses-20260920/anat/sub-S501_ses-20260920_acq-swi_part-mag_T2starw.nii.gz",
+   "problems": [],
+   "status": "standard"
+  },
+  {
+   "id": "B04",
+   "path": "sub-S503/ses-20260922/anat/sub-S503_ses-20260922_acq-qsm_echo-2_part-phase_MEGRE.json",
+   "problems": [],
+   "status": "standard"
+  },
+  {
+   "id": "B05",
+   "path": "sub-S401/ses-20260910/dwi/sub-S401_ses-20260910_dwi.bval",
+   "problems": [],
+   "status": "standard"
+  },
+  {
+   "id": "B06",
+   "path": "sub-S403/ses-20260912/fmap/sub-S403_ses-20260912_acq-dwi_dir-jneg_epi.nii.gz",
+   "problems": [],
+   "status": "standard"
+  },
+  {
+   "id": "B07",
+   "path": "sub-S901/ses-20261005/anat/sub-S901_ses-20261005_rec-mip_angio.nii.gz",
+   "problems": [],
+   "status": "standard"
+  },
+  {
+   "id": "B08",
+   "path": "sub-S401/ses-20260910/dwi/sub-S401_ses-20260910_expADC.nii.gz",
+   "problems": [],
+   "status": "standard"
+  },
+  {
+   "id": "B09",
+   "path": "sub-S501/ses-20260920/anat/sub-S501_ses-20260920_acq-swi_swi.nii.gz",
+   "problems": [],
+   "status": "conventional"
+  },
+  {
+   "id": "B10",
+   "path": "sub-S501/ses-20260920/anat/sub-S501_ses-20260920_acq-swiUnlinked_minIP.nii.gz",
+   "problems": [],
+   "status": "conventional"
+  },
+  {
+   "id": "B11",
+   "path": "sub-S104/ses-20260803/anat/sub-S104_ses-20260803_ce-gad_acq-x_T1w.nii.gz",
+   "problems": [
+    "entities out of order"
+   ],
+   "work": "acq comes before ce"
+  },
+  {
+   "id": "B12",
+   "path": "sub-S101/ses-20260725/anat/sub-S101_ses-20260725_dir-j_T1w.nii.gz",
+   "problems": [
+    "entities not allowed"
+   ],
+   "work": "dir is not an anat entity"
+  },
+  {
+   "id": "B13",
+   "path": "sub-S403/ses-20260912/fmap/sub-S403_ses-20260912_acq-dwi_epi.nii.gz",
+   "problems": [],
+   "status": "standard",
+   "work": "dir is optional on epi in the BIDS schema (owner decision at G1); that our field maps always carry dir is a policy expectation of R4-BEX-02, not a BIDS rule"
+  },
+  {
+   "id": "B13B",
+   "path": "sub-S403/ses-20260912/fmap/sub-S403_ses-20260912_epi.nii.gz",
+   "problems": [],
+   "status": "standard",
+   "work": "only sub is required on epi"
+  },
+  {
+   "id": "B14",
+   "path": "sub-S1/ses-20260725/anat/sub-S-1_ses-20260725_T1w.nii.gz",
+   "problems": [
+    "bad sub value",
+    "subject folder and filename disagree"
+   ],
+   "work": "a '-' inside a label splits the entity: sub-S-1 parses as sub = 'S-1', which is not a valid label"
+  },
+  {
+   "id": "B15",
+   "path": "sub-S504/ses-20260923/anat/sub-S504_ses-20260923_echo-a_MEGRE.nii.gz",
+   "problems": [
+    "bad echo value"
+   ],
+   "work": "echo is an index"
+  },
+  {
+   "id": "B16",
+   "path": "sub-S504/ses-20260923/anat/sub-S504_ses-20260923_MEGRE.nii.gz",
+   "problems": [
+    "required entities missing"
+   ],
+   "work": "MEGRE needs echo"
+  },
+  {
+   "id": "B17",
+   "path": "sub-S401/ses-20260910/anat/sub-S401_ses-20260910_dwi.nii.gz",
+   "problems": [
+    "datatype folder"
+   ],
+   "work": "dwi files live in dwi/"
+  },
+  {
+   "id": "B18",
+   "path": "sub-S101/ses-20260726/anat/sub-S101_ses-20260725_T1w.nii.gz",
+   "problems": [
+    "session folder and filename disagree"
+   ]
+  },
+  {
+   "id": "B19",
+   "path": "sub-S101/ses-20260725/anat/sub-S101_ses-20260725_run-1_run-2_T1w.nii.gz",
+   "problems": [
+    "an entity appears twice"
+   ]
+  },
+  {
+   "id": "B20",
+   "path": "sub-S401/ses-20260910/dwi/sub-S401_ses-20260910_part-mag_ADC.nii.gz",
+   "problems": [
+    "entities not allowed"
+   ],
+   "work": "scanner-derived diffusion maps take no part"
+  }
+ ],
+ "subject_labels": {
+  "valid": [
+   "S101",
+   "S001",
+   "AB12",
+   "S1+2"
+  ],
+  "invalid": [
+   "S-1",
+   "S_1",
+   "S 1",
+   ""
+  ],
+  "source": "bids-output-research.md 2.1 and 3 (BIDS labels exclude - and _, which the package allows; --bids refuses such IDs)"
+ }
+}

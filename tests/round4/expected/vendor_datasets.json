@@ -1,0 +1,52 @@
+{
+  "description": "D-13 public vendor datasets for calibrating the header reader (R4-OR-05) and the pixel sampler (R4-OR-06). Chosen by the owner at Gate G1 on 2026-11-24. Each archive is GitHub's zip of the pinned commit (codeload.github.com/neurolabusc/<repo>/zip/<commit>); its SHA-256 was computed on download on 2026-11-24. GitHub does not promise byte-stable archives, so a checksum mismatch in CI is reported, never silently accepted. Layout of each archive: <repo>-<commit>/In/<series folder>/ (DICOM) and <repo>-<commit>/Ref/ (the reference dcm2niix output: '-b y -z n', '-l' left at its default 'o', per the repository's batch.sh).",
+  "local_root": "D:\\round4\\vendor_datasets",
+  "local_layout": "<local_root>\\<repo>\\extracted\\<repo>-<commit>\\",
+  "env_override": "R4_VENDOR_DIR",
+  "datasets": [
+    {
+      "repo": "neurolabusc/dcm_qa_ge",
+      "url": "https://github.com/neurolabusc/dcm_qa_ge",
+      "commit": "e92133ae414e2b23e8c4d07a4030ab4dbb41518e",
+      "archive_bytes": 61193233,
+      "archive_sha256": "7908f097aaa25981f799a5155612fb80af77518fe51db800393482174926c4c8",
+      "license": "BSD-2-Clause",
+      "license_check": "LICENSE file present in the archive ('BSD 2-Clause License'): use, modification and redistribution allowed with the copyright notice and disclaimer. Fetching the data for test calibration, without redistributing it, is within those terms.",
+      "content": "GE DICOM: four axial DWI tensor series (several acceleration factors), a 3D axial MP-RAGE, and slice-timing series"
+    },
+    {
+      "repo": "neurolabusc/dcm_qa_xa30",
+      "url": "https://github.com/neurolabusc/dcm_qa_xa30",
+      "commit": "371ab3071aa9270d23b99fca5f83fe0c35932182",
+      "archive_bytes": 42261744,
+      "archive_sha256": "4e5e1aaa51fc0a9a75a7597bbe67d39d47164d90d02ea8b8e341c1e22193401b",
+      "license": "BSD-2-Clause",
+      "license_check": "LICENSE file present in the archive ('BSD 2-Clause License'); same terms as above.",
+      "content": "Siemens XA30 DICOM. Checked on 2026-11-24: every MR object is enhanced multi-frame (SOP classes Enhanced MR Image and Enhanced MR Color Image, up to 96 frames), plus a raw-data and an SR object. The lab's XA data are classic exports (scan-selection.md 2.2), so this set exercises only the multiframe path.",
+      "scope": "Kept by the owner at G1 (2026-11-24) with limited scope: R4-OR-05 compares only Manufacturer and MagneticFieldStrength (every other field is not comparable for enhanced objects) and confirms the multiframe flag; R4-OR-06 reports every series 'not compared'."
+    },
+    {
+      "repo": "neurolabusc/dcm_qa_polar",
+      "url": "https://github.com/neurolabusc/dcm_qa_polar",
+      "commit": "cda2bc7a4c13c065ffc264db84613c666e36b226",
+      "archive_bytes": 47203319,
+      "archive_sha256": "b67570fbc8cb2674b707ebfff555dc5a95d21a9c60b35e3513375bcc772ef5df",
+      "license": "BSD-2-Clause",
+      "license_check": "LICENSE file present in the archive ('BSD 2-Clause License'); same terms as above.",
+      "content": "GE epi_pepolar: four field-map series with forward and reverse phase encoding"
+    }
+  ],
+  "accepted_discrepancies": [
+    {"test": "R4-OR-05", "repo": "neurolabusc/dcm_qa_ge", "reference": "epiRT_IntAsc_GD33_3", "field": "RepetitionTime"},
+    {"test": "R4-OR-05", "repo": "neurolabusc/dcm_qa_ge", "reference": "epiRT_IntAsc_GD3s_2", "field": "RepetitionTime"},
+    {"test": "R4-OR-05", "repo": "neurolabusc/dcm_qa_ge", "reference": "epiRT_IntAsc_GD55_4", "field": "RepetitionTime"},
+    {"test": "R4-OR-05", "repo": "neurolabusc/dcm_qa_ge", "reference": "epiRT_IntDesHB3_GD33_6", "field": "RepetitionTime"},
+    {"test": "R4-OR-05", "repo": "neurolabusc/dcm_qa_ge", "reference": "epiRT_IntDesHB3_GD55_7", "field": "RepetitionTime"},
+    {"test": "R4-OR-05", "repo": "neurolabusc/dcm_qa_ge", "reference": "fMRI_Multiphase_Des_0.35Delay_3", "field": "RepetitionTime"}
+  ],
+  "accepted_discrepancies_reason": "Accepted by the owner at G1 (2026-11-24): the header reader reports the DICOM RepetitionTime, as scan-selection.md 5.1 defines tr_ms; dcm2niix writes an adjusted TR in these six GE slice-timing references (their names carry the group delay: GD33 -> 2.033 s, GD55 -> 2.055 s, GD3s -> 5 s, 0.35Delay -> 1.35 s). An expected difference, excluded by name.",
+  "expected_sampler_statuses": [
+    {"test": "R4-OR-06", "repo": "neurolabusc/dcm_qa_polar", "reference": "7_FM_cv12_1_3mm", "status": "known GE row reversal",
+     "reason": "Accepted by the owner at G1 (2026-11-24): GE epi_pepolar mode 1 stores the images with reversed row order and dcm2niix corrects it on purpose (its issue 532); expected, and evidence that the sampler catches a real row flip. Reported through the sampler's named category."}
+  ]
+}

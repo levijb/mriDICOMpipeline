@@ -1,0 +1,1312 @@
+{
+ "catalog": "susceptibility",
+ "description": "Susceptibility and GRE families (spec 4.1): Siemens SWI magnitude and phase as separate series with the processed SWI and the minIP; GE SWAN with magnitude and phase in one series (GE (0043,102F) parts) and four echoes; a Siemens multi-echo QSM source (magnitude and phase in one series, M/P ImageType tokens) with a scanner QSM map; a 2D T2* GRE. Axial 3D on a reduced 32 x 32 grid over 240 mm.",
+ "protocols_from": [
+  "structural"
+ ],
+ "sources": {
+  "SS-5.5-PARTS": "scan-selection.md 5.5 rules 1-2",
+  "SS-6.1-SWI": "scan-selection.md 6.1 and 6.5 (derived groups of SWI and QSM)",
+  "SS-10.1-SWI": "scan-selection.md 10.1, cases 8, 29, 30, 32, 33",
+  "SS-8-GE-PHASE": "scan-selection.md 8 (later items: GE phase detection)"
+ },
+ "protocols": {
+  "AERA_SWI": {
+   "base": "SIEMENS_AERA",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "GR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SP"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "*swi3d1r",
+     "R4"
+    ],
+    "RepetitionTime": [
+     49,
+     "R4"
+    ],
+    "FlipAngle": [
+     15,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     2.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      256,
+      0,
+      0,
+      192
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "{part}",
+      "ND"
+     ],
+     "VEN"
+    ],
+    "SeriesDescription": [
+     "t2_swi_tra_p2_2mm_Mag",
+     "R4"
+    ],
+    "ProtocolName": [
+     "t2_swi_tra_p2_2mm",
+     "R4"
+    ]
+   },
+   "echoes": [
+    40
+   ],
+   "slices": 60,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -60.0
+    ],
+    "step_mm": 2.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "SWI",
+    "CLS"
+   ]
+  },
+  "GE_SWAN": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "GR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SS",
+      "SK"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "swan",
+     "R4"
+    ],
+    "RepetitionTime": [
+     40,
+     "R4"
+    ],
+    "FlipAngle": [
+     15,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     4,
+     "R4"
+    ],
+    "SliceThickness": [
+     2.0,
+     "R4"
+    ],
+    "SpacingBetweenSlices": [
+     2.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      256,
+      256,
+      0
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "VEN"
+    ],
+    "SeriesDescription": [
+     "AX SWAN",
+     "R4"
+    ]
+   },
+   "parts": [
+    "mag",
+    "phase"
+   ],
+   "echoes": [
+    5,
+    15,
+    25,
+    35
+   ],
+   "slices": 60,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -60.0
+    ],
+    "step_mm": 2.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "SWI",
+    "CLS"
+   ]
+  },
+  "AERA_QSM_ME": {
+   "base": "AERA_SWI",
+   "tags": {
+    "SequenceName": [
+     "*fl3d4r",
+     "R4"
+    ],
+    "RepetitionTime": [
+     40,
+     "R4"
+    ],
+    "SeriesDescription": [
+     "qsm_gre_me",
+     "R4"
+    ],
+    "ProtocolName": [
+     "qsm_gre_me",
+     "R4"
+    ]
+   },
+   "parts": [
+    "mag",
+    "phase"
+   ],
+   "echoes": [
+    12,
+    20,
+    28,
+    36
+   ],
+   "echo_numbers_always": true,
+   "folder": [
+    "QSM",
+    "CLS"
+   ]
+  },
+  "GE_GRE_2D": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "2D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "GR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SS"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "fgre",
+     "R4"
+    ],
+    "RepetitionTime": [
+     650,
+     "R4"
+    ],
+    "FlipAngle": [
+     20,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     5.0,
+     "R4"
+    ],
+    "SpacingBetweenSlices": [
+     5.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      320,
+      224,
+      0
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "R4"
+    ],
+    "SeriesDescription": [
+     "AX T2* GRE",
+     "CLS"
+    ]
+   },
+   "echoes": [
+    20
+   ],
+   "slices": 24,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -60.0
+    ],
+    "step_mm": 5.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "GRE",
+    "CLS"
+   ]
+  }
+ },
+ "exams": [
+  {
+   "id": "SUS-01-SIEMENS-SWI-BUNDLE",
+   "uid_exam": 501,
+   "family": "susceptibility",
+   "description": "Siemens SWI: magnitude (10) and phase (11) as separate series with one acquisition identity, the processed SWI image (12, a map) and the minIP (13, a projection), all on the magnitude's frame of reference.",
+   "roster_rows": [
+    [
+     "S501",
+     "9/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260920",
+     "zip_name": "S501_20260920.zip",
+     "study_date": "20260920",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 10,
+       "protocol": "AERA_SWI",
+       "tags": {
+        "SeriesNumber": [
+         10,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "MAG",
+         "SWI",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 11,
+       "protocol": "AERA_SWI",
+       "parts": [
+        "phase"
+       ],
+       "geometry": {
+        "frame": 10
+       },
+       "tags": {
+        "SeriesNumber": [
+         11,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090600",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "SS-5.5-PARTS"
+        ],
+        "SeriesDescription": [
+         "t2_swi_tra_p2_2mm_Pha",
+         "R4"
+        ]
+       },
+       "folder": [
+        "SWI_PHASE",
+        "CLS"
+       ],
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": 50.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "PHA",
+         "SWI",
+         "T2"
+        ],
+        "unclear": [
+         "positions"
+        ]
+       }
+      },
+      {
+       "uid_series": 12,
+       "protocol": "AERA_SWI",
+       "geometry": {
+        "frame": 10
+       },
+       "tags": {
+        "SeriesNumber": [
+         12,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090610",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "ImageType": [
+         [
+          "DERIVED",
+          "PRIMARY",
+          "{part}",
+          "SWI",
+          "ND"
+         ],
+         "VEN"
+        ],
+        "SeriesDescription": [
+         "t2_swi_tra_p2_2mm_SWI",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": 60.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "SWI",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 13,
+       "protocol": "AERA_SWI",
+       "slices": 30,
+       "geometry": {
+        "frame": 10,
+        "step_mm": 4.0
+       },
+       "tags": {
+        "SeriesNumber": [
+         13,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090620",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SliceThickness": [
+         8.0,
+         "R4"
+        ],
+        "ImageType": [
+         [
+          "DERIVED",
+          "PRIMARY",
+          "MNIP",
+          "{part}",
+          "ND"
+         ],
+         "VEN"
+        ],
+        "SeriesDescription": [
+         "t2_swi_tra_p2_2mm_mIP_SWI",
+         "R4"
+        ]
+       },
+       "folder": [
+        "SWI_MINIP",
+        "CLS"
+       ],
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 30,
+        "pos_min": -60.0,
+        "pos_max": 56.0,
+        "step_mm": 4.0,
+        "extent_mm": 124.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": 70.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "MIP",
+         "SWI",
+         "T2"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-4": {
+     "outcome": {
+      "acquisitions": [
+       [
+        "10",
+        "11"
+       ]
+      ],
+      "has_phase": {
+       "10+11": true
+      }
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 5.5 rule 2; 10.1 case 8"
+    },
+    "R-IDN-3": {
+     "outcome": {
+      "kinds": {
+       "10": "native",
+       "11": "native",
+       "12": "map",
+       "13": "projection"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 Derived (MNIP is a projection; the processed SWI is a map)"
+    },
+    "R-LNK-1": {
+     "outcome": {
+      "links": {
+       "12": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "10",
+         "11"
+        ]
+       },
+       "13": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "10",
+         "11"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.6"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "SWI": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "10",
+         "11"
+        ],
+        "tier": "3d"
+       },
+       "SWI_MINIP": {
+        "outcome": "selected",
+        "decided_by": "follows_source",
+        "winner": [
+         "13"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4, 6.5; 10.1 case 29"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "10": [
+        "selected",
+        "SWI"
+       ],
+       "11": [
+        "selected",
+        "SWI_PHASE"
+       ],
+       "12": [
+        "selected_derived",
+        "SWI"
+       ],
+       "13": [
+        "selected_derived",
+        "SWI_MINIP"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6 (a phase member goes to SWI_PHASE); 10.1 case 29"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "SUS-02-GE-SWAN-ONE-SERIES",
+   "uid_exam": 502,
+   "family": "susceptibility",
+   "description": "GE SWAN: four echoes, magnitude and phase in one series, parts given only by GE (0043,102F) (0 = magnitude, 1 = phase).",
+   "roster_rows": [
+    [
+     "S502",
+     "9/21/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260921",
+     "zip_name": "S502_20260921.zip",
+     "study_date": "20260921",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 10,
+       "protocol": "GE_SWAN",
+       "part_encoding": "ge_private",
+       "tags": {
+        "SeriesNumber": [
+         10,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "SWAN"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-HDR-3": {
+     "outcome": {
+      "10": {
+       "mixed": false,
+       "te_ms": null,
+       "echoes": [
+        [
+         5,
+         1,
+         120
+        ],
+        [
+         15,
+         2,
+         120
+        ],
+        [
+         25,
+         3,
+         120
+        ],
+        [
+         35,
+         4,
+         120
+        ]
+       ],
+       "parts": {
+        "mag": 240,
+        "phase": 240
+       }
+      }
+     },
+     "oracle": "P,S",
+     "source": "scan-selection.md 5.1 (parts from GE (0043,102F) values 0-3; echoes)"
+    },
+    "R-IDN-4": {
+     "outcome": {
+      "acquisitions": [
+       [
+        "10:*"
+       ]
+      ],
+      "n_echoes": {
+       "10": 4
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.5 rule 1"
+    }
+   },
+   "owner_decisions": [
+    "2026-11-24 (G1): deferred. In phase 2, has_phase is set from what dcm2niix writes for GE phase volumes (a converter fact), with the owner's approval recorded; if no phase token appears, it is recorded as a known limit under scan-selection.md section 8."
+   ],
+   "notes": [
+    "Whether the phase volumes dcm2niix writes carry a phase token in their sidecar ImageType decides the volume part (5.2) and so has_phase; scan-selection.md section 8 lists GE phase detection from (0043,102F) per volume as a later item. No has_phase or SWI decision is expected until phase 2 shows what the converter writes."
+   ]
+  },
+  {
+   "id": "SUS-03-QSM-MULTI-ECHO",
+   "uid_exam": 503,
+   "family": "susceptibility",
+   "description": "Siemens multi-echo 3D GRE QSM source (TE 12-36 ms, so no T1 family can match), magnitude and phase in one series, plus a scanner QSM map on its frame of reference; and a 2D T2* GRE.",
+   "roster_rows": [
+    [
+     "S503",
+     "9/22/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260922",
+     "zip_name": "S503_20260922.zip",
+     "study_date": "20260922",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 20,
+       "protocol": "AERA_QSM_ME",
+       "tags": {
+        "SeriesNumber": [
+         20,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "QSM"
+        ]
+       }
+      },
+      {
+       "uid_series": 30,
+       "protocol": "AERA_SWI",
+       "geometry": {
+        "frame": 20
+       },
+       "tags": {
+        "SeriesNumber": [
+         30,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "ImageType": [
+         [
+          "DERIVED",
+          "PRIMARY",
+          "QSM",
+          "ND"
+         ],
+         "R4"
+        ],
+        "SeriesDescription": [
+         "qsm_map",
+         "R4"
+        ],
+        "ProtocolName": [
+         "qsm_gre_me",
+         "R4"
+        ]
+       },
+       "folder": [
+        "QSM",
+        "CLS"
+       ],
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": 590.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "QSM"
+        ]
+       }
+      },
+      {
+       "uid_series": 4,
+       "protocol": "GE_GRE_2D",
+       "tags": {
+        "SeriesNumber": [
+         4,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "R4"
+        ],
+        "Manufacturer": [
+         "SIEMENS",
+         "VEN"
+        ],
+        "ManufacturerModelName": [
+         "Aera",
+         "R4"
+        ],
+        "MagneticFieldStrength": [
+         1.5,
+         "R4"
+        ],
+        "SoftwareVersions": [
+         [
+          "syngo MR E11"
+         ],
+         "R4"
+        ]
+       },
+       "facts": {
+        "manufacturer": "SIEMENS",
+        "orientation": "AX",
+        "n_positions": 24,
+        "pos_min": -60.0,
+        "pos_max": 55.0,
+        "step_mm": 5.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 300.0,
+        "series_rel_s": 290.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-HDR-3": {
+     "outcome": {
+      "20": {
+       "mixed": false,
+       "te_ms": null,
+       "echoes": [
+        [
+         12,
+         1,
+         120
+        ],
+        [
+         20,
+         2,
+         120
+        ],
+        [
+         28,
+         3,
+         120
+        ],
+        [
+         36,
+         4,
+         120
+        ]
+       ],
+       "parts": {
+        "mag": 240,
+        "phase": 240
+       }
+      }
+     },
+     "oracle": "P,S",
+     "source": "scan-selection.md 5.1 (M and P ImageType tokens; echoes)"
+    },
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "20:*": [
+        "QSM",
+        2
+       ],
+       "30": [
+        "QSM",
+        2
+       ],
+       "4": [
+        "GRE",
+        2
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rule 2 (specialized label)"
+    },
+    "R-IDN-4": {
+     "outcome": {
+      "acquisitions": [
+       [
+        "20:*"
+       ],
+       [
+        "4"
+       ]
+      ],
+      "n_echoes": {
+       "20": 4
+      },
+      "has_phase": {
+       "20": true
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.5 rule 1"
+    },
+    "R-LNK-1": {
+     "outcome": {
+      "links": {
+       "30": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "20:*"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.6 (QSM parents: QSM, SWI, GRE)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "QSM": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "20:*"
+        ],
+        "tier": "3d"
+       },
+       "GRE": {
+        "outcome": "selected_fallback",
+        "decided_by": "only_eligible",
+        "winner": [
+         "4"
+        ],
+        "tier": "clinical"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4, 6.5, 6.7 (GRE: 5 mm fails thin, passes clinical); 10.1 cases 32-33"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "20:*": [
+        "selected",
+        "QSM"
+       ],
+       "30": [
+        "selected_derived",
+        "QSM"
+       ],
+       "4": [
+        "selected",
+        "GRE"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6; 10.1 case 32"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "SUS-04-MULTI-ECHO-GRE",
+   "uid_exam": 504,
+   "family": "susceptibility",
+   "description": "A 2D multi-echo GRE (TE 10, 20, 30 ms; magnitude only) labelled GRE ('AX T2* GRE ME'), 3 mm slices without gap. Being 2D it cannot match T1_3D_GRE.",
+   "roster_rows": [
+    [
+     "S504",
+     "9/23/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260923",
+     "zip_name": "S504_20260923.zip",
+     "study_date": "20260923",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 4,
+       "protocol": "GE_GRE_2D",
+       "echoes": [
+        10,
+        20,
+        30
+       ],
+       "slices": 40,
+       "geometry": {
+        "step_mm": 3.0
+       },
+       "tags": {
+        "SeriesNumber": [
+         4,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SliceThickness": [
+         3.0,
+         "R4"
+        ],
+        "SpacingBetweenSlices": [
+         3.0,
+         "R4"
+        ],
+        "EchoTrainLength": [
+         3,
+         "R4"
+        ],
+        "SeriesDescription": [
+         "AX T2* GRE ME",
+         "CLS"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 40,
+        "pos_min": -60.0,
+        "pos_max": 57.0,
+        "step_mm": 3.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-HDR-3": {
+     "outcome": {
+      "4": {
+       "te_ms": null,
+       "echoes": [
+        [
+         10,
+         1,
+         40
+        ],
+        [
+         20,
+         2,
+         40
+        ],
+        [
+         30,
+         3,
+         40
+        ]
+       ],
+       "mixed": false
+      }
+     },
+     "oracle": "P,S",
+     "source": "scan-selection.md 5.1 Stacks"
+    },
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "4:*": [
+        "GRE",
+        2
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rule 2 (label GRE; classifier word T2*)"
+    },
+    "R-IDN-4": {
+     "outcome": {
+      "acquisitions": [
+       [
+        "4:*"
+       ]
+      ],
+      "n_echoes": {
+       "4": 3
+      },
+      "has_phase": {
+       "4": false
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.5 rule 1"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "GRE": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "4:*"
+        ],
+        "tier": "thin"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.7 GRE tiers (thin: slices up to 3 mm, gap up to 1 mm, not a fallback)"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "4:*": [
+        "selected",
+        "GRE"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6 (echoes are members, never competitors)"
+    },
+    "R-BID-2": {
+     "outcome": {
+      "files": [
+       "anat/sub-S504_ses-20260923_echo-1_MEGRE.nii.gz",
+       "anat/sub-S504_ses-20260923_echo-2_MEGRE.nii.gz",
+       "anat/sub-S504_ses-20260923_echo-3_MEGRE.nii.gz"
+      ],
+      "part_entity": false
+     },
+     "oracle": "P,S",
+     "source": "bids-output-research.md 4.1 (multi-echo GRE: echo-<n>_MEGRE), 11 (a magnitude-only acquisition has no part)"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,1090 @@
+{
+ "description": "Tier 1 decision tables (R4-RNK-02, R4-RNK-03, R4-RNK-04). Candidates are given by the facts the rules use (family, native row/col/slice in mm, gap in mm, orientation, contrast phase, gradients, echoes, phase, Siemens variant tokens); phase 2 builds the pipeline's records from them. Expected values were derived by hand from scan-selection.md 6.2, 6.3, 6.4 and the default profile in 6.7 (2026-11-18), and the README requirement table. P only.",
+ "oracle": "P",
+ "tiers": {
+  "requirement": "R-RNK-2 / R4-RNK-02",
+  "source": "scan-selection.md 6.2 (tier assignment: the first enabled tier that contains the family and whose limits are met) and 6.7 (default tiers); limits are inclusive",
+  "cases": [
+   {
+    "id": "T01",
+    "role": "T1",
+    "family": "T1_3D_IRGRE",
+    "native": [
+     1.3,
+     1.3,
+     1.3
+    ],
+    "gap": 0.0,
+    "tier": "3d_ir_gre"
+   },
+   {
+    "id": "T02",
+    "role": "T1",
+    "family": "T1_3D_IRGRE",
+    "native": [
+     1.31,
+     1.0,
+     1.0
+    ],
+    "gap": 0.0,
+    "tier": "any",
+    "work": "in-plane 1.31 > 1.3; 'any' has no limits"
+   },
+   {
+    "id": "T03",
+    "role": "T1",
+    "family": "T1_3D_IRGRE",
+    "native": [
+     1.0,
+     1.0,
+     1.31
+    ],
+    "gap": 0.0,
+    "tier": "any"
+   },
+   {
+    "id": "T04",
+    "role": "T1",
+    "family": "T1_3D_GRE",
+    "native": [
+     1.3,
+     1.3,
+     1.3
+    ],
+    "gap": 0.0,
+    "tier": "3d_gre"
+   },
+   {
+    "id": "T05",
+    "role": "T1",
+    "family": "T1_3D_GRE",
+    "native": [
+     1.0,
+     1.0,
+     1.5
+    ],
+    "gap": 0.0,
+    "tier": "any",
+    "work": "10.1 case 18: a coarse 3D T1 lands in 'any'"
+   },
+   {
+    "id": "T06",
+    "role": "T1",
+    "family": "T1_2D_SE",
+    "native": [
+     1.3,
+     1.3,
+     6.0
+    ],
+    "gap": 0.5,
+    "tier": "2d"
+   },
+   {
+    "id": "T07",
+    "role": "T1",
+    "family": "T1_2D_SE",
+    "native": [
+     1.31,
+     1.25,
+     5.0
+    ],
+    "gap": 0.5,
+    "tier": "any"
+   },
+   {
+    "id": "T08",
+    "role": "T1",
+    "family": "T1_2D_IR",
+    "native": [
+     1.0,
+     1.0,
+     6.01
+    ],
+    "gap": 0.0,
+    "tier": "any"
+   },
+   {
+    "id": "T09",
+    "role": "T1_POST",
+    "family": "T1_3D_IRGRE",
+    "native": [
+     1.3,
+     1.3,
+     1.3
+    ],
+    "gap": 0.0,
+    "tier": "3d"
+   },
+   {
+    "id": "T10",
+    "role": "T1_POST",
+    "family": "T1_3D_GRE",
+    "native": [
+     1.31,
+     1.0,
+     1.0
+    ],
+    "gap": 0.0,
+    "tier": "any"
+   },
+   {
+    "id": "T11",
+    "role": "FLAIR",
+    "family": "FLAIR_3D",
+    "native": [
+     1.2,
+     1.2,
+     1.5
+    ],
+    "gap": -0.75,
+    "tier": "3d"
+   },
+   {
+    "id": "T12",
+    "role": "FLAIR",
+    "family": "FLAIR_3D",
+    "native": [
+     1.21,
+     1.0,
+     1.0
+    ],
+    "gap": 0.0,
+    "tier": "any"
+   },
+   {
+    "id": "T13",
+    "role": "FLAIR",
+    "family": "FLAIR_3D",
+    "native": [
+     1.0,
+     1.0,
+     1.51
+    ],
+    "gap": 0.0,
+    "tier": "any"
+   },
+   {
+    "id": "T14",
+    "role": "FLAIR",
+    "family": "FLAIR_2D",
+    "native": [
+     1.2,
+     1.0,
+     3.0
+    ],
+    "gap": 0.1,
+    "tier": "2d_consensus"
+   },
+   {
+    "id": "T15",
+    "role": "FLAIR",
+    "family": "FLAIR_2D",
+    "native": [
+     1.2,
+     1.0,
+     3.0
+    ],
+    "gap": 0.11,
+    "tier": "2d_legacy",
+    "work": "gap over 0.1; legacy allows 1.5"
+   },
+   {
+    "id": "T16",
+    "role": "FLAIR",
+    "family": "FLAIR_2D",
+    "native": [
+     1.2,
+     1.0,
+     3.01
+    ],
+    "gap": 0.0,
+    "tier": "2d_legacy"
+   },
+   {
+    "id": "T17",
+    "role": "FLAIR",
+    "family": "FLAIR_2D",
+    "native": [
+     1.21,
+     1.0,
+     3.0
+    ],
+    "gap": 0.0,
+    "tier": "2d_legacy",
+    "work": "in-plane 1.21 > 1.2 but <= 1.3"
+   },
+   {
+    "id": "T18",
+    "role": "FLAIR",
+    "family": "FLAIR_2D",
+    "native": [
+     1.3,
+     1.0,
+     6.0
+    ],
+    "gap": 1.5,
+    "tier": "2d_legacy"
+   },
+   {
+    "id": "T19",
+    "role": "FLAIR",
+    "family": "FLAIR_2D",
+    "native": [
+     1.31,
+     1.0,
+     5.0
+    ],
+    "gap": 1.0,
+    "tier": "any"
+   },
+   {
+    "id": "T20",
+    "role": "FLAIR",
+    "family": "FLAIR_2D",
+    "native": [
+     1.0,
+     1.0,
+     5.0
+    ],
+    "gap": 1.51,
+    "tier": "any"
+   },
+   {
+    "id": "T21",
+    "role": "T2",
+    "family": "T2_3D_TSE",
+    "native": [
+     1.2,
+     1.2,
+     1.5
+    ],
+    "gap": 0.0,
+    "tier": "3d"
+   },
+   {
+    "id": "T22",
+    "role": "T2",
+    "family": "T2_2D_TSE",
+    "native": [
+     1.2,
+     1.0,
+     3.0
+    ],
+    "gap": 0.1,
+    "tier": "2d_consensus"
+   },
+   {
+    "id": "T23",
+    "role": "T2",
+    "family": "T2_2D_TSE",
+    "native": [
+     1.2,
+     1.0,
+     3.0
+    ],
+    "gap": 0.11,
+    "tier": "2d_clinical"
+   },
+   {
+    "id": "T24",
+    "role": "T2",
+    "family": "T2_2D_TSE",
+    "native": [
+     1.2,
+     1.0,
+     5.0
+    ],
+    "gap": 1.0,
+    "tier": "2d_clinical"
+   },
+   {
+    "id": "T25",
+    "role": "T2",
+    "family": "T2_2D_TSE",
+    "native": [
+     1.2,
+     1.0,
+     5.01
+    ],
+    "gap": 0.0,
+    "tier": "any"
+   },
+   {
+    "id": "T26",
+    "role": "T2",
+    "family": "T2_2D_TSE",
+    "native": [
+     1.0,
+     1.0,
+     4.0
+    ],
+    "gap": 1.01,
+    "tier": "any"
+   },
+   {
+    "id": "T27",
+    "role": "T2",
+    "family": "T2_2D_TSE",
+    "native": [
+     1.21,
+     1.0,
+     4.0
+    ],
+    "gap": 0.0,
+    "tier": "any",
+    "work": "both 2D T2 tiers limit in-plane to 1.2"
+   },
+   {
+    "id": "T28",
+    "role": "GRE",
+    "family": "GRE_2D",
+    "native": [
+     1.0,
+     1.0,
+     3.0
+    ],
+    "gap": 1.0,
+    "tier": "thin"
+   },
+   {
+    "id": "T29",
+    "role": "GRE",
+    "family": "GRE_2D",
+    "native": [
+     1.0,
+     1.0,
+     3.01
+    ],
+    "gap": 0.0,
+    "tier": "clinical"
+   },
+   {
+    "id": "T30",
+    "role": "GRE",
+    "family": "GRE_3D",
+    "native": [
+     1.0,
+     1.0,
+     5.0
+    ],
+    "gap": 1.0,
+    "tier": "clinical"
+   },
+   {
+    "id": "T31",
+    "role": "GRE",
+    "family": "GRE_2D",
+    "native": [
+     1.0,
+     1.0,
+     5.01
+    ],
+    "gap": 0.0,
+    "tier": "any"
+   },
+   {
+    "id": "T32",
+    "role": "GRE",
+    "family": "GRE_2D",
+    "native": [
+     1.0,
+     1.0,
+     3.0
+    ],
+    "gap": 1.01,
+    "tier": "any"
+   },
+   {
+    "id": "T33",
+    "role": "DWI",
+    "family": "DWI_TENSOR",
+    "native": [
+     2.0,
+     2.0,
+     2.0
+    ],
+    "gap": 0.0,
+    "tier": "tensor"
+   },
+   {
+    "id": "T34",
+    "role": "DWI",
+    "family": "DWI_TRACE",
+    "native": [
+     2.0,
+     2.0,
+     4.0
+    ],
+    "gap": 0.0,
+    "tier": "trace"
+   },
+   {
+    "id": "T35",
+    "role": "SWI",
+    "family": "SWI_2D",
+    "native": [
+     0.8,
+     0.8,
+     3.0
+    ],
+    "gap": 0.0,
+    "tier": "2d",
+    "outcome_if_winner": "selected_fallback"
+   },
+   {
+    "id": "T36",
+    "role": "QSM",
+    "family": "QSM_3D",
+    "native": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "gap": 0.0,
+    "tier": "3d"
+   }
+  ]
+ },
+ "components": {
+  "requirement": "R-RNK-3 / R4-RNK-03",
+  "source": "scan-selection.md 6.1 (order of components per role), 6.3 (component values: native ranked on max(native_max, cap); gap counted only in tiers with max_gap_mm; Siemens variant preference), 6.4 step 4 (decided_by). Each pair differs only in the named component, so no pair is a same-protocol repeat.",
+  "cases": [
+   {
+    "id": "C01",
+    "role": "T1",
+    "a": {
+     "family": "T1_3D_IRGRE",
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    "b": {
+     "family": "T1_3D_IRGRE",
+     "native": [
+      1.5,
+      1.0,
+      1.0
+     ]
+    },
+    "winner": "a",
+    "decided_by": "tier",
+    "work": "a: 3d_ir_gre; b: any"
+   },
+   {
+    "id": "C02",
+    "role": "T1",
+    "a": {
+     "family": "T1_2D_SE",
+     "native": [
+      1.25,
+      1.25,
+      5.0
+     ],
+     "orientation": "AX"
+    },
+    "b": {
+     "family": "T1_2D_SE",
+     "native": [
+      1.25,
+      1.25,
+      5.0
+     ],
+     "orientation": "SAG"
+    },
+    "winner": "a",
+    "decided_by": "orientation",
+    "work": "tier 2d list AX, SAG, COR (census session D)"
+   },
+   {
+    "id": "C03",
+    "role": "T1",
+    "a": {
+     "family": "T1_3D_IRGRE",
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    "b": {
+     "family": "T1_3D_IRGRE",
+     "native": [
+      1.2,
+      1.0,
+      1.0
+     ]
+    },
+    "winner": "a",
+    "decided_by": "native",
+    "work": "max(1.0, 1.1) = 1.1 against 1.2"
+   },
+   {
+    "id": "C04",
+    "role": "T1",
+    "a": {
+     "family": "T1_3D_IRGRE",
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "variant": [
+      "DIS2D"
+     ]
+    },
+    "b": {
+     "family": "T1_3D_IRGRE",
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "variant": [
+      "ND"
+     ]
+    },
+    "winner": "a",
+    "decided_by": "variant",
+    "work": "DIS2D before ND (10.1 case 38)"
+   },
+   {
+    "id": "C05",
+    "role": "FLAIR",
+    "a": {
+     "family": "FLAIR_3D",
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "contrast": "pre"
+    },
+    "b": {
+     "family": "FLAIR_3D",
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "contrast": "post"
+    },
+    "winner": "a",
+    "decided_by": "contrast"
+   },
+   {
+    "id": "C06",
+    "role": "FLAIR",
+    "a": {
+     "family": "FLAIR_2D",
+     "native": [
+      1.0,
+      1.0,
+      5.0
+     ],
+     "gap": 0.5,
+     "orientation": "AX"
+    },
+    "b": {
+     "family": "FLAIR_2D",
+     "native": [
+      1.0,
+      1.0,
+      5.0
+     ],
+     "gap": 1.0,
+     "orientation": "AX"
+    },
+    "winner": "a",
+    "decided_by": "gap",
+    "work": "both 2d_legacy (max_gap 1.5); gap rounded to 0.05: 0.5 < 1.0"
+   },
+   {
+    "id": "C07",
+    "role": "FLAIR",
+    "a": {
+     "family": "FLAIR_3D",
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "contrast": "unknown"
+    },
+    "b": {
+     "family": "FLAIR_3D",
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "contrast": "post"
+    },
+    "winner": "a",
+    "decided_by": "contrast",
+    "work": "prefer_pre ranks unknown with pre"
+   },
+   {
+    "id": "C08",
+    "role": "T2",
+    "a": {
+     "family": "T2_2D_TSE",
+     "native": [
+      0.9,
+      0.9,
+      3.0
+     ],
+     "gap": 0.0
+    },
+    "b": {
+     "family": "T2_2D_TSE",
+     "native": [
+      0.9,
+      0.9,
+      4.0
+     ],
+     "gap": 0.0
+    },
+    "winner": "a",
+    "decided_by": "tier",
+    "work": "2d_consensus against 2d_clinical (10.1 case 22)"
+   },
+   {
+    "id": "C09",
+    "role": "T2",
+    "a": {
+     "family": "T2_2D_TSE",
+     "native": [
+      0.9,
+      0.9,
+      4.0
+     ],
+     "contrast": "pre",
+     "orientation": "COR"
+    },
+    "b": {
+     "family": "T2_2D_TSE",
+     "native": [
+      0.9,
+      0.9,
+      4.0
+     ],
+     "contrast": "post",
+     "orientation": "AX"
+    },
+    "winner": "a",
+    "decided_by": "contrast",
+    "work": "contrast comes before orientation for T2"
+   },
+   {
+    "id": "C10",
+    "role": "DWI",
+    "a": {
+     "family": "DWI_TENSOR",
+     "n_dirs": 6,
+     "shells": [
+      1000
+     ]
+    },
+    "b": {
+     "family": "DWI_TRACE",
+     "n_dirs": 3,
+     "shells": [
+      1000
+     ]
+    },
+    "winner": "a",
+    "decided_by": "tier"
+   },
+   {
+    "id": "C11",
+    "role": "DWI",
+    "a": {
+     "family": "DWI_TENSOR",
+     "n_dirs": 30,
+     "shells": [
+      1000
+     ]
+    },
+    "b": {
+     "family": "DWI_TENSOR",
+     "n_dirs": 12,
+     "shells": [
+      1000
+     ]
+    },
+    "winner": "a",
+    "decided_by": "directions"
+   },
+   {
+    "id": "C12",
+    "role": "DWI",
+    "a": {
+     "family": "DWI_TENSOR",
+     "n_dirs": 30,
+     "shells": [
+      1000
+     ]
+    },
+    "b": {
+     "family": "DWI_TENSOR",
+     "n_dirs": 30,
+     "shells": [
+      2000
+     ]
+    },
+    "winner": "a",
+    "decided_by": "b_target",
+    "work": "a shell within 800-1200 (10.1 case 28)"
+   },
+   {
+    "id": "C13",
+    "role": "DWI",
+    "a": {
+     "family": "DWI_TENSOR",
+     "n_dirs": 30,
+     "shells": [
+      1000
+     ],
+     "native": [
+      1.8,
+      1.8,
+      2.0
+     ]
+    },
+    "b": {
+     "family": "DWI_TENSOR",
+     "n_dirs": 64,
+     "shells": [
+      1000
+     ],
+     "native": [
+      2.5,
+      2.5,
+      2.5
+     ]
+    },
+    "winner": "a",
+    "decided_by": "native",
+    "work": "directions capped at 30 tie; native max(2.0, 2.0) = 2.0 against 2.5"
+   },
+   {
+    "id": "C14",
+    "role": "SWI",
+    "a": {
+     "family": "SWI_3D",
+     "has_phase": true,
+     "n_echoes": 1
+    },
+    "b": {
+     "family": "SWI_3D",
+     "has_phase": false,
+     "n_echoes": 1
+    },
+    "winner": "a",
+    "decided_by": "has_phase",
+    "work": "10.1 case 30"
+   },
+   {
+    "id": "C15",
+    "role": "SWI",
+    "a": {
+     "family": "SWI_3D",
+     "has_phase": true,
+     "n_echoes": 3
+    },
+    "b": {
+     "family": "SWI_3D",
+     "has_phase": true,
+     "n_echoes": 1
+    },
+    "winner": "a",
+    "decided_by": "echoes"
+   },
+   {
+    "id": "C16",
+    "role": "SWI",
+    "a": {
+     "family": "SWI_3D",
+     "has_phase": true,
+     "n_echoes": 1,
+     "contrast": "pre"
+    },
+    "b": {
+     "family": "SWI_3D",
+     "has_phase": true,
+     "n_echoes": 1,
+     "contrast": "post"
+    },
+    "winner": "a",
+    "decided_by": "contrast"
+   },
+   {
+    "id": "C17",
+    "role": "QSM",
+    "a": {
+     "family": "QSM_3D",
+     "has_phase": true
+    },
+    "b": {
+     "family": "QSM_2D",
+     "has_phase": true
+    },
+    "winner": "a",
+    "decided_by": "tier"
+   },
+   {
+    "id": "C18",
+    "role": "GRE",
+    "a": {
+     "family": "GRE_2D",
+     "native": [
+      0.9,
+      0.9,
+      3.0
+     ]
+    },
+    "b": {
+     "family": "GRE_2D",
+     "native": [
+      0.9,
+      0.9,
+      5.0
+     ]
+    },
+    "winner": "a",
+    "decided_by": "tier",
+    "work": "thin against clinical (10.1 case 33)"
+   },
+   {
+    "id": "C19B",
+    "role": "GRE",
+    "a": {
+     "family": "GRE_3D",
+     "native": [
+      0.9,
+      0.9,
+      0.9
+     ]
+    },
+    "b": {
+     "family": "GRE_3D",
+     "native": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    },
+    "winner": "a",
+    "decided_by": "native",
+    "work": "cap 1.0: max(0.9, 1.0) = 1.0 against 1.2"
+   },
+   {
+    "id": "C20",
+    "role": "FLAIR",
+    "a": {
+     "family": "FLAIR_3D",
+     "native": null,
+     "slice": 1.0
+    },
+    "b": {
+     "family": "FLAIR_3D",
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    "tier_both": "any",
+    "outcome": "review_required",
+    "reason": "undecidable_missing_field",
+    "work": "10.1 case 35: one candidate lacks AcquisitionMatrix; a missing value never decides"
+   }
+  ]
+ },
+ "options": {
+  "requirement": "R-RNK-4 / R4-RNK-04",
+  "source": "README Scan selection requirement table and the paragraph after it (a requirement the headers cannot answer goes to review: native_unknown, field_strength_unknown); scan-selection.md 7.1",
+  "cases": [
+   {
+    "id": "O01",
+    "option": "--3d-only",
+    "role": "T1",
+    "candidate": {
+     "family": "T1_2D_SE"
+    },
+    "reason": "not_3d"
+   },
+   {
+    "id": "O02",
+    "option": "--3d-only",
+    "role": "DWI",
+    "candidate": {
+     "family": "DWI_TENSOR",
+     "mr_acq": "2D"
+    },
+    "reason": null,
+    "work": "DWI is exempt"
+   },
+   {
+    "id": "O03",
+    "option": "--isotropic",
+    "role": "T1",
+    "candidate": {
+     "native": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    "reason": null
+   },
+   {
+    "id": "O04",
+    "option": "--isotropic",
+    "role": "T1",
+    "candidate": {
+     "native": [
+      1.0,
+      1.0,
+      1.3
+     ]
+    },
+    "reason": "not_isotropic",
+    "work": "1.3 is more than 20% from 1.0 by either reading (1.3/1.0, or 0.3/1.3 = 0.23)"
+   },
+   {
+    "id": "O05",
+    "option": "--isotropic",
+    "role": "T1",
+    "candidate": {
+     "native": [
+      1.0,
+      1.0,
+      1.15
+     ]
+    },
+    "reason": null,
+    "work": "within 20% by either reading"
+   },
+   {
+    "id": "O06",
+    "option": "--isotropic",
+    "role": "T1",
+    "candidate": {
+     "native": null
+    },
+    "outcome": "review_required",
+    "reason": "native_unknown"
+   },
+   {
+    "id": "O07",
+    "option": "--max-voxel-mm 1.2",
+    "role": "T1",
+    "candidate": {
+     "native": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    },
+    "reason": null
+   },
+   {
+    "id": "O08",
+    "option": "--max-voxel-mm 1.2",
+    "role": "T1",
+    "candidate": {
+     "native": [
+      1.21,
+      1.0,
+      1.0
+     ]
+    },
+    "reason": "voxel_too_large"
+   },
+   {
+    "id": "O09",
+    "option": "--max-voxel-mm 1.2",
+    "role": "T1",
+    "candidate": {
+     "native": null
+    },
+    "outcome": "review_required",
+    "reason": "native_unknown"
+   },
+   {
+    "id": "O10",
+    "option": "--min-directions 30",
+    "role": "DWI",
+    "candidate": {
+     "n_dirs": 30
+    },
+    "reason": null
+   },
+   {
+    "id": "O11",
+    "option": "--min-directions 30",
+    "role": "DWI",
+    "candidate": {
+     "n_dirs": 12
+    },
+    "reason": "too_few_directions"
+   },
+   {
+    "id": "O12",
+    "option": "--no-fallback",
+    "role": "T1",
+    "candidate": {
+     "family": "T1_2D_SE"
+    },
+    "reason": "fallback_only"
+   },
+   {
+    "id": "O13",
+    "option": "--field-strength 3",
+    "session": {
+     "field_t": 2.89
+    },
+    "session_excluded": false,
+    "work": "2.89 counts as 3"
+   },
+   {
+    "id": "O14",
+    "option": "--field-strength 3",
+    "session": {
+     "field_t": 1.5
+    },
+    "session_excluded": true
+   },
+   {
+    "id": "O15",
+    "option": "--field-strength 3",
+    "session": {
+     "field_t": null
+    },
+    "outcome": "review_required",
+    "reason": "field_strength_unknown"
+   },
+   {
+    "id": "O16",
+    "option": "--manufacturer GE",
+    "session": {
+     "manufacturer": "SIEMENS"
+    },
+    "session_excluded": true
+   },
+   {
+    "id": "O17",
+    "option": "--manufacturer GE",
+    "session": {
+     "manufacturer": null
+    },
+    "outcome": "review_required",
+    "reason": "manufacturer_unknown",
+    "work": "named by the spec's R4-RNK-04 ('manufacturer_unknown for the missing value')"
+   }
+  ]
+ }
+}

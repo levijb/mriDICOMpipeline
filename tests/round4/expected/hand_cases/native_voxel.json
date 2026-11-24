@@ -1,0 +1,41 @@
+{
+  "description": "Hand-worked native voxel sizes (scan-selection.md 5.3; PS3.3 C.8.3.1 AcquisitionMatrix). Used by R4-OR-01 for oracles/geometry.native_voxel and by the header reader checks.",
+  "tolerance_mm": 1e-6,
+  "cases": [
+    {
+      "id": "NV-GE-T1",
+      "rows": 1024, "cols": 1024, "pixel_spacing": [0.234375, 0.234375], "acq_matrix": [0, 240, 240, 0], "phase_dir": "ROW", "thick_mm": 1.0,
+      "expected": {"row": 1.0, "col": 1.0, "slice": 1.0, "max": 1.0, "interpolated_grid": true},
+      "work": "fov_row = 1024*0.234375 = 240; fov_col = 240; n_freq = 240, n_phase = 240; ROW: row = 240/240, col = 240/240. Grid 0.234 < 0.75*1.0, so interpolated",
+      "oracle": "S", "source": "scan-selection.md 5.3 and census check (GE 3D T1 1.0 mm, 10.1 case 1)"
+    },
+    {
+      "id": "NV-AERA-FLAIR-ROW",
+      "rows": 256, "cols": 224, "pixel_spacing": [1.0, 1.0], "acq_matrix": [256, 0, 0, 202], "phase_dir": "ROW", "thick_mm": 1.05,
+      "expected": {"row": 1.108910891089109, "col": 1.0, "slice": 1.05, "max": 1.108910891089109, "interpolated_grid": false},
+      "work": "fov_row = 224*1.0 = 224, fov_col = 256*1.0 = 256; n_freq = 256, n_phase = 202; ROW: row = 224/202 = 1.10891089..., col = 256/256 = 1.0",
+      "oracle": "S", "source": "scan-selection.md 5.3 census check (Aera 3D FLAIR 1.11 x 1.0 x 1.05 mm)"
+    },
+    {
+      "id": "NV-NONSQUARE-COL",
+      "rows": 320, "cols": 256, "pixel_spacing": [0.75, 0.9375], "acq_matrix": [320, 0, 0, 224], "phase_dir": "COL", "thick_mm": 4.0,
+      "expected": {"row": 0.75, "col": 1.0714285714285714, "slice": 4.0, "max": 4.0, "interpolated_grid": true},
+      "work": "fov_row = 256*0.9375 = 240, fov_col = 320*0.75 = 240; n_freq = 320, n_phase = 224; COL: col = 240/224 = 1.07142857..., row = 240/320 = 0.75. Row spacing 0.75 (along the column direction) < 0.75*1.0714 = 0.8036, so interpolated",
+      "oracle": "S", "source": "scan-selection.md 5.3"
+    },
+    {
+      "id": "NV-PHASE-MISSING",
+      "rows": 256, "cols": 256, "pixel_spacing": [0.9375, 0.9375], "acq_matrix": [0, 256, 192, 0], "phase_dir": null, "thick_mm": 5.0,
+      "expected_both": {"if_row": {"row": 1.25, "col": 0.9375}, "if_col": {"row": 0.9375, "col": 1.25}},
+      "work": "fov 240 x 240; n_freq 256, n_phase 192. ROW: row = 240/192 = 1.25, col = 240/256 = 0.9375. COL: row = 240/256, col = 240/192",
+      "oracle": "S", "source": "scan-selection.md 5.3 (phase_dir missing: compute both assignments)"
+    },
+    {
+      "id": "NV-MATRIX-MISSING",
+      "rows": 256, "cols": 256, "pixel_spacing": [0.9375, 0.9375], "acq_matrix": null, "phase_dir": "COL", "thick_mm": 5.0,
+      "expected": null,
+      "work": "No AcquisitionMatrix: native in-plane unknown, never the pixel spacing",
+      "oracle": "P", "source": "scan-selection.md 5.3 (missing matrix gives unknown)"
+    }
+  ]
+}

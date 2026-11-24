@@ -1,0 +1,839 @@
+{
+ "description": "Tier 1 identity tables (R4-IDN-01, R4-IDN-02, R4-IDN-03). Inputs use scan-selection.md 5.1/5.2 field names; phase 2 builds the pipeline's records from them. Every expected value was derived by hand from scan-selection.md 5.4 (rules revision 2, 2026-11-19). P only. Missing values fail a rule (5.4). 'family': null means no structural family.",
+ "oracle": "P",
+ "families": {
+  "requirement": "R-IDN-2 / R4-IDN-02",
+  "source": "scan-selection.md 5.4 Structural families table and the four definitions above it",
+  "base": {
+   "irgre": {
+    "mr_acq": "3D",
+    "scan_seq": [
+     "GR"
+    ],
+    "seq_var": [
+     "SS"
+    ],
+    "scan_opt": [],
+    "tr_ms": 6.0,
+    "te_ms": 2.4,
+    "ti_ms": 450.0,
+    "echoes": null
+   },
+   "gre": {
+    "mr_acq": "3D",
+    "scan_seq": [
+     "GR"
+    ],
+    "seq_var": [
+     "SS"
+    ],
+    "scan_opt": [],
+    "tr_ms": 8.0,
+    "te_ms": 3.0,
+    "ti_ms": 0.0,
+    "echoes": null
+   },
+   "t1ir": {
+    "mr_acq": "2D",
+    "scan_seq": [
+     "SE",
+     "IR"
+    ],
+    "seq_var": [
+     "SK"
+    ],
+    "scan_opt": [],
+    "tr_ms": 2200.0,
+    "te_ms": 21.0,
+    "ti_ms": 889.0,
+    "echoes": null
+   },
+   "t1se": {
+    "mr_acq": "2D",
+    "scan_seq": [
+     "SE"
+    ],
+    "seq_var": [
+     "SP"
+    ],
+    "scan_opt": [],
+    "tr_ms": 540.0,
+    "te_ms": 12.0,
+    "ti_ms": null,
+    "echoes": null
+   },
+   "flair": {
+    "mr_acq": "3D",
+    "scan_seq": [
+     "SE",
+     "IR"
+    ],
+    "seq_var": [
+     "SK"
+    ],
+    "scan_opt": [],
+    "tr_ms": 6000.0,
+    "te_ms": 120.0,
+    "ti_ms": 1700.0,
+    "echoes": null
+   },
+   "t23d": {
+    "mr_acq": "3D",
+    "scan_seq": [
+     "SE"
+    ],
+    "seq_var": [
+     "SK"
+    ],
+    "scan_opt": [],
+    "tr_ms": 2500.0,
+    "te_ms": 400.0,
+    "ti_ms": null,
+    "echoes": null
+   },
+   "t22d": {
+    "mr_acq": "2D",
+    "scan_seq": [
+     "SE"
+    ],
+    "seq_var": [
+     "SK"
+    ],
+    "scan_opt": [],
+    "tr_ms": 6000.0,
+    "te_ms": 100.0,
+    "ti_ms": 0.0,
+    "echoes": null
+   }
+  },
+  "cases": [
+   {
+    "id": "F01",
+    "base": "irgre",
+    "set": {
+     "ti_ms": 300.0
+    },
+    "family": "T1_3D_IRGRE",
+    "work": "TI lower bound inclusive"
+   },
+   {
+    "id": "F02",
+    "base": "irgre",
+    "set": {
+     "ti_ms": 299.9
+    },
+    "family": null,
+    "work": "TI > 0 is inversion, so prepared: T1_3D_GRE is closed and the IRGRE band fails"
+   },
+   {
+    "id": "F03",
+    "base": "irgre",
+    "set": {
+     "ti_ms": 1300.0
+    },
+    "family": "T1_3D_IRGRE",
+    "work": "TI upper bound inclusive"
+   },
+   {
+    "id": "F04",
+    "base": "irgre",
+    "set": {
+     "ti_ms": 1300.1
+    },
+    "family": null,
+    "work": "above the band"
+   },
+   {
+    "id": "F05",
+    "base": "irgre",
+    "set": {
+     "te_ms": 10.0
+    },
+    "family": "T1_3D_IRGRE",
+    "work": "TE <= 10"
+   },
+   {
+    "id": "F06",
+    "base": "irgre",
+    "set": {
+     "te_ms": 10.1
+    },
+    "family": null,
+    "work": "TE > 10"
+   },
+   {
+    "id": "F07",
+    "base": "irgre",
+    "set": {
+     "tr_ms": 2999.9
+    },
+    "family": "T1_3D_IRGRE",
+    "work": "TR < 3000"
+   },
+   {
+    "id": "F08",
+    "base": "irgre",
+    "set": {
+     "tr_ms": 3000.0
+    },
+    "family": null,
+    "work": "TR < 3000 is strict"
+   },
+   {
+    "id": "F09",
+    "base": "irgre",
+    "set": {
+     "tr_ms": 2200.0,
+     "te_ms": 2.9,
+     "ti_ms": 900.0
+    },
+    "family": "T1_3D_IRGRE",
+    "work": "Siemens MPRAGE: TI without IR still means inversion (revision 2)"
+   },
+   {
+    "id": "F10",
+    "base": "irgre",
+    "set": {
+     "scan_seq": [
+      "RM"
+     ]
+    },
+    "family": "T1_3D_IRGRE",
+    "work": "RM counts as gradient echo (GE research mode)"
+   },
+   {
+    "id": "F11",
+    "base": "irgre",
+    "set": {
+     "scan_opt": [
+      "IR_GEMS"
+     ],
+     "ti_ms": null
+    },
+    "family": null,
+    "work": "prepared by IR_GEMS, but the IRGRE band needs a TI and the MP rule needs MP: no family"
+   },
+   {
+    "id": "F12",
+    "base": "irgre",
+    "set": {
+     "seq_var": [
+      "MP"
+     ],
+     "ti_ms": null,
+     "tr_ms": 8.0,
+     "te_ms": 3.5
+    },
+    "family": "T1_3D_IRGRE",
+    "work": "Philips 3D TFE: the MP rule of T1_3D_IRGRE (no TI; TE and TR within its bounds)"
+   },
+   {
+    "id": "F13",
+    "base": "irgre",
+    "set": {
+     "seq_var": [
+      "MP"
+     ],
+     "ti_ms": null,
+     "tr_ms": 50.1,
+     "te_ms": 3.5
+    },
+    "family": null,
+    "work": "TR > 50 fails the MP rule; MP makes it prepared, so not T1_3D_GRE"
+   },
+   {
+    "id": "F14",
+    "base": "gre",
+    "family": "T1_3D_GRE",
+    "work": "GE SPGR: GR, TI 0 is no inversion, single echo, TE 3, TR 8"
+   },
+   {
+    "id": "F15",
+    "base": "gre",
+    "set": {
+     "tr_ms": 50.1
+    },
+    "family": null,
+    "work": "TR > 50"
+   },
+   {
+    "id": "F16",
+    "base": "gre",
+    "set": {
+     "te_ms": 10.1
+    },
+    "family": null,
+    "work": "TE > 10"
+   },
+   {
+    "id": "F17",
+    "base": "gre",
+    "set": {
+     "te_ms": null,
+     "echoes": [
+      {
+       "te_ms": 3.0,
+       "echo_number": 1
+      },
+      {
+       "te_ms": 6.0,
+       "echo_number": 2
+      }
+     ]
+    },
+    "volume_te_ms": 3.0,
+    "family": null,
+    "work": "not a single-echo series"
+   },
+   {
+    "id": "F18",
+    "base": "t1ir",
+    "family": "T1_2D_IR",
+    "work": "GE T1-FLAIR: TI 889, TE 21"
+   },
+   {
+    "id": "F19",
+    "base": "t1ir",
+    "set": {
+     "ti_ms": 599.9
+    },
+    "family": null,
+    "work": "below 600; inversion closes T1_2D_SE; FLAIR needs 1400"
+   },
+   {
+    "id": "F20",
+    "base": "t1ir",
+    "set": {
+     "ti_ms": 1300.1
+    },
+    "family": null,
+    "work": "above 1300 and below FLAIR's 1400"
+   },
+   {
+    "id": "F21",
+    "base": "t1ir",
+    "set": {
+     "te_ms": 40.1
+    },
+    "family": null,
+    "work": "TE > 40"
+   },
+   {
+    "id": "F22",
+    "base": "t1ir",
+    "set": {
+     "scan_seq": [
+      "IR"
+     ],
+     "ti_ms": 800.0,
+     "te_ms": 15.0
+    },
+    "family": "T1_2D_IR",
+    "work": "Philips IR without SE is an inversion spin echo (revision 2)"
+   },
+   {
+    "id": "F23",
+    "base": "t1se",
+    "family": "T1_2D_SE",
+    "work": "Espree spin echo"
+   },
+   {
+    "id": "F24",
+    "base": "t1se",
+    "set": {
+     "tr_ms": 1000.0,
+     "te_ms": 30.0
+    },
+    "family": "T1_2D_SE",
+    "work": "both bounds inclusive"
+   },
+   {
+    "id": "F25",
+    "base": "t1se",
+    "set": {
+     "tr_ms": 1000.1
+    },
+    "family": null,
+    "work": "TR > 1000"
+   },
+   {
+    "id": "F26",
+    "base": "t1se",
+    "set": {
+     "te_ms": 30.1
+    },
+    "family": null,
+    "work": "TE > 30"
+   },
+   {
+    "id": "F27",
+    "base": "flair",
+    "family": "FLAIR_3D",
+    "work": "CUBE FLAIR"
+   },
+   {
+    "id": "F28",
+    "base": "flair",
+    "set": {
+     "ti_ms": 1399.9
+    },
+    "family": null,
+    "work": "TI < 1400 and above T1_2D_IR's band (3D anyway)"
+   },
+   {
+    "id": "F29",
+    "base": "flair",
+    "set": {
+     "ti_ms": 3000.1
+    },
+    "family": null,
+    "work": "TI > 3000"
+   },
+   {
+    "id": "F30",
+    "base": "flair",
+    "set": {
+     "tr_ms": 3999.9
+    },
+    "family": null,
+    "work": "TR < 4000"
+   },
+   {
+    "id": "F31",
+    "base": "flair",
+    "set": {
+     "te_ms": 69.9
+    },
+    "family": null,
+    "work": "TE < 70"
+   },
+   {
+    "id": "F32",
+    "base": "flair",
+    "set": {
+     "mr_acq": "2D",
+     "ti_ms": 2500.0,
+     "tr_ms": 8000.0,
+     "te_ms": 100.0
+    },
+    "family": "FLAIR_2D",
+    "work": "Espree 2D FLAIR"
+   },
+   {
+    "id": "F33",
+    "base": "flair",
+    "set": {
+     "scan_seq": [
+      "SE",
+      "IR",
+      "GR"
+     ]
+    },
+    "family": null,
+    "work": "an inversion spin echo has neither GR nor EP"
+   },
+   {
+    "id": "F34",
+    "base": "t23d",
+    "family": "T2_3D_TSE",
+    "work": "variable-flip 3D TSE, TE up to 500"
+   },
+   {
+    "id": "F35",
+    "base": "t23d",
+    "set": {
+     "te_ms": 500.1
+    },
+    "family": null,
+    "work": "TE > 500"
+   },
+   {
+    "id": "F36",
+    "base": "t23d",
+    "set": {
+     "te_ms": 59.9
+    },
+    "family": null,
+    "work": "TE < 60"
+   },
+   {
+    "id": "F37",
+    "base": "t23d",
+    "set": {
+     "tr_ms": 1499.9
+    },
+    "family": null,
+    "work": "TR < 1500"
+   },
+   {
+    "id": "F38",
+    "base": "t22d",
+    "family": "T2_2D_TSE",
+    "work": "GE FSE; TI 0 is no inversion"
+   },
+   {
+    "id": "F39",
+    "base": "t22d",
+    "set": {
+     "tr_ms": 1999.9
+    },
+    "family": null,
+    "work": "TR < 2000"
+   },
+   {
+    "id": "F40",
+    "base": "t22d",
+    "set": {
+     "te_ms": 200.1
+    },
+    "family": null,
+    "work": "TE > 200"
+   },
+   {
+    "id": "F41",
+    "base": "t22d",
+    "set": {
+     "scan_seq": [
+      "EP",
+      "SE"
+     ],
+     "te_ms": 80.0,
+     "ti_ms": null
+    },
+    "family": null,
+    "work": "an EP scanning sequence excludes the T2 families, which keeps diffusion b0 volumes out (10.1 case 4)"
+   },
+   {
+    "id": "F42",
+    "base": "t22d",
+    "set": {
+     "scan_seq": [
+      "SE",
+      "IR"
+     ],
+     "ti_ms": 150.0,
+     "te_ms": 60.0
+    },
+    "family": null,
+    "work": "STIR: inversion keeps it out of T2; TI 150 is in no band"
+   },
+   {
+    "id": "F43",
+    "base": "t1se",
+    "set": {
+     "scan_seq": [
+      "GR"
+     ],
+     "tr_ms": 250.0,
+     "te_ms": 2.5
+    },
+    "family": null,
+    "work": "2D spoiled GRE (FLASH) has no family (5.4)"
+   },
+   {
+    "id": "F44",
+    "base": "t22d",
+    "set": {
+     "tr_ms": 3000.0,
+     "te_ms": 12.0
+    },
+    "family": null,
+    "work": "PD echo of a dual echo: TE < 60; TR > 1000 closes T1_2D_SE"
+   }
+  ]
+ },
+ "roles": {
+  "requirement": "R-IDN-1 / R4-IDN-01",
+  "source": "scan-selection.md 5.4 rule order 1-6",
+  "cases": [
+   {
+    "id": "R1",
+    "label": "LOCALIZER",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "OTHER"
+    ],
+    "params": "irgre",
+    "has_bval": false,
+    "role": "LOCALIZER",
+    "rule": 1,
+    "warnings": []
+   },
+   {
+    "id": "R1B",
+    "label": "OTHER",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "LOCALIZER"
+    ],
+    "params": "irgre",
+    "has_bval": false,
+    "role": "LOCALIZER",
+    "rule": 1,
+    "warnings": [],
+    "work": "localizer flag from ImageType"
+   },
+   {
+    "id": "R2",
+    "label": "QSM",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "M"
+    ],
+    "params": "gre",
+    "has_bval": false,
+    "role": "QSM",
+    "rule": 2,
+    "warnings": [
+     "label_parameter_conflict"
+    ],
+    "work": "single-echo 3D GR TE 3 also matches T1_3D_GRE (10.1 case 3)"
+   },
+   {
+    "id": "R2B",
+    "label": "MRA",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "OTHER"
+    ],
+    "params": "gre",
+    "has_bval": false,
+    "role": "MRA",
+    "rule": 2,
+    "warnings": [
+     "label_parameter_conflict"
+    ],
+    "work": "TOF timing matches T1_3D_GRE"
+   },
+   {
+    "id": "R3",
+    "label": "OTHER",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "OTHER"
+    ],
+    "params": "t22d",
+    "has_bval": true,
+    "role": "DWI",
+    "rule": 3,
+    "warnings": [],
+    "work": "a .bval file"
+   },
+   {
+    "id": "R3B",
+    "label": "OTHER",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "DIFFUSION",
+     "NONE"
+    ],
+    "params": "t22d",
+    "has_bval": false,
+    "role": "DWI",
+    "rule": 3,
+    "warnings": [],
+    "work": "ImageType DIFFUSION without gradient files"
+   },
+   {
+    "id": "R4",
+    "label": "OTHER",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "OTHER"
+    ],
+    "params": "irgre",
+    "has_bval": false,
+    "role": "T1",
+    "rule": 4,
+    "warnings": []
+   },
+   {
+    "id": "R4B",
+    "label": "T1",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "OTHER"
+    ],
+    "params": "flair",
+    "has_bval": false,
+    "role": "FLAIR",
+    "rule": 4,
+    "warnings": [
+     "label_parameter_conflict"
+    ],
+    "work": "a FLAIR described as T1 (10.1 case 3)"
+   },
+   {
+    "id": "R5",
+    "label": "T2",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "OTHER"
+    ],
+    "params_set": {
+     "base": "t22d",
+     "set": {
+      "tr_ms": 3000.0,
+      "te_ms": 12.0
+     }
+    },
+    "has_bval": false,
+    "role": "T2",
+    "rule": 5,
+    "family": "UNCLASSIFIED",
+    "warnings": [],
+    "work": "label without evidence; the candidate later fails metadata_unavailable"
+   },
+   {
+    "id": "R6",
+    "label": "OTHER",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "OTHER"
+    ],
+    "params_set": {
+     "base": "t1se",
+     "set": {
+      "scan_seq": [
+       "GR"
+      ],
+      "tr_ms": 250.0,
+      "te_ms": 2.5
+     }
+    },
+    "has_bval": false,
+    "role": null,
+    "rule": 6,
+    "warnings": [],
+    "work": "no role: unclassified"
+   }
+  ]
+ },
+ "derived_kinds": {
+  "requirement": "R-IDN-3 / R4-IDN-03",
+  "source": "scan-selection.md 5.4 Derived (DERIVED_TOKENS; derived roles ADC, EADC, SWI_MINIP)",
+  "cases": [
+   {
+    "id": "D1",
+    "image_type": [
+     "DERIVED",
+     "SECONDARY",
+     "REFORMATTED",
+     "AVERAGE"
+    ],
+    "role": "T1",
+    "derived": true,
+    "kind": "reformat",
+    "warnings": []
+   },
+   {
+    "id": "D2",
+    "image_type": [
+     "DERIVED",
+     "SECONDARY",
+     "MPR",
+     "CSA MPR",
+     "ND",
+     "NORM"
+    ],
+    "role": "T1",
+    "derived": true,
+    "kind": "reformat",
+    "warnings": []
+   },
+   {
+    "id": "D3",
+    "image_type": [
+     "DERIVED",
+     "PRIMARY",
+     "MIN IP"
+    ],
+    "role": "SWI",
+    "derived": true,
+    "kind": "projection",
+    "warnings": []
+   },
+   {
+    "id": "D4",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "OTHER"
+    ],
+    "role": "ADC",
+    "derived": true,
+    "kind": "map",
+    "warnings": [
+     "derived_by_role"
+    ],
+    "work": "10.1 case 6"
+   },
+   {
+    "id": "D5",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "DIFFUSION",
+     "TRACEW",
+     "ND"
+    ],
+    "role": "DWI",
+    "derived": true,
+    "kind": "map",
+    "warnings": [],
+    "work": "TRACEW is in DERIVED_TOKENS"
+   },
+   {
+    "id": "D6",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "M"
+    ],
+    "role": "SWI_MINIP",
+    "derived": true,
+    "kind": "projection",
+    "warnings": [
+     "derived_by_role"
+    ]
+   },
+   {
+    "id": "D7",
+    "image_type": [
+     "DERIVED",
+     "PRIMARY",
+     "M",
+     "SWI"
+    ],
+    "role": "SWI",
+    "derived": true,
+    "kind": "map",
+    "warnings": [],
+    "work": "value 1 DERIVED, no reformat or projection token: the processed SWI"
+   },
+   {
+    "id": "D8",
+    "image_type": [
+     "ORIGINAL",
+     "PRIMARY",
+     "M",
+     "ND"
+    ],
+    "role": "SWI",
+    "derived": false,
+    "kind": "native",
+    "warnings": []
+   }
+  ]
+ }
+}

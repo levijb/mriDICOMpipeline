@@ -1,0 +1,341 @@
+{
+ "description": "Hand-worked gradient statistics (scan-selection.md 5.2; R4-OR-02). Vectors are written as given in a .bvec file; the oracle normalizes them.",
+ "cases": [
+  {
+   "id": "GR-TRACE5",
+   "bvals": [
+    0,
+    1000,
+    1000,
+    1000,
+    1000,
+    1000,
+    1000
+   ],
+   "bvecs": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     1,
+     0
+    ],
+    [
+     0,
+     0,
+     1
+    ],
+    [
+     -1,
+     0,
+     0
+    ],
+    [
+     0.7071067811865476,
+     0.7071067811865476,
+     0
+    ],
+    [
+     0,
+     0.7071067811865476,
+     0.7071067811865476
+    ]
+   ],
+   "dim4": 7,
+   "expected": {
+    "n_volumes": 7,
+    "b0": 1,
+    "shells": [
+     1000
+    ],
+    "b_max": 1000,
+    "n_dirs": 5,
+    "mismatch": false,
+    "family": "DWI_TRACE"
+   },
+   "work": "x, y, z distinct; -x is x up to sign; the two diagonals have |dot| 0.707 or 0.5 with every other: 5 directions, below 6, so trace",
+   "oracle": "P",
+   "source": "scan-selection.md 5.2 gradients; 5.4 DWI families (min_tensor_directions 6)"
+  },
+  {
+   "id": "GR-ROUNDING",
+   "bvals": [
+    5,
+    45,
+    50,
+    55,
+    990,
+    1010,
+    1024,
+    1026
+   ],
+   "bvecs": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     1,
+     0,
+     0
+    ],
+    [
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     1,
+     0
+    ],
+    [
+     0,
+     0,
+     1
+    ],
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "dim4": 8,
+   "expected": {
+    "n_volumes": 8,
+    "b0": 3,
+    "shells": [
+     50,
+     1000,
+     1050
+    ],
+    "b_max": 1050,
+    "n_dirs": 3,
+    "mismatch": false,
+    "family": "DWI_TRACE"
+   },
+   "work": "b <= 50: 5, 45, 50. 55/50 = 1.1 -> 50; 990 -> 19.8 -> 1000; 1010 -> 20.2 -> 1000; 1024 -> 20.48 -> 1000; 1026 -> 20.52 -> 1050. Shell 1000 holds x, y, z: 3",
+   "oracle": "P",
+   "source": "scan-selection.md 5.2 (b <= 50 is b0; shells rounded to the nearest 50)"
+  },
+  {
+   "id": "GR-ZERO-VECTORS",
+   "bvals": [
+    0,
+    1000,
+    1000,
+    1000
+   ],
+   "bvecs": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0
+    ]
+   ],
+   "dim4": 4,
+   "expected": {
+    "n_volumes": 4,
+    "b0": 1,
+    "shells": [
+     1000
+    ],
+    "b_max": 1000,
+    "n_dirs": 0,
+    "mismatch": false,
+    "family": "DWI_TRACE"
+   },
+   "work": "A zero vector is not a direction (a trace image is b > 0 with a zero vector). There is a b > 50 volume, so the family is trace, not b0-only",
+   "oracle": "P",
+   "source": "scan-selection.md 5.2; 5.4"
+  },
+  {
+   "id": "GR-B0-ONLY",
+   "bvals": [
+    0,
+    0,
+    0
+   ],
+   "bvecs": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0
+    ]
+   ],
+   "dim4": 3,
+   "expected": {
+    "n_volumes": 3,
+    "b0": 3,
+    "shells": [],
+    "b_max": null,
+    "n_dirs": 0,
+    "mismatch": false,
+    "family": "DWI_B0_ONLY"
+   },
+   "work": "No b > 50 volume",
+   "oracle": "P",
+   "source": "scan-selection.md 5.4 (DWI_B0_ONLY)"
+  },
+  {
+   "id": "GR-MISMATCH",
+   "bvals": [
+    0,
+    1000,
+    1000,
+    1000
+   ],
+   "bvecs": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     1,
+     0
+    ],
+    [
+     0,
+     0,
+     1
+    ]
+   ],
+   "dim4": 5,
+   "expected": {
+    "n_volumes": 4,
+    "b0": 1,
+    "shells": [
+     1000
+    ],
+    "b_max": 1000,
+    "n_dirs": 3,
+    "mismatch": true,
+    "family": "DWI_TRACE"
+   },
+   "work": "4 b-values against a 4th dimension of 5",
+   "oracle": "P",
+   "source": "scan-selection.md 5.2 (n_volumes must equal the NIfTI 4th dimension)"
+  },
+  {
+   "id": "GR-TENSOR-NEAR-DUPLICATE",
+   "bvals": [
+    0,
+    1000,
+    1000,
+    1000,
+    1000,
+    1000,
+    1000,
+    1000
+   ],
+   "bvecs": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     1,
+     0
+    ],
+    [
+     0,
+     0,
+     1
+    ],
+    [
+     0.7071067811865476,
+     0.7071067811865476,
+     0
+    ],
+    [
+     0.7071067811865476,
+     0,
+     0.7071067811865476
+    ],
+    [
+     0,
+     0.7071067811865476,
+     0.7071067811865476
+    ],
+    [
+     0.999,
+     0.0447,
+     0
+    ]
+   ],
+   "dim4": 8,
+   "expected": {
+    "n_volumes": 8,
+    "b0": 1,
+    "shells": [
+     1000
+    ],
+    "b_max": 1000,
+    "n_dirs": 6,
+    "mismatch": false,
+    "family": "DWI_TENSOR"
+   },
+   "work": "(0.999, 0.0447, 0) has norm 0.99999950; its dot with x is 0.99900050 >= 0.995, so it repeats x. The three diagonals have |dot| 0.5 with each other and 0.707 with the axes: 6 directions",
+   "oracle": "P",
+   "source": "scan-selection.md 5.2 (|dot| >= 0.995 is the same direction); 5.4 (DWI_TENSOR from 6)"
+  }
+ ]
+}

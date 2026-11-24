@@ -1,0 +1,3630 @@
+{
+ "catalog": "structural",
+ "description": "Structural families (spec 4.1): GE IR-prepared 3D T1 with reformats, Siemens MPRAGE with a split MPR, 2D spin-echo T1, 2D T1-FLAIR, 3D and 2D FLAIR (with overlapping slices), 2D T2. Rows and Columns are reduced to 28-48 while fields of view and slice spacing stay realistic, so coverage reaches 110 mm. Times are seconds after the session's earliest AcquisitionTime (reading RD-10). Volume keys in expected outcomes are series numbers; 'N:*' stands for all volumes of series N.",
+ "sources": {
+  "PS3.3": "DICOM PS3.3 (attribute definitions and units)",
+  "SS-2.1-1": "scan-selection.md 2.1, census fact 1 (ImageType of natives and of GE and Siemens reformats)",
+  "SS-2.1-2": "scan-selection.md 2.1, census fact 2 (what a reformat has in common with its native)",
+  "SS-2.1-3": "scan-selection.md 2.1, census fact 3 (GE 3D T1 matrix and field of view; GE 3D FLAIR slice overlap)",
+  "SS-2.1-4": "scan-selection.md 2.1, census fact 4 (where the contrast-agent tag appeared; PRE/POST words in reformat descriptions)",
+  "SS-2.1-5": "scan-selection.md 2.1, census fact 5 (per-slice acquisition times on the Espree)",
+  "SS-2.1-7": "scan-selection.md 2.1, census fact 7 (observed parameter ranges per family)",
+  "SS-2.1-8": "scan-selection.md 2.1, census fact 8 (the census T2 scans)",
+  "SS-2.1-T": "scan-selection.md 2.1, census table (scanners and volumes per session)",
+  "SS-5.3": "scan-selection.md 5.3, census checks (Aera T1 and 3D FLAIR native sizes)",
+  "SS-10.1": "scan-selection.md 10.1 (test cases built from the census), as cited",
+  "VEN": "vendor DICOM conventions as described in dcm2niix's documentation and vendor conformance statements",
+  "CLS": "production-hardening.md, implementation plan item 9 (classifier revision 2): folder label from the description",
+  "R4": "round 4 choice: a valid value with no external source"
+ },
+ "protocols": {
+  "GE_PREMIER": {
+   "tags": {
+    "Manufacturer": [
+     "GE MEDICAL SYSTEMS",
+     "VEN"
+    ],
+    "ManufacturerModelName": [
+     "SIGNA Premier",
+     "SS-2.1-T"
+    ],
+    "MagneticFieldStrength": [
+     3.0,
+     "SS-2.1-T"
+    ],
+    "SoftwareVersions": [
+     [
+      "29",
+      "LX",
+      "MR29.1"
+     ],
+     "R4"
+    ],
+    "ProtocolName": [
+     "BRAIN ROUTINE",
+     "R4"
+    ],
+    "PercentPhaseFieldOfView": [
+     100,
+     "R4"
+    ]
+   },
+   "part_encoding": "ge_private",
+   "parts": [
+    "mag"
+   ],
+   "facts": {
+    "manufacturer": "GE"
+   }
+  },
+  "GE_BRAVO": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "SS-2.1-T"
+    ],
+    "ScanningSequence": [
+     [
+      "GR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SS",
+      "SK"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS",
+      "EDR_GEMS",
+      "ACC_GEMS",
+      "IR_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "efgre3d",
+     "VEN"
+    ],
+    "RepetitionTime": [
+     6.0,
+     "SS-2.1-7"
+    ],
+    "InversionTime": [
+     450,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     13,
+     "SS-2.1-7"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     1.0,
+     "SS-2.1-3"
+    ],
+    "SpacingBetweenSlices": [
+     1.0,
+     "SS-2.1-3"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      240,
+      240,
+      0
+     ],
+     "SS-2.1-3"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "SS-2.1-1"
+    ],
+    "SeriesDescription": [
+     "SAG T1 BRAVO",
+     "R4"
+    ]
+   },
+   "echoes": [
+    2.4
+   ],
+   "slices": 120,
+   "geometry": {
+    "iop": [
+     0,
+     1,
+     0,
+     0,
+     0,
+     -1
+    ],
+    "first_position": [
+     60.0,
+     -120.0,
+     120.0
+    ],
+    "step_mm": 1.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "T1",
+    "CLS"
+   ]
+  },
+  "GE_BRAVO_REFORMAT": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "SS-2.1-2"
+    ],
+    "ScanningSequence": [
+     [
+      "GR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SS",
+      "SK"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS",
+      "EDR_GEMS",
+      "ACC_GEMS",
+      "IR_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "efgre3d",
+     "VEN"
+    ],
+    "RepetitionTime": [
+     6.0,
+     "SS-2.1-2"
+    ],
+    "InversionTime": [
+     450,
+     "SS-2.1-2"
+    ],
+    "FlipAngle": [
+     13,
+     "SS-2.1-2"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     2.0,
+     "R4"
+    ],
+    "SpacingBetweenSlices": [
+     2.0,
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "DERIVED",
+      "SECONDARY",
+      "REFORMATTED",
+      "AVERAGE"
+     ],
+     "SS-2.1-1"
+    ],
+    "SeriesDescription": [
+     "AX T1 BRAVO PRE REFORMAT",
+     "SS-2.1-4"
+    ]
+   },
+   "echoes": [
+    2.4
+   ],
+   "slices": 60,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -60.0
+    ],
+    "step_mm": 2.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "T1",
+    "CLS"
+   ]
+  },
+  "GE_CUBE_FLAIR": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "SS-2.1-T"
+    ],
+    "ScanningSequence": [
+     [
+      "SE",
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SS"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS",
+      "EDR_GEMS",
+      "IR_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "fse3d",
+     "R4"
+    ],
+    "RepetitionTime": [
+     6000,
+     "SS-2.1-7"
+    ],
+    "InversionTime": [
+     1700,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     90,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     200,
+     "R4"
+    ],
+    "SliceThickness": [
+     1.0,
+     "SS-2.1-3"
+    ],
+    "SpacingBetweenSlices": [
+     0.5,
+     "SS-2.1-3"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      256,
+      256,
+      0
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "SS-2.1-1"
+    ],
+    "SeriesDescription": [
+     "SAG CUBE FLAIR",
+     "R4"
+    ]
+   },
+   "echoes": [
+    120
+   ],
+   "slices": 230,
+   "geometry": {
+    "iop": [
+     0,
+     1,
+     0,
+     0,
+     0,
+     -1
+    ],
+    "first_position": [
+     57.5,
+     -128.0,
+     128.0
+    ],
+    "step_mm": 0.5,
+    "pixel_spacing": [
+     8.0,
+     8.0
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "FLAIR",
+    "CLS"
+   ]
+  },
+  "GE_FLAIR_REFORMAT": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "SS-2.1-2"
+    ],
+    "ScanningSequence": [
+     [
+      "SE",
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SS"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS",
+      "EDR_GEMS",
+      "IR_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "fse3d",
+     "R4"
+    ],
+    "RepetitionTime": [
+     6000,
+     "SS-2.1-2"
+    ],
+    "InversionTime": [
+     1700,
+     "SS-2.1-2"
+    ],
+    "FlipAngle": [
+     90,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     200,
+     "R4"
+    ],
+    "SliceThickness": [
+     2.0,
+     "R4"
+    ],
+    "SpacingBetweenSlices": [
+     2.0,
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "DERIVED",
+      "SECONDARY",
+      "REFORMATTED",
+      "AVERAGE"
+     ],
+     "SS-2.1-1"
+    ],
+    "SeriesDescription": [
+     "AX FLAIR REFORMAT",
+     "R4"
+    ]
+   },
+   "echoes": [
+    120
+   ],
+   "slices": 58,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -128.0,
+     -128.0,
+     -57.0
+    ],
+    "step_mm": 2.0,
+    "pixel_spacing": [
+     8.0,
+     8.0
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "FLAIR",
+    "CLS"
+   ]
+  },
+  "GE_T2_FSE": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "2D",
+     "SS-2.1-8"
+    ],
+    "ScanningSequence": [
+     [
+      "SE"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS",
+      "EDR_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "fse",
+     "R4"
+    ],
+    "RepetitionTime": [
+     6000,
+     "SS-2.1-7"
+    ],
+    "InversionTime": [
+     0,
+     "VEN"
+    ],
+    "FlipAngle": [
+     90,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     16,
+     "SS-2.1-7"
+    ],
+    "SliceThickness": [
+     4.0,
+     "SS-2.1-8"
+    ],
+    "SpacingBetweenSlices": [
+     4.0,
+     "SS-2.1-8"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      320,
+      256,
+      0
+     ],
+     "SS-2.1-8"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "SS-2.1-8"
+    ],
+    "SeriesDescription": [
+     "AX T2 FSE",
+     "R4"
+    ]
+   },
+   "echoes": [
+    100
+   ],
+   "slices": 28,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -50.0
+    ],
+    "step_mm": 4.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "T2",
+    "CLS"
+   ]
+  },
+  "GE_T1_FLAIR_2D": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "2D",
+     "SS-2.1-T"
+    ],
+    "ScanningSequence": [
+     [
+      "SE",
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SS"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS",
+      "IR_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "fsirs",
+     "R4"
+    ],
+    "RepetitionTime": [
+     2200,
+     "R4"
+    ],
+    "InversionTime": [
+     889,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     90,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     7,
+     "R4"
+    ],
+    "SliceThickness": [
+     5.0,
+     "R4"
+    ],
+    "SpacingBetweenSlices": [
+     5.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      320,
+      224,
+      0
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "SS-2.1-1"
+    ],
+    "SeriesDescription": [
+     "AX T1 FLAIR +C",
+     "R4"
+    ],
+    "ContrastBolusAgent": [
+     "GADOBUTROL",
+     "SS-2.1-4"
+    ]
+   },
+   "echoes": [
+    21
+   ],
+   "slices": 24,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -60.0
+    ],
+    "step_mm": 5.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "FLAIR",
+    "CLS"
+   ]
+  },
+  "GE_LOCALIZER": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "2D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "GR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SS"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS"
+     ],
+     "VEN"
+    ],
+    "RepetitionTime": [
+     5.0,
+     "R4"
+    ],
+    "FlipAngle": [
+     30,
+     "R4"
+    ],
+    "SliceThickness": [
+     10.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      256,
+      128,
+      0
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "R4"
+    ],
+    "SeriesDescription": [
+     "3 PLANE LOCALIZER",
+     "R4"
+    ]
+   },
+   "echoes": [
+    1.6
+   ],
+   "slices": 3,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -128.0,
+     -128.0,
+     -10.0
+    ],
+    "step_mm": 10.0,
+    "pixel_spacing": [
+     8.0,
+     8.0
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "stacks": [
+    {},
+    {
+     "geometry": {
+      "iop": [
+       0,
+       1,
+       0,
+       0,
+       0,
+       -1
+      ],
+      "first_position": [
+       10.0,
+       -128.0,
+       128.0
+      ]
+     }
+    },
+    {
+     "geometry": {
+      "iop": [
+       1,
+       0,
+       0,
+       0,
+       0,
+       -1
+      ],
+      "first_position": [
+       -128.0,
+       -10.0,
+       128.0
+      ]
+     }
+    }
+   ],
+   "folder": [
+    "LOCALIZER",
+    "CLS"
+   ]
+  },
+  "SIEMENS_AERA": {
+   "tags": {
+    "Manufacturer": [
+     "SIEMENS",
+     "VEN"
+    ],
+    "ManufacturerModelName": [
+     "Aera",
+     "SS-2.1-T"
+    ],
+    "MagneticFieldStrength": [
+     1.5,
+     "SS-2.1-T"
+    ],
+    "SoftwareVersions": [
+     [
+      "syngo MR E11"
+     ],
+     "R4"
+    ]
+   },
+   "part_encoding": "imagetype",
+   "parts": [
+    "mag"
+   ],
+   "facts": {
+    "manufacturer": "SIEMENS"
+   }
+  },
+  "AERA_MPRAGE": {
+   "base": "SIEMENS_AERA",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "SS-2.1-T"
+    ],
+    "ScanningSequence": [
+     [
+      "GR",
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SP",
+      "MP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "*tfl3d1_16ns",
+     "VEN"
+    ],
+    "RepetitionTime": [
+     2200,
+     "SS-2.1-7"
+    ],
+    "InversionTime": [
+     900,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     8,
+     "SS-2.1-7"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     1.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      256,
+      0,
+      0,
+      246
+     ],
+     "SS-5.3"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "PercentPhaseFieldOfView": [
+     100,
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "{part}",
+      "ND",
+      "NORM"
+     ],
+     "VEN"
+    ],
+    "SeriesDescription": [
+     "t1_mprage_sag_p2_iso",
+     "R4"
+    ],
+    "ProtocolName": [
+     "t1_mprage_sag_p2_iso",
+     "R4"
+    ]
+   },
+   "echoes": [
+    2.9
+   ],
+   "slices": 120,
+   "geometry": {
+    "iop": [
+     0,
+     1,
+     0,
+     0,
+     0,
+     -1
+    ],
+    "first_position": [
+     60.0,
+     -128.0,
+     128.0
+    ],
+    "step_mm": 1.0,
+    "pixel_spacing": [
+     8.0,
+     8.0
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "T1",
+    "CLS"
+   ]
+  },
+  "AERA_SPACE_FLAIR": {
+   "base": "SIEMENS_AERA",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "SS-2.1-T"
+    ],
+    "ScanningSequence": [
+     [
+      "SE",
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SP",
+      "MP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "*spcir3d1_220ns",
+     "R4"
+    ],
+    "RepetitionTime": [
+     5000,
+     "SS-2.1-7"
+    ],
+    "InversionTime": [
+     1800,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     120,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     220,
+     "R4"
+    ],
+    "SliceThickness": [
+     1.05,
+     "SS-5.3"
+    ],
+    "AcquisitionMatrix": [
+     [
+      256,
+      0,
+      0,
+      202
+     ],
+     "SS-5.3"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "SS-5.3"
+    ],
+    "PercentPhaseFieldOfView": [
+     87.5,
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "{part}",
+      "ND",
+      "NORM"
+     ],
+     "VEN"
+    ],
+    "SeriesDescription": [
+     "t2_space_flair_sag_p2_iso",
+     "R4"
+    ],
+    "ProtocolName": [
+     "t2_space_flair_sag_p2_iso",
+     "R4"
+    ]
+   },
+   "echoes": [
+    336
+   ],
+   "slices": 106,
+   "geometry": {
+    "iop": [
+     0,
+     1,
+     0,
+     0,
+     0,
+     -1
+    ],
+    "first_position": [
+     55.65,
+     -128.0,
+     128.0
+    ],
+    "step_mm": 1.05,
+    "pixel_spacing": [
+     8.0,
+     8.0
+    ],
+    "rows": 32,
+    "cols": 28
+   },
+   "folder": [
+    "FLAIR",
+    "CLS"
+   ]
+  },
+  "AERA_T2_TSE": {
+   "base": "SIEMENS_AERA",
+   "tags": {
+    "MRAcquisitionType": [
+     "2D",
+     "SS-2.1-8"
+    ],
+    "ScanningSequence": [
+     [
+      "SE"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SP",
+      "OSP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "PFP",
+      "SAT1"
+     ],
+     "R4"
+    ],
+    "SequenceName": [
+     "*tse2d1_15",
+     "R4"
+    ],
+    "RepetitionTime": [
+     4000,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     150,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     15,
+     "SS-2.1-7"
+    ],
+    "SliceThickness": [
+     4.0,
+     "SS-2.1-8"
+    ],
+    "SpacingBetweenSlices": [
+     4.0,
+     "SS-2.1-8"
+    ],
+    "AcquisitionMatrix": [
+     [
+      320,
+      0,
+      0,
+      256
+     ],
+     "SS-2.1-8"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "COL",
+     "R4"
+    ],
+    "PercentPhaseFieldOfView": [
+     100,
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "{part}",
+      "ND",
+      "NORM"
+     ],
+     "VEN"
+    ],
+    "SeriesDescription": [
+     "t2_tse_tra",
+     "R4"
+    ],
+    "ProtocolName": [
+     "t2_tse_tra",
+     "R4"
+    ]
+   },
+   "echoes": [
+    98
+   ],
+   "slices": 28,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -115.0,
+     -115.0,
+     -50.0
+    ],
+    "step_mm": 4.0,
+    "pixel_spacing": [
+     7.1875,
+     7.1875
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "T2",
+    "CLS"
+   ]
+  },
+  "SIEMENS_ESPREE": {
+   "tags": {
+    "Manufacturer": [
+     "SIEMENS",
+     "VEN"
+    ],
+    "ManufacturerModelName": [
+     "Espree",
+     "SS-2.1-T"
+    ],
+    "MagneticFieldStrength": [
+     1.5,
+     "SS-2.1-T"
+    ],
+    "SoftwareVersions": [
+     [
+      "syngo MR B17"
+     ],
+     "R4"
+    ],
+    "MRAcquisitionType": [
+     "2D",
+     "SS-2.1-T"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "COL",
+     "R4"
+    ],
+    "PercentPhaseFieldOfView": [
+     100,
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "{part}",
+      "ND",
+      "NORM"
+     ],
+     "VEN"
+    ]
+   },
+   "part_encoding": "imagetype",
+   "parts": [
+    "mag"
+   ],
+   "instance_time_step_s": 2.0,
+   "facts": {
+    "manufacturer": "SIEMENS"
+   }
+  },
+  "ESPREE_T1_SE": {
+   "base": "SIEMENS_ESPREE",
+   "tags": {
+    "ScanningSequence": [
+     [
+      "SE"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SP",
+      "OSP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "SAT1"
+     ],
+     "R4"
+    ],
+    "SequenceName": [
+     "*se2d1",
+     "R4"
+    ],
+    "RepetitionTime": [
+     540,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     90,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     5.0,
+     "SS-2.1-T"
+    ],
+    "SpacingBetweenSlices": [
+     5.5,
+     "SS-2.1-T"
+    ],
+    "AcquisitionMatrix": [
+     [
+      192,
+      0,
+      0,
+      192
+     ],
+     "SS-2.1-T"
+    ],
+    "SeriesDescription": [
+     "t1_se_tra",
+     "R4"
+    ],
+    "ProtocolName": [
+     "t1_se_tra",
+     "R4"
+    ]
+   },
+   "echoes": [
+    12
+   ],
+   "slices": 21,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -55.0
+    ],
+    "step_mm": 5.5,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "T1",
+    "CLS"
+   ]
+  },
+  "ESPREE_FLAIR": {
+   "base": "SIEMENS_ESPREE",
+   "tags": {
+    "ScanningSequence": [
+     [
+      "SE",
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SP",
+      "MP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "*tir2d1_15",
+     "R4"
+    ],
+    "RepetitionTime": [
+     8000,
+     "SS-2.1-7"
+    ],
+    "InversionTime": [
+     2500,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     150,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     15,
+     "R4"
+    ],
+    "SliceThickness": [
+     5.0,
+     "SS-2.1-T"
+    ],
+    "SpacingBetweenSlices": [
+     6.0,
+     "SS-2.1-T"
+    ],
+    "AcquisitionMatrix": [
+     [
+      256,
+      0,
+      0,
+      192
+     ],
+     "R4"
+    ],
+    "SeriesDescription": [
+     "flair_tra",
+     "R4"
+    ],
+    "ProtocolName": [
+     "flair_tra",
+     "R4"
+    ]
+   },
+   "echoes": [
+    100
+   ],
+   "slices": 21,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -60.0
+    ],
+    "step_mm": 6.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "FLAIR",
+    "CLS"
+   ]
+  },
+  "ESPREE_T2_TSE": {
+   "base": "SIEMENS_ESPREE",
+   "tags": {
+    "ScanningSequence": [
+     [
+      "SE"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SP",
+      "OSP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "SAT1"
+     ],
+     "R4"
+    ],
+    "SequenceName": [
+     "*tse2d1_15",
+     "R4"
+    ],
+    "RepetitionTime": [
+     4000,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     150,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     15,
+     "SS-2.1-7"
+    ],
+    "SliceThickness": [
+     5.0,
+     "SS-2.1-8"
+    ],
+    "SpacingBetweenSlices": [
+     5.5,
+     "SS-2.1-8"
+    ],
+    "AcquisitionMatrix": [
+     [
+      256,
+      0,
+      0,
+      240
+     ],
+     "R4"
+    ],
+    "SeriesDescription": [
+     "t2_tse_tra",
+     "R4"
+    ],
+    "ProtocolName": [
+     "t2_tse_tra",
+     "R4"
+    ]
+   },
+   "echoes": [
+    98
+   ],
+   "slices": 21,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -55.0
+    ],
+    "step_mm": 5.5,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "T2",
+    "CLS"
+   ]
+  }
+ },
+ "exams": [
+  {
+   "id": "STR-01-GE-PREMIER-CENSUS",
+   "uid_exam": 101,
+   "family": "structural",
+   "description": "Census GE SIGNA Premier session (sessions A-C, E, I): native 3D sagittal IR-GRE T1 with an axial reformat, native 3D sagittal CUBE FLAIR (overlapping slices) with axial and coronal reformats, one axial 2D FSE T2, a three-plane localizer (a harmless mixed series). No contrast evidence except the reformat's PRE.",
+   "roster_rows": [
+    [
+     "S101",
+     "7/25/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260725",
+     "zip_name": "S101_20260725.zip",
+     "study_date": "20260725",
+     "study_time": "085900",
+     "series": [
+      {
+       "uid_series": 1,
+       "protocol": "GE_LOCALIZER",
+       "tags": {
+        "SeriesNumber": [
+         1,
+         "R4"
+        ],
+        "SeriesTime": [
+         "085955",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090000",
+         "R4"
+        ]
+       },
+       "facts": {
+        "mixed": true,
+        "n_stacks": 3
+       }
+      },
+      {
+       "uid_series": 2,
+       "protocol": "GE_T2_FSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090110",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 70.0,
+        "series_rel_s": 60.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 310.0,
+        "series_rel_s": 300.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 4,
+       "protocol": "GE_CUBE_FLAIR",
+       "tags": {
+        "SeriesNumber": [
+         4,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 230,
+        "pos_min": -57.5,
+        "pos_max": 57.0,
+        "step_mm": 0.5,
+        "extent_mm": 115.5,
+        "uniform_spacing": true,
+        "acq_rel_s": 610.0,
+        "series_rel_s": 600.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "CUBE",
+         "FLAIR",
+         "SAG"
+        ]
+       }
+      },
+      {
+       "uid_series": 300,
+       "protocol": "GE_BRAVO_REFORMAT",
+       "geometry": {
+        "frame": 3
+       },
+       "tags": {
+        "SeriesNumber": [
+         300,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "SS-2.1-2"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 310.0,
+        "series_rel_s": 900.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "BRAVO",
+         "PRE",
+         "REFORMAT",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 400,
+       "protocol": "GE_FLAIR_REFORMAT",
+       "geometry": {
+        "frame": 4
+       },
+       "tags": {
+        "SeriesNumber": [
+         400,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091600",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "SS-2.1-2"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 58,
+        "pos_min": -57.0,
+        "pos_max": 57.0,
+        "step_mm": 2.0,
+        "extent_mm": 116.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 610.0,
+        "series_rel_s": 960.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "FLAIR",
+         "REFORMAT"
+        ]
+       }
+      },
+      {
+       "uid_series": 401,
+       "protocol": "GE_FLAIR_REFORMAT",
+       "geometry": {
+        "frame": 4,
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         0,
+         -1
+        ],
+        "first_position": [
+         -128.0,
+         -57.0,
+         128.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         401,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091700",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "SS-2.1-2"
+        ],
+        "SeriesDescription": [
+         "COR FLAIR REFORMAT",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "COR",
+        "n_positions": 58,
+        "pos_min": -57.0,
+        "pos_max": 57.0,
+        "step_mm": 2.0,
+        "extent_mm": 116.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 610.0,
+        "series_rel_s": 1020.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "COR",
+         "FLAIR",
+         "REFORMAT"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "1:*": [
+        "LOCALIZER",
+        1
+       ],
+       "2": [
+        "T2",
+        4
+       ],
+       "3": [
+        "T1",
+        4
+       ],
+       "4": [
+        "FLAIR",
+        4
+       ],
+       "300": [
+        "T1",
+        4
+       ],
+       "400": [
+        "FLAIR",
+        4
+       ],
+       "401": [
+        "FLAIR",
+        4
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rule order (2026-11-19); folder labels per CLS"
+    },
+    "R-IDN-2": {
+     "outcome": {
+      "families": {
+       "2": "T2_2D_TSE",
+       "3": "T1_3D_IRGRE",
+       "4": "FLAIR_3D",
+       "300": "T1_3D_IRGRE",
+       "400": "FLAIR_3D",
+       "401": "FLAIR_3D"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 family table, rules revision 2 (2026-11-19): BRAVO prepared by TI 450 > 0; T2 TI 0 is no inversion"
+    },
+    "R-IDN-3": {
+     "outcome": {
+      "kinds": {
+       "2": "native",
+       "3": "native",
+       "4": "native",
+       "300": "reformat",
+       "400": "reformat",
+       "401": "reformat"
+      }
+     },
+     "oracle": "P,S",
+     "source": "scan-selection.md 5.4 Derived (REFORMATTED)"
+    },
+    "R-IDN-5": {
+     "outcome": {
+      "native_mm": {
+       "2": [
+        0.9375,
+        0.75,
+        4.0
+       ],
+       "3": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "4": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "300": "unknown",
+       "400": "unknown",
+       "401": "unknown"
+      }
+     },
+     "oracle": "S,C",
+     "source": "scan-selection.md 5.3 ([row, col, slice]; reformats carry no AcquisitionMatrix)"
+    },
+    "R-LNK-1": {
+     "outcome": {
+      "links": {
+       "300": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "3"
+        ]
+       },
+       "400": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "4"
+        ]
+       },
+       "401": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "4"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.6 ladder: reference skipped (no references); frame_of_reference leaves one"
+    },
+    "R-CON-1": {
+     "outcome": {
+      "phases": {
+       "2": [
+        "pre",
+        "presumed"
+       ],
+       "3": [
+        "pre",
+        "reformat_description"
+       ],
+       "4": [
+        "pre",
+        "presumed"
+       ],
+       "300": [
+        "pre",
+        "description"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.7 rules 3, 4 and 6 (default contrast_unknown presume_pre); census check sessions A-C"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "3"
+        ],
+        "tier": "3d_ir_gre"
+       },
+       "FLAIR": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "4"
+        ],
+        "tier": "3d",
+        "warnings_include": [
+         "overlapping_slices",
+         "contrast_presumed_pre"
+        ]
+       },
+       "T2": {
+        "outcome": "selected_fallback",
+        "decided_by": "only_eligible",
+        "winner": [
+         "2"
+        ],
+        "tier": "2d_clinical",
+        "warnings_include": [
+         "contrast_presumed_pre"
+        ]
+       },
+       "T1_POST": {
+        "outcome": "missing"
+       },
+       "LOCALIZER": {
+        "outcome": "kept_all"
+       },
+       "DWI": {
+        "outcome": "missing"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.2-6.4, 6.7 default profile; 10.1 case 13 (census GE session)"
+    },
+    "R-RNK-5": {
+     "outcome": {
+      "coverage_mm": {
+       "2": 112.0,
+       "3": 120.0,
+       "4": 115.5
+      },
+      "partial_coverage": []
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 5.3 extent_mm; 6.7 min_extent_mm 110"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "1:*": [
+        "kept",
+        "LOCALIZER"
+       ],
+       "2": [
+        "selected",
+        "T2"
+       ],
+       "3": [
+        "selected",
+        "T1"
+       ],
+       "4": [
+        "selected",
+        "FLAIR"
+       ],
+       "300": [
+        "reformat",
+        "OTHER/T1"
+       ],
+       "400": [
+        "reformat",
+        "OTHER/FLAIR"
+       ],
+       "401": [
+        "reformat",
+        "OTHER/FLAIR"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.1 (reformats go to OTHER/<role>), 6.6 fates"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection (exit 0 when nothing needs attention)"
+    }
+   }
+  },
+  {
+   "id": "STR-02-SIEMENS-AERA-CENSUS",
+   "uid_exam": 102,
+   "family": "structural",
+   "description": "Census Siemens Aera 1.5 T session (session G): native 3D sagittal MPRAGE with an axial MPR that holds one image of a different matrix (dcm2niix splits it into two NIfTIs; the stack key makes the series mixed), native 3D sagittal SPACE FLAIR (phase ROW, 202 phase lines over 224 mm), axial 2D TSE T2 (phase COL). No contrast evidence anywhere: presumed precontrast. SpacingBetweenSlices absent on the 3D series.",
+   "roster_rows": [
+    [
+     "S102",
+     "8/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260801",
+     "zip_name": "S102_20260801.zip",
+     "study_date": "20260801",
+     "study_time": "095900",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "AERA_T2_TSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "100000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "100010",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 5,
+       "protocol": "AERA_MPRAGE",
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "100500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "100510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 300.0,
+        "series_rel_s": 290.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "ISO",
+         "MPRAGE",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 6,
+       "protocol": "AERA_MPRAGE",
+       "geometry": {
+        "frame": 5,
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         1,
+         0
+        ],
+        "first_position": [
+         -128.0,
+         -128.0,
+         -60.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         6,
+         "R4"
+        ],
+        "SeriesTime": [
+         "101200",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "100510",
+         "SS-2.1-2"
+        ],
+        "ImageType": [
+         [
+          "DERIVED",
+          "SECONDARY",
+          "MPR",
+          "CSA MPR",
+          "ND",
+          "NORM"
+         ],
+         "SS-2.1-1"
+        ],
+        "SeriesDescription": [
+         "t1_mprage_sag_p2_iso_MPR_tra",
+         "R4"
+        ]
+       },
+       "stacks": [
+        {
+         "slices": 120
+        },
+        {
+         "slices": 1,
+         "geometry": {
+          "rows": 48,
+          "cols": 48,
+          "pixel_spacing": [
+           5.333333333,
+           5.333333333
+          ],
+          "first_position": [
+           -128.0,
+           -128.0,
+           0.0
+          ]
+         }
+        }
+       ],
+       "facts": {
+        "mixed": true,
+        "n_stacks": 2
+       }
+      },
+      {
+       "uid_series": 7,
+       "protocol": "AERA_SPACE_FLAIR",
+       "tags": {
+        "SeriesNumber": [
+         7,
+         "R4"
+        ],
+        "SeriesTime": [
+         "100800",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "100810",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 106,
+        "pos_min": -55.65,
+        "pos_max": 54.6,
+        "step_mm": 1.05,
+        "extent_mm": 111.3,
+        "uniform_spacing": true,
+        "acq_rel_s": 480.0,
+        "series_rel_s": 470.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "FLAIR",
+         "ISO",
+         "SAG",
+         "SPACE",
+         "T2"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "2": [
+        "T2",
+        4
+       ],
+       "5": [
+        "T1",
+        4
+       ],
+       "7": [
+        "FLAIR",
+        4
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rule order"
+    },
+    "R-IDN-2": {
+     "outcome": {
+      "families": {
+       "2": "T2_2D_TSE",
+       "5": "T1_3D_IRGRE",
+       "7": "FLAIR_3D"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 (MPRAGE: GR, prepared by IR and MP, TI 900, TR 2200 < 3000)"
+    },
+    "R-IDN-3": {
+     "outcome": {
+      "kinds": {
+       "2": "native",
+       "5": "native",
+       "7": "native",
+       "6:*": "reformat"
+      }
+     },
+     "oracle": "P,S",
+     "source": "scan-selection.md 5.4 Derived (MPR)"
+    },
+    "R-IDN-5": {
+     "outcome": {
+      "native_mm": {
+       "2": [
+        0.71875,
+        0.8984375,
+        4.0
+       ],
+       "5": [
+        1.040650406504065,
+        1.0,
+        1.0
+       ],
+       "7": [
+        1.108910891089109,
+        1.0,
+        1.05
+       ]
+      }
+     },
+     "oracle": "S,C",
+     "source": "scan-selection.md 5.3; census checks Aera T1 and 3D FLAIR"
+    },
+    "R-CON-1": {
+     "outcome": {
+      "phases": {
+       "2": [
+        "pre",
+        "presumed"
+       ],
+       "5": [
+        "pre",
+        "presumed"
+       ],
+       "7": [
+        "pre",
+        "presumed"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.7 rule 6; census check session G presumed"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "5"
+        ],
+        "tier": "3d_ir_gre",
+        "warnings_include": [
+         "contrast_presumed_pre"
+        ]
+       },
+       "FLAIR": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "7"
+        ],
+        "tier": "3d",
+        "warnings_include": [
+         "contrast_presumed_pre"
+        ]
+       },
+       "T2": {
+        "outcome": "selected_fallback",
+        "decided_by": "only_eligible",
+        "winner": [
+         "2"
+        ],
+        "tier": "2d_clinical"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.2-6.4, 6.7; 10.1 case 15"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "2": [
+        "selected",
+        "T2"
+       ],
+       "5": [
+        "selected",
+        "T1"
+       ],
+       "7": [
+        "selected",
+        "FLAIR"
+       ],
+       "6:*": [
+        "reformat",
+        "OTHER/T1"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6; 10.1 case 15 (both NIfTIs of the split MPR are reformats in OTHER/T1)"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   },
+   "owner_decisions": [
+    "2026-11-24 (G1): accepted as written: no link state is expected for the mixed MPR; only its fate."
+   ],
+   "notes": [
+    "The MPR series is mixed, so its record keeps no for_hash, TR or acq_rel_s. Whether the linking ladder then skips frame_of_reference, parameters and acquisition_time (and links at series_order) or uses the volumes' sidecar values is not settled by 5.6; no link state is expected here. Its fate (reformat, OTHER/T1) does not depend on it."
+   ]
+  },
+  {
+   "id": "STR-03-SIEMENS-ESPREE-2D",
+   "uid_exam": 103,
+   "family": "structural",
+   "description": "Census Siemens Espree 1.5 T session (session D): 2D spin-echo T1 axial and sagittal (1.25 x 1.25 x 5 mm, 0.5 mm gaps), 2D FLAIR axial, coronal and sagittal (5 mm, 1.0 / 1.0 / 0.5 mm gaps), 2D TSE T2 (5 mm, 0.5 mm gaps). AcquisitionTime advances 2 s per instance (census fact 5).",
+   "roster_rows": [
+    [
+     "S103",
+     "8/2/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260802",
+     "zip_name": "S103_20260802.zip",
+     "study_date": "20260802",
+     "study_time": "105900",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "ESPREE_T1_SE",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "110000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "110005",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 21,
+        "pos_min": -55.0,
+        "pos_max": 55.0,
+        "step_mm": 5.5,
+        "extent_mm": 115.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -5.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 4,
+       "protocol": "ESPREE_T1_SE",
+       "geometry": {
+        "iop": [
+         0,
+         1,
+         0,
+         0,
+         0,
+         -1
+        ],
+        "first_position": [
+         55.0,
+         -120.0,
+         120.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         4,
+         "R4"
+        ],
+        "SeriesTime": [
+         "110300",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "110305",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "t1_se_sag",
+         "R4"
+        ],
+        "ProtocolName": [
+         "t1_se_sag",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 21,
+        "pos_min": -55.0,
+        "pos_max": 55.0,
+        "step_mm": 5.5,
+        "extent_mm": 115.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 180.0,
+        "series_rel_s": 175.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 5,
+       "protocol": "ESPREE_T2_TSE",
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "110600",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "110605",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 21,
+        "pos_min": -55.0,
+        "pos_max": 55.0,
+        "step_mm": 5.5,
+        "extent_mm": 115.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 360.0,
+        "series_rel_s": 355.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 6,
+       "protocol": "ESPREE_FLAIR",
+       "tags": {
+        "SeriesNumber": [
+         6,
+         "R4"
+        ],
+        "SeriesTime": [
+         "110900",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "110905",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 21,
+        "pos_min": -60.0,
+        "pos_max": 60.0,
+        "step_mm": 6.0,
+        "extent_mm": 125.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 540.0,
+        "series_rel_s": 535.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "FLAIR"
+        ]
+       }
+      },
+      {
+       "uid_series": 7,
+       "protocol": "ESPREE_FLAIR",
+       "geometry": {
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         0,
+         -1
+        ],
+        "first_position": [
+         -120.0,
+         -60.0,
+         120.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         7,
+         "R4"
+        ],
+        "SeriesTime": [
+         "111200",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "111205",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "flair_cor",
+         "R4"
+        ],
+        "ProtocolName": [
+         "flair_cor",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "COR",
+        "n_positions": 21,
+        "pos_min": -60.0,
+        "pos_max": 60.0,
+        "step_mm": 6.0,
+        "extent_mm": 125.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 720.0,
+        "series_rel_s": 715.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "COR",
+         "FLAIR"
+        ]
+       }
+      },
+      {
+       "uid_series": 8,
+       "protocol": "ESPREE_FLAIR",
+       "geometry": {
+        "iop": [
+         0,
+         1,
+         0,
+         0,
+         0,
+         -1
+        ],
+        "first_position": [
+         55.0,
+         -120.0,
+         120.0
+        ],
+        "step_mm": 5.5
+       },
+       "tags": {
+        "SeriesNumber": [
+         8,
+         "R4"
+        ],
+        "SeriesTime": [
+         "111500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "111505",
+         "R4"
+        ],
+        "SpacingBetweenSlices": [
+         5.5,
+         "SS-2.1-T"
+        ],
+        "SeriesDescription": [
+         "flair_sag",
+         "R4"
+        ],
+        "ProtocolName": [
+         "flair_sag",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 21,
+        "pos_min": -55.0,
+        "pos_max": 55.0,
+        "step_mm": 5.5,
+        "extent_mm": 115.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 900.0,
+        "series_rel_s": 895.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "FLAIR",
+         "SAG"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-2": {
+     "outcome": {
+      "families": {
+       "3": "T1_2D_SE",
+       "4": "T1_2D_SE",
+       "5": "T2_2D_TSE",
+       "6": "FLAIR_2D",
+       "7": "FLAIR_2D",
+       "8": "FLAIR_2D"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 family table"
+    },
+    "R-IDN-5": {
+     "outcome": {
+      "native_mm": {
+       "3": [
+        1.25,
+        1.25,
+        5.0
+       ],
+       "4": [
+        1.25,
+        1.25,
+        5.0
+       ],
+       "5": [
+        0.9375,
+        1.0,
+        5.0
+       ],
+       "6": [
+        0.9375,
+        1.25,
+        5.0
+       ],
+       "7": [
+        0.9375,
+        1.25,
+        5.0
+       ],
+       "8": [
+        0.9375,
+        1.25,
+        5.0
+       ]
+      }
+     },
+     "oracle": "S,C",
+     "source": "scan-selection.md 5.3 (phase COL: col = fov_col / n_phase)"
+    },
+    "R-CON-1": {
+     "outcome": {
+      "phases": {
+       "3": [
+        "pre",
+        "presumed"
+       ],
+       "6": [
+        "pre",
+        "presumed"
+       ],
+       "5": [
+        "pre",
+        "presumed"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.7 rule 6"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected_fallback",
+        "decided_by": "orientation",
+        "winner": [
+         "3"
+        ],
+        "runner_up": [
+         "4"
+        ],
+        "tier": "2d"
+       },
+       "FLAIR": {
+        "outcome": "selected_fallback",
+        "decided_by": "orientation",
+        "winner": [
+         "6"
+        ],
+        "tier": "2d_legacy"
+       },
+       "T2": {
+        "outcome": "selected_fallback",
+        "decided_by": "only_eligible",
+        "winner": [
+         "5"
+        ],
+        "tier": "2d_clinical"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.3 ranking (orientation list AX, SAG, COR), 6.7 tiers; census table session D; 10.1 case 16"
+    },
+    "R-RNK-4": {
+     "outcome": {
+      "variants": {
+       "--3d-only": {
+        "T1": {
+         "outcome": "no_eligible_candidate",
+         "reasons_include": [
+          "not_3d"
+         ]
+        },
+        "FLAIR": {
+         "outcome": "no_eligible_candidate",
+         "reasons_include": [
+          "not_3d"
+         ]
+        }
+       },
+       "--no-fallback": {
+        "T1": {
+         "outcome": "no_eligible_candidate",
+         "reasons_include": [
+          "fallback_only"
+         ]
+        },
+        "FLAIR": {
+         "outcome": "no_eligible_candidate",
+         "reasons_include": [
+          "fallback_only"
+         ]
+        },
+        "T2": {
+         "outcome": "no_eligible_candidate",
+         "reasons_include": [
+          "fallback_only"
+         ]
+        }
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "README Scan selection requirement table; scan-selection.md 7.1 (--3d-only), 10.1 case 16"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "3": [
+        "selected",
+        "T1"
+       ],
+       "4": [
+        "alternative",
+        "OTHER/T1"
+       ],
+       "5": [
+        "selected",
+        "T2"
+       ],
+       "6": [
+        "selected",
+        "FLAIR"
+       ],
+       "7": [
+        "alternative",
+        "OTHER/FLAIR"
+       ],
+       "8": [
+        "alternative",
+        "OTHER/FLAIR"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "STR-04-GE-SESSION-F-CONTRAST",
+   "uid_exam": 104,
+   "family": "structural",
+   "description": "GE census session F: a precontrast 3D T1 with a PRE reformat, a CUBE FLAIR with a reformat, then after injection a tagged T2, a tagged postcontrast 3D T1 with two POST reformats, and a tagged 2D T1-FLAIR. The pre and post 3D T1 have the same frame of reference and the same TR, TE and TI, so only acquisition time separates their reformats.",
+   "roster_rows": [
+    [
+     "S104",
+     "8/3/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260803",
+     "zip_name": "S104_20260803.zip",
+     "study_date": "20260803",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 4,
+       "protocol": "GE_CUBE_FLAIR",
+       "tags": {
+        "SeriesNumber": [
+         4,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 230,
+        "pos_min": -57.5,
+        "pos_max": 57.0,
+        "step_mm": 0.5,
+        "extent_mm": 115.5,
+        "uniform_spacing": true,
+        "acq_rel_s": 300.0,
+        "series_rel_s": 290.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "CUBE",
+         "FLAIR",
+         "SAG"
+        ]
+       }
+      },
+      {
+       "uid_series": 5,
+       "protocol": "GE_T2_FSE",
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091600",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091610",
+         "R4"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-2.1-4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 660.0,
+        "series_rel_s": 650.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 6,
+       "protocol": "GE_BRAVO",
+       "geometry": {
+        "frame": 3
+       },
+       "tags": {
+        "SeriesNumber": [
+         6,
+         "R4"
+        ],
+        "SeriesTime": [
+         "092000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "092010",
+         "R4"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-2.1-4"
+        ],
+        "SeriesDescription": [
+         "SAG T1 BRAVO +C",
+         "R4"
+        ]
+       },
+       "folder": [
+        "T1_POST",
+        "CLS"
+       ],
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 900.0,
+        "series_rel_s": 890.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "C",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 7,
+       "protocol": "GE_T1_FLAIR_2D",
+       "tags": {
+        "SeriesNumber": [
+         7,
+         "R4"
+        ],
+        "SeriesTime": [
+         "092500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "092510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 24,
+        "pos_min": -60.0,
+        "pos_max": 55.0,
+        "step_mm": 5.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 1200.0,
+        "series_rel_s": 1190.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "C",
+         "FLAIR",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 300,
+       "protocol": "GE_BRAVO_REFORMAT",
+       "geometry": {
+        "frame": 3
+       },
+       "tags": {
+        "SeriesNumber": [
+         300,
+         "R4"
+        ],
+        "SeriesTime": [
+         "093000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "SS-2.1-2"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": 1490.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "BRAVO",
+         "PRE",
+         "REFORMAT",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 600,
+       "protocol": "GE_BRAVO_REFORMAT",
+       "geometry": {
+        "frame": 3
+       },
+       "tags": {
+        "SeriesNumber": [
+         600,
+         "R4"
+        ],
+        "SeriesTime": [
+         "093100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "092010",
+         "SS-2.1-2"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-2.1-4"
+        ],
+        "SeriesDescription": [
+         "AX T1 BRAVO POST REFORMAT",
+         "SS-2.1-4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 900.0,
+        "series_rel_s": 1550.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "BRAVO",
+         "POST",
+         "REFORMAT",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 601,
+       "protocol": "GE_BRAVO_REFORMAT",
+       "geometry": {
+        "frame": 3,
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         0,
+         -1
+        ],
+        "first_position": [
+         -120.0,
+         -60.0,
+         120.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         601,
+         "R4"
+        ],
+        "SeriesTime": [
+         "093200",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "092010",
+         "SS-2.1-2"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-2.1-4"
+        ],
+        "SeriesDescription": [
+         "COR T1 BRAVO POST REFORMAT",
+         "SS-2.1-4"
+        ]
+       },
+       "facts": {
+        "orientation": "COR",
+        "n_positions": 60,
+        "pos_min": -60.0,
+        "pos_max": 58.0,
+        "step_mm": 2.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 900.0,
+        "series_rel_s": 1610.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "COR",
+         "POST",
+         "REFORMAT",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 400,
+       "protocol": "GE_FLAIR_REFORMAT",
+       "geometry": {
+        "frame": 4
+       },
+       "tags": {
+        "SeriesNumber": [
+         400,
+         "R4"
+        ],
+        "SeriesTime": [
+         "093300",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "SS-2.1-2"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 58,
+        "pos_min": -57.0,
+        "pos_max": 57.0,
+        "step_mm": 2.0,
+        "extent_mm": 116.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 300.0,
+        "series_rel_s": 1670.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "FLAIR",
+         "REFORMAT"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "3": [
+        "T1",
+        4
+       ],
+       "4": [
+        "FLAIR",
+        4
+       ],
+       "5": [
+        "T2",
+        4
+       ],
+       "6": [
+        "T1_POST",
+        4
+       ],
+       "7": [
+        "T1_POST",
+        4
+       ],
+       "300": [
+        "T1",
+        4
+       ],
+       "600": [
+        "T1_POST",
+        4
+       ],
+       "601": [
+        "T1_POST",
+        4
+       ],
+       "400": [
+        "FLAIR",
+        4
+       ]
+      },
+      "warnings": {
+       "7": [
+        "label_parameter_conflict"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rule 4 (T1 family with post phase is T1_POST; the classifier labels the T1-FLAIR FLAIR, a different structural role); linked groups take the parent's role"
+    },
+    "R-IDN-2": {
+     "outcome": {
+      "families": {
+       "3": "T1_3D_IRGRE",
+       "4": "FLAIR_3D",
+       "5": "T2_2D_TSE",
+       "6": "T1_3D_IRGRE",
+       "7": "T1_2D_IR"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 (T1_2D_IR: 2D, inversion spin echo, TI 889, TE 21)"
+    },
+    "R-LNK-1": {
+     "outcome": {
+      "links": {
+       "300": {
+        "state": "linked",
+        "rung": "acquisition_time",
+        "parent": [
+         "3"
+        ]
+       },
+       "600": {
+        "state": "linked",
+        "rung": "acquisition_time",
+        "parent": [
+         "6"
+        ]
+       },
+       "601": {
+        "state": "linked",
+        "rung": "acquisition_time",
+        "parent": [
+         "6"
+        ]
+       },
+       "400": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "4"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.6: frame_of_reference keeps 3 and 6; geometry skipped for reformats; parameters keeps both; acquisition_time leaves one (R-LNK-2, census session F)"
+    },
+    "R-LNK-2": {
+     "outcome": {
+      "links": {
+       "300": "3",
+       "600": "6",
+       "601": "6"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 2.1 fact 2 and 5.6 census check (session F)"
+    },
+    "R-CON-1": {
+     "outcome": {
+      "phases": {
+       "3": [
+        "pre",
+        "reformat_description"
+       ],
+       "4": [
+        "pre",
+        "timing"
+       ],
+       "5": [
+        "post",
+        "agent_tag"
+       ],
+       "6": [
+        "post",
+        "agent_tag"
+       ],
+       "7": [
+        "post",
+        "agent_tag"
+       ],
+       "300": [
+        "pre",
+        "description"
+       ],
+       "600": [
+        "post",
+        "agent_tag"
+       ],
+       "601": [
+        "post",
+        "agent_tag"
+       ],
+       "400": [
+        "unknown",
+        "none"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.7: rule 2 (tag not on every series); rule 3 (PRE); rule 4 (linked PRE reformat); rule 5 (FLAIR before the earliest post series, series 5, in both orders); series 400's SeriesNumber is after series 5 while its acquisition time is before, so rule 5 does not apply and rule 7 gives unknown"
+    },
+    "R-CON-3": {
+     "outcome": {
+      "T1_winner_has_contrast_evidence": false,
+      "T1_POST_winner_has_contrast_evidence": true
+     },
+     "oracle": "C,P",
+     "source": "Consequential-error definition (spec Overview); plan 3.5 contrast check"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "3"
+        ],
+        "tier": "3d_ir_gre"
+       },
+       "T1_POST": {
+        "outcome": "selected",
+        "decided_by": "tier",
+        "winner": [
+         "6"
+        ],
+        "runner_up": [
+         "7"
+        ],
+        "tier": "3d"
+       },
+       "FLAIR": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "4"
+        ],
+        "tier": "3d",
+        "warnings_include": [
+         "overlapping_slices",
+         "contrast_by_timing"
+        ]
+       },
+       "T2": {
+        "outcome": "selected_fallback",
+        "decided_by": "only_eligible",
+        "winner": [
+         "5"
+        ],
+        "tier": "2d_clinical"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.3, 6.4, 6.7 (T1_POST tiers 3d then 2d); 10.1 case 14"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "3": [
+        "selected",
+        "T1"
+       ],
+       "300": [
+        "reformat",
+        "OTHER/T1"
+       ],
+       "6": [
+        "selected",
+        "T1_POST"
+       ],
+       "600": [
+        "reformat",
+        "OTHER/T1_POST"
+       ],
+       "601": [
+        "reformat",
+        "OTHER/T1_POST"
+       ],
+       "7": [
+        "alternative",
+        "OTHER/T1_POST"
+       ],
+       "4": [
+        "selected",
+        "FLAIR"
+       ],
+       "400": [
+        "reformat",
+        "OTHER/FLAIR"
+       ],
+       "5": [
+        "selected",
+        "T2"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6; 10.1 case 14"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  }
+ ]
+}

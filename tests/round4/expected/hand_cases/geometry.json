@@ -1,0 +1,549 @@
+{
+ "description": "Hand-worked geometry cases for oracles/geometry.py (oracle rule 5; R4-OR-01). Every expected value was worked out by hand from the formula named in 'source', before the oracle ran.",
+ "tolerance_mm": 1e-06,
+ "pixel_to_patient": [
+  {
+   "id": "G-AX",
+   "ipp": [
+    -120.0,
+    -100.0,
+    30.0
+   ],
+   "iop": [
+    1,
+    0,
+    0,
+    0,
+    1,
+    0
+   ],
+   "pixel_spacing": [
+    0.5,
+    0.75
+   ],
+   "row": 10,
+   "col": 20,
+   "expected_lps": [
+    -105.0,
+    -95.0,
+    30.0
+   ],
+   "expected_ras": [
+    105.0,
+    95.0,
+    30.0
+   ],
+   "expected_normal": [
+    0,
+    0,
+    1
+   ],
+   "expected_orientation": "AX",
+   "work": "P = S + c*dc*X + r*dr*Y = (-120 + 20*0.75, -100 + 10*0.5, 30); RAS negates x, y; X x Y = (0,0,1)",
+   "oracle": "S",
+   "source": "DICOM PS3.3 C.7.6.2.1.1 (equation C.7.6.2.1-1)"
+  },
+  {
+   "id": "G-SAG",
+   "ipp": [
+    40.0,
+    -110.0,
+    95.0
+   ],
+   "iop": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1
+   ],
+   "pixel_spacing": [
+    1.0,
+    0.9
+   ],
+   "row": 4,
+   "col": 7,
+   "expected_lps": [
+    40.0,
+    -103.7,
+    91.0
+   ],
+   "expected_ras": [
+    -40.0,
+    103.7,
+    91.0
+   ],
+   "expected_normal": [
+    -1,
+    0,
+    0
+   ],
+   "expected_orientation": "SAG",
+   "work": "P = (40, -110 + 7*0.9, 95 - 4*1.0); X x Y = (0,1,0) x (0,0,-1) = (-1,0,0)",
+   "oracle": "S",
+   "source": "DICOM PS3.3 C.7.6.2.1.1"
+  },
+  {
+   "id": "G-OBL30",
+   "ipp": [
+    -100.0,
+    -80.0,
+    50.0
+   ],
+   "iop": [
+    1,
+    0,
+    0,
+    0,
+    0.8660254037844386,
+    -0.5
+   ],
+   "pixel_spacing": [
+    2.0,
+    2.0
+   ],
+   "row": 10,
+   "col": 5,
+   "expected_lps": [
+    -90.0,
+    -62.67949192431123,
+    40.0
+   ],
+   "expected_ras": [
+    90.0,
+    62.67949192431123,
+    40.0
+   ],
+   "expected_normal": [
+    0,
+    0.5,
+    0.8660254037844386
+   ],
+   "expected_orientation": "oblique",
+   "work": "Y = (0, cos 30, -sin 30). P = (-100 + 5*2, -80 + 10*2*0.8660254037844386, 50 - 10*2*0.5); X x Y = (0, sin 30, cos 30); largest component 0.866 < 0.95",
+   "oracle": "S",
+   "source": "DICOM PS3.3 C.7.6.2.1.1; scan-selection.md 5.1 orientation"
+  },
+  {
+   "id": "G-OBL15",
+   "ipp": [
+    -100.0,
+    -80.0,
+    50.0
+   ],
+   "iop": [
+    1,
+    0,
+    0,
+    0,
+    0.9659258262890683,
+    -0.25881904510252074
+   ],
+   "pixel_spacing": [
+    2.0,
+    2.0
+   ],
+   "row": 0,
+   "col": 0,
+   "expected_lps": [
+    -100.0,
+    -80.0,
+    50.0
+   ],
+   "expected_ras": [
+    100.0,
+    80.0,
+    50.0
+   ],
+   "expected_normal": [
+    0,
+    0.25881904510252074,
+    0.9659258262890683
+   ],
+   "expected_orientation": "AX",
+   "work": "Pixel (0,0) is S itself. Normal (0, sin 15, cos 15); largest component 0.966 >= 0.95, so AX",
+   "oracle": "S",
+   "source": "DICOM PS3.3 C.7.6.2.1.1; scan-selection.md 5.1 orientation"
+  },
+  {
+   "id": "G-COR-NONSQUARE",
+   "ipp": [
+    -128.0,
+    20.0,
+    90.0
+   ],
+   "iop": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    -1
+   ],
+   "pixel_spacing": [
+    0.8,
+    1.25
+   ],
+   "row": 3,
+   "col": 2,
+   "expected_lps": [
+    -125.5,
+    20.0,
+    87.6
+   ],
+   "expected_ras": [
+    125.5,
+    -20.0,
+    87.6
+   ],
+   "expected_normal": [
+    0,
+    1,
+    0
+   ],
+   "expected_orientation": "COR",
+   "work": "Non-square pixels: x = -128 + 2*1.25 (column spacing), z = 90 - 3*0.8 (row spacing); X x Y = (1,0,0) x (0,0,-1) = (0,1,0)",
+   "oracle": "S",
+   "source": "DICOM PS3.3 C.7.6.2.1.1 (PixelSpacing = row spacing, column spacing)"
+  }
+ ],
+ "stacks": [
+  {
+   "id": "ST-AX",
+   "iop": [
+    1,
+    0,
+    0,
+    0,
+    1,
+    0
+   ],
+   "ipps": [
+    [
+     -120,
+     -100,
+     30
+    ],
+    [
+     -120,
+     -100,
+     32.5
+    ],
+    [
+     -120,
+     -100,
+     35
+    ],
+    [
+     -120,
+     -100,
+     37.5
+    ],
+    [
+     -120,
+     -100,
+     40
+    ]
+   ],
+   "thick_mm": 3.0,
+   "expected": {
+    "n_positions": 5,
+    "pos_min": 30.0,
+    "pos_max": 40.0,
+    "step_mm": 2.5,
+    "extent_mm": 13.0,
+    "uniform_spacing": true
+   },
+   "work": "Projections on (0,0,1) are z; steps 2.5; extent = 4*2.5 + 3.0",
+   "oracle": "S",
+   "source": "PS3.3 C.7.6.2.1.1; scan-selection.md 5.3 extent_mm and uniform_spacing"
+  },
+  {
+   "id": "ST-SAG",
+   "iop": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1
+   ],
+   "ipps": [
+    [
+     40,
+     -110,
+     95
+    ],
+    [
+     38.8,
+     -110,
+     95
+    ],
+    [
+     37.6,
+     -110,
+     95
+    ],
+    [
+     36.4,
+     -110,
+     95
+    ],
+    [
+     35.2,
+     -110,
+     95
+    ],
+    [
+     34.0,
+     -110,
+     95
+    ],
+    [
+     32.8,
+     -110,
+     95
+    ],
+    [
+     31.6,
+     -110,
+     95
+    ],
+    [
+     30.4,
+     -110,
+     95
+    ],
+    [
+     29.2,
+     -110,
+     95
+    ]
+   ],
+   "thick_mm": 1.2,
+   "expected": {
+    "n_positions": 10,
+    "pos_min": -40.0,
+    "pos_max": -29.2,
+    "step_mm": 1.2,
+    "extent_mm": 12.0,
+    "uniform_spacing": true
+   },
+   "work": "Normal (-1,0,0): projection = -x, from -40 to -29.2 in 1.2 mm steps; extent = 9*1.2 + 1.2",
+   "oracle": "S",
+   "source": "PS3.3 C.7.6.2.1.1; scan-selection.md 5.3"
+  },
+  {
+   "id": "ST-UNEVEN",
+   "iop": [
+    1,
+    0,
+    0,
+    0,
+    1,
+    0
+   ],
+   "ipps": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     5
+    ],
+    [
+     0,
+     0,
+     10
+    ],
+    [
+     0,
+     0,
+     16
+    ],
+    [
+     0,
+     0,
+     21
+    ]
+   ],
+   "thick_mm": 5.0,
+   "expected": {
+    "n_positions": 5,
+    "pos_min": 0.0,
+    "pos_max": 21.0,
+    "step_mm": 5.0,
+    "extent_mm": 25.0,
+    "uniform_spacing": false
+   },
+   "work": "Steps 5, 5, 6, 5: median 5; max - min = 1 > 0.05 + 1% of 5; extent = 4*5 + 5",
+   "oracle": "S",
+   "source": "scan-selection.md 5.3 (uniform_spacing tolerance: 0.05 mm plus 1%)"
+  },
+  {
+   "id": "ST-REVERSED-4D",
+   "iop": [
+    1,
+    0,
+    0,
+    0,
+    1,
+    0
+   ],
+   "ipps": [
+    [
+     0,
+     0,
+     20
+    ],
+    [
+     0,
+     0,
+     16
+    ],
+    [
+     0,
+     0,
+     12
+    ],
+    [
+     0,
+     0,
+     20
+    ],
+    [
+     0,
+     0,
+     16
+    ],
+    [
+     0,
+     0,
+     12
+    ]
+   ],
+   "thick_mm": 4.0,
+   "expected": {
+    "n_positions": 3,
+    "pos_min": 12.0,
+    "pos_max": 20.0,
+    "step_mm": 4.0,
+    "extent_mm": 12.0,
+    "uniform_spacing": true
+   },
+   "work": "Slices stored in descending z, two volumes: distinct positions 12, 16, 20; extent = 2*4 + 4",
+   "oracle": "S",
+   "source": "scan-selection.md 5.1 positions (count of distinct positions); 5.3"
+  }
+ ],
+ "nifti_axes": [
+  {
+   "id": "NA-SAG-NATURAL",
+   "description": "A sagittal stack stored in DICOM order: voxel axes follow column index, row index, slice.",
+   "affine": [
+    [
+     0,
+     0,
+     -1.2,
+     40.0
+    ],
+    [
+     -0.9,
+     0,
+     0,
+     110.0
+    ],
+    [
+     0,
+     -1.0,
+     0,
+     95.0
+    ],
+    [
+     0,
+     0,
+     0,
+     1
+    ]
+   ],
+   "shape": [
+    64,
+    48,
+    10
+   ],
+   "iop": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1
+   ],
+   "expected": {
+    "col_index_axis": 0,
+    "row_index_axis": 1,
+    "slice_axis": 2,
+    "slice_count": 10
+   },
+   "work": "Affine columns: a0 = (0,-0.9,0), a1 = (0,0,-1.0), a2 = (-1.2,0,0). DICOM X = (0,1,0) LPS = (0,-1,0) RAS, parallel to a0. Y = (0,0,-1) LPS = (0,0,-1) RAS, parallel to a1. Normal (-1,0,0) LPS = (1,0,0) RAS, parallel to a2. Size along axis 2 is 10",
+   "oracle": "S",
+   "source": "NIfTI-1 sform (affine columns are voxel axes in RAS mm); PS3.3 C.7.6.2.1.1"
+  },
+  {
+   "id": "NA-SAG-ROTATED",
+   "description": "The same stack with the slice direction moved to voxel axis 0, as an axis-reordering converter may store it.",
+   "affine": [
+    [
+     -1.2,
+     0,
+     0,
+     40.0
+    ],
+    [
+     0,
+     -0.9,
+     0,
+     110.0
+    ],
+    [
+     0,
+     0,
+     -1.0,
+     95.0
+    ],
+    [
+     0,
+     0,
+     0,
+     1
+    ]
+   ],
+   "shape": [
+    10,
+    64,
+    48
+   ],
+   "iop": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1
+   ],
+   "expected": {
+    "col_index_axis": 1,
+    "row_index_axis": 2,
+    "slice_axis": 0,
+    "slice_count": 10
+   },
+   "work": "Affine columns: a0 = (-1.2,0,0), a1 = (0,-0.9,0), a2 = (0,0,-1.0). X (RAS (0,-1,0)) is parallel to a1, Y (RAS (0,0,-1)) to a2, the normal (RAS (1,0,0)) to a0. Size along axis 0 is 10",
+   "oracle": "S",
+   "source": "NIfTI-1 sform; PS3.3 C.7.6.2.1.1"
+  }
+ ]
+}

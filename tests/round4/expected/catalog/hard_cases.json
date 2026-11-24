@@ -1,0 +1,2170 @@
+{
+ "catalog": "hard_cases",
+ "description": "Hard cases (spec 4.1): an archive copy mixing two scans, a duplicate, repeats with and without consistent timing, a contrast tag on every series, bolus times, a Siemens XA classic export lacking matrix, phase direction and ImageTypeText, a dual-echo PD/T2, a series with two orientations, and a sentinel exam. Protocols come from structural.json. Times are seconds after each session's earliest AcquisitionTime (reading RD-10), counting mixed series too.",
+ "protocols_from": [
+  "structural"
+ ],
+ "sources": {
+  "SS-2.2-1": "scan-selection.md 2.2, finding 1 (an archive copy series of a whole exam)",
+  "SS-2.2-2": "scan-selection.md 2.2, finding 2 (Siemens XA classic exports)",
+  "SS-5.5": "scan-selection.md 5.5 (acquisition identity, echoes, duplicates)",
+  "SS-5.7": "scan-selection.md 5.7 (contrast rules)",
+  "README-FS": "README, Scan selection requirement table (field-strength option)",
+  "PLAN-3.2": "round 4 plan 3.2 (sentinels and planted values)"
+ },
+ "protocols": {
+  "XA_VIDA": {
+   "tags": {
+    "Manufacturer": [
+     "Siemens Healthineers",
+     "VEN"
+    ],
+    "ManufacturerModelName": [
+     "MAGNETOM Vida",
+     "R4"
+    ],
+    "MagneticFieldStrength": [
+     2.89,
+     "README-FS"
+    ],
+    "SoftwareVersions": [
+     [
+      "syngo MR XA30"
+     ],
+     "R4"
+    ]
+   },
+   "part_encoding": "imagetype",
+   "parts": [
+    "mag"
+   ],
+   "facts": {
+    "manufacturer": "SIEMENS"
+   }
+  },
+  "XA_MPRAGE": {
+   "base": "XA_VIDA",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "GR",
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SP",
+      "MP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "*tfl3d1_16ns",
+     "VEN"
+    ],
+    "RepetitionTime": [
+     2200,
+     "SS-2.1-7"
+    ],
+    "InversionTime": [
+     900,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     8,
+     "SS-2.1-7"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     1.0,
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "{part}",
+      "DIS2D"
+     ],
+     "SS-2.2-2"
+    ],
+    "SeriesDescription": [
+     "t1_mprage_sag_p2_iso",
+     "R4"
+    ],
+    "ProtocolName": [
+     "t1_mprage_sag_p2_iso",
+     "R4"
+    ]
+   },
+   "echoes": [
+    2.9
+   ],
+   "slices": 120,
+   "geometry": {
+    "iop": [
+     0,
+     1,
+     0,
+     0,
+     0,
+     -1
+    ],
+    "first_position": [
+     60.0,
+     -128.0,
+     128.0
+    ],
+    "step_mm": 1.0,
+    "pixel_spacing": [
+     8.0,
+     8.0
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "T1",
+    "CLS"
+   ]
+  },
+  "XA_SPACE_FLAIR": {
+   "base": "XA_VIDA",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "SE",
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SP",
+      "MP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "IR"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "*spcir3d1_220ns",
+     "R4"
+    ],
+    "RepetitionTime": [
+     5000,
+     "SS-2.1-7"
+    ],
+    "InversionTime": [
+     1800,
+     "SS-2.1-7"
+    ],
+    "FlipAngle": [
+     120,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     220,
+     "R4"
+    ],
+    "SliceThickness": [
+     1.0,
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "{part}",
+      "DIS2D"
+     ],
+     "SS-2.2-2"
+    ],
+    "SeriesDescription": [
+     "t2_space_flair_sag_p2_iso",
+     "R4"
+    ],
+    "ProtocolName": [
+     "t2_space_flair_sag_p2_iso",
+     "R4"
+    ]
+   },
+   "echoes": [
+    336
+   ],
+   "slices": 120,
+   "geometry": {
+    "iop": [
+     0,
+     1,
+     0,
+     0,
+     0,
+     -1
+    ],
+    "first_position": [
+     60.0,
+     -128.0,
+     128.0
+    ],
+    "step_mm": 1.0,
+    "pixel_spacing": [
+     8.0,
+     8.0
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "FLAIR",
+    "CLS"
+   ]
+  },
+  "GE_PDT2": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "2D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "SE"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS",
+      "EDR_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "fse",
+     "R4"
+    ],
+    "RepetitionTime": [
+     3000,
+     "R4"
+    ],
+    "InversionTime": [
+     0,
+     "VEN"
+    ],
+    "FlipAngle": [
+     90,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     8,
+     "R4"
+    ],
+    "SliceThickness": [
+     4.0,
+     "R4"
+    ],
+    "SpacingBetweenSlices": [
+     4.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      320,
+      256,
+      0
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "R4"
+    ],
+    "SeriesDescription": [
+     "AX PD T2 FSE",
+     "R4"
+    ]
+   },
+   "echoes": [
+    12,
+    96
+   ],
+   "slices": 28,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -50.0
+    ],
+    "step_mm": 4.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "T2",
+    "CLS"
+   ]
+  }
+ },
+ "exams": [
+  {
+   "id": "HC-01-PACS-COPY",
+   "uid_exam": 201,
+   "family": "hard_cases",
+   "description": "A real T1 and FLAIR next to an archive copy series (series 900) that holds copies of both under one SeriesInstanceUID: two stacks (different PixelSpacing, TR, TI, flip), so the series is mixed (D10).",
+   "roster_rows": [
+    [
+     "S201",
+     "8/10/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260810",
+     "zip_name": "S201_20260810.zip",
+     "study_date": "20260810",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 4,
+       "protocol": "GE_CUBE_FLAIR",
+       "tags": {
+        "SeriesNumber": [
+         4,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 230,
+        "pos_min": -57.5,
+        "pos_max": 57.0,
+        "step_mm": 0.5,
+        "extent_mm": 115.5,
+        "uniform_spacing": true,
+        "acq_rel_s": 300.0,
+        "series_rel_s": 290.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "CUBE",
+         "FLAIR",
+         "SAG"
+        ]
+       }
+      },
+      {
+       "uid_series": 900,
+       "protocol": "GE_BRAVO",
+       "geometry": {
+        "frame": 3
+       },
+       "tags": {
+        "SeriesNumber": [
+         900,
+         "R4"
+        ],
+        "SeriesTime": [
+         "100000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "SS-2.2-1"
+        ],
+        "SeriesDescription": [
+         "GEIIS PACS COPY",
+         "R4"
+        ]
+       },
+       "folder": [
+        "OTHER",
+        "SS-2.2-1"
+       ],
+       "stacks": [
+        {},
+        {
+         "slices": 230,
+         "echoes": [
+          120
+         ],
+         "geometry": {
+          "pixel_spacing": [
+           8.0,
+           8.0
+          ],
+          "first_position": [
+           57.5,
+           -128.0,
+           128.0
+          ],
+          "step_mm": 0.5,
+          "frame": 4
+         },
+         "tags": {
+          "ScanningSequence": [
+           [
+            "SE",
+            "IR"
+           ],
+           "VEN"
+          ],
+          "SequenceVariant": [
+           [
+            "SK",
+            "SS"
+           ],
+           "VEN"
+          ],
+          "ScanOptions": [
+           [
+            "FAST_GEMS",
+            "EDR_GEMS",
+            "IR_GEMS"
+           ],
+           "VEN"
+          ],
+          "SequenceName": [
+           "fse3d",
+           "R4"
+          ],
+          "RepetitionTime": [
+           6000,
+           "SS-2.1-7"
+          ],
+          "InversionTime": [
+           1700,
+           "SS-2.1-7"
+          ],
+          "FlipAngle": [
+           90,
+           "R4"
+          ],
+          "EchoTrainLength": [
+           200,
+           "R4"
+          ],
+          "SpacingBetweenSlices": [
+           0.5,
+           "SS-2.1-3"
+          ],
+          "AcquisitionMatrix": [
+           [
+            0,
+            256,
+            256,
+            0
+           ],
+           "R4"
+          ],
+          "AcquisitionTime": [
+           "091010",
+           "SS-2.2-1"
+          ]
+         }
+        }
+       ],
+       "facts": {
+        "mixed": true,
+        "n_stacks": 2
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-HDR-3": {
+     "outcome": {
+      "mixed": {
+       "900": true,
+       "3": false,
+       "4": false
+      }
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 5.1 Stacks (any other split makes the series mixed)"
+    },
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "3": [
+        "T1",
+        4
+       ],
+       "4": [
+        "FLAIR",
+        4
+       ],
+       "900:stack1": [
+        "T1",
+        4
+       ],
+       "900:stack2": [
+        "FLAIR",
+        4
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 Mixed series (role from the volume's own sidecar); 2.2 finding 1"
+    },
+    "R-IDN-6": {
+     "outcome": {
+      "no_selected_volume_of": [
+       "900"
+      ],
+      "reasons": {
+       "900:*": [
+        "mixed_series"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md D10 and 6.2 (a candidate from a mixed series is tested only for a reviewer exclusion and for being mixed)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "3"
+        ],
+        "n_candidates": 2,
+        "n_eligible": 1
+       },
+       "FLAIR": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "4"
+        ],
+        "n_candidates": 2,
+        "n_eligible": 1
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.2-6.4; 10.1 case 12"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "3": [
+        "selected",
+        "T1"
+       ],
+       "4": [
+        "selected",
+        "FLAIR"
+       ],
+       "900:stack1": [
+        "excluded",
+        "OTHER/T1"
+       ],
+       "900:stack2": [
+        "excluded",
+        "OTHER/FLAIR"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6 (excluded: member of an ineligible candidate)"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "HC-02-DUPLICATE",
+   "uid_exam": 202,
+   "family": "hard_cases",
+   "description": "A non-mixed copy (series 1003) of the T1 native (series 3): same FrameOfReferenceUID, AcquisitionTime, geometry, TR, TE, TI and part.",
+   "roster_rows": [
+    [
+     "S202",
+     "8/11/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260811",
+     "zip_name": "S202_20260811.zip",
+     "study_date": "20260811",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 1003,
+       "protocol": "GE_BRAVO",
+       "geometry": {
+        "frame": 3
+       },
+       "tags": {
+        "SeriesNumber": [
+         1003,
+         "R4"
+        ],
+        "SeriesTime": [
+         "093000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "SS-5.5"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": 1490.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-4": {
+     "outcome": {
+      "acquisitions": [
+       [
+        "3"
+       ],
+       [
+        "1003"
+       ]
+      ],
+      "duplicates": [
+       [
+        "3",
+        "1003"
+       ]
+      ]
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 5.5 rule 2 and duplicates"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "duplicate_series"
+        ],
+        "rule_recommendation": [
+         "3"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 4 (duplicates: rule_recommendation is the lower SeriesNumber); 10.1 case 20"
+    },
+    "R-REV-1": {
+     "outcome": {
+      "empty_role_folders": [
+       "T1"
+      ]
+     },
+     "oracle": "P",
+     "source": "README Scan selection (review leaves the folder empty)"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "3": [
+        "pending_review",
+        "OTHER/T1"
+       ],
+       "1003": [
+        "pending_review",
+        "OTHER/T1"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection (exit 2 when a role needs review)"
+    }
+   }
+  },
+  {
+   "id": "HC-03-REPEAT-CONSISTENT",
+   "uid_exam": 203,
+   "family": "hard_cases",
+   "description": "Two same-protocol T1 natives (series 3 and 7), separate frames of reference, acquired 900 s apart in series-number order.",
+   "roster_rows": [
+    [
+     "S203",
+     "8/12/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260812",
+     "zip_name": "S203_20260812.zip",
+     "study_date": "20260812",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 7,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         7,
+         "R4"
+        ],
+        "SeriesTime": [
+         "092000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "092010",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 900.0,
+        "series_rel_s": 890.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-4": {
+     "outcome": {
+      "acquisitions": [
+       [
+        "3"
+       ],
+       [
+        "7"
+       ]
+      ],
+      "duplicates": []
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.5 (different for_hash and acq_rel_s: not one identity)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "repeat_needs_review"
+        ],
+        "rule_recommendation": [
+         "7"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 4 (repeat_policy review, repeat_recommendation later); 10.1 case 19"
+    },
+    "R-RNK-4": {
+     "outcome": {
+      "variants": {
+       "profile repeat_policy=later": {
+        "T1": {
+         "outcome": "selected",
+         "decided_by": "repeat_order",
+         "winner": [
+          "7"
+         ],
+         "warnings_include": [
+          "repeat_order_tiebreak"
+         ]
+        }
+       },
+       "profile repeat_policy=earlier": {
+        "T1": {
+         "outcome": "selected",
+         "decided_by": "repeat_order",
+         "winner": [
+          "3"
+         ],
+         "warnings_include": [
+          "repeat_order_tiebreak"
+         ]
+        }
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 4, 6.7 repeat_policy; 10.1 case 19"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "HC-04-REPEAT-INCONSISTENT",
+   "uid_exam": 204,
+   "family": "hard_cases",
+   "description": "The repeat pair of HC-03 with series 7 acquired before series 3: SeriesNumber order and acquisition order disagree.",
+   "roster_rows": [
+    [
+     "S204",
+     "8/13/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260813",
+     "zip_name": "S204_20260813.zip",
+     "study_date": "20260813",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "092000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "092010",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 900.0,
+        "series_rel_s": 890.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 7,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         7,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "order_unreliable"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 4 (order reliable only when SeriesNumber order equals acq_rel_s order); 10.1 case 19"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "HC-05-AGENT-EXAM-WIDE",
+   "uid_exam": 205,
+   "family": "hard_cases",
+   "description": "Every MR series of the session carries ContrastBolusAgent; no bolus times; no PRE/POST words.",
+   "roster_rows": [
+    [
+     "S205",
+     "8/14/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260814",
+     "zip_name": "S205_20260814.zip",
+     "study_date": "20260814",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "GE_T2_FSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090110",
+         "R4"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-5.7"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-5.7"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 240.0,
+        "series_rel_s": 230.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 4,
+       "protocol": "GE_CUBE_FLAIR",
+       "tags": {
+        "SeriesNumber": [
+         4,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "R4"
+        ],
+        "ContrastBolusAgent": [
+         "GADOBUTROL",
+         "SS-5.7"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 230,
+        "pos_min": -57.5,
+        "pos_max": 57.0,
+        "step_mm": 0.5,
+        "extent_mm": 115.5,
+        "uniform_spacing": true,
+        "acq_rel_s": 540.0,
+        "series_rel_s": 530.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "CUBE",
+         "FLAIR",
+         "SAG"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-CON-1": {
+     "outcome": {
+      "phases": {
+       "2": [
+        "unknown",
+        "agent_tag_exam_wide"
+       ],
+       "3": [
+        "unknown",
+        "agent_tag_exam_wide"
+       ],
+       "4": [
+        "unknown",
+        "agent_tag_exam_wide"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.7 rule 2"
+    },
+    "R-CON-2": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "contrast_unknown"
+        ],
+        "rule_recommendation": [
+         "3"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 5 (unknown contrast in a pre role)"
+    },
+    "R-CON-3": {
+     "outcome": {
+      "objective_contrast_flags": []
+     },
+     "oracle": "C,P",
+     "source": "plan 3.5 (a tag on every MR series of the session is not counted)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "FLAIR": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "4"
+        ],
+        "tier": "3d"
+       },
+       "T2": {
+        "outcome": "selected_fallback",
+        "decided_by": "only_eligible",
+        "winner": [
+         "2"
+        ],
+        "tier": "2d_clinical"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.7 role policies (prefer_pre ranks unknown with pre), 6.4"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "HC-06-BOLUS-TIME",
+   "uid_exam": 206,
+   "family": "hard_cases",
+   "description": "ContrastBolusStartTime on both T1 natives, no agent tag: series 3 acquired before the bolus, series 6 after it.",
+   "roster_rows": [
+    [
+     "S206",
+     "8/15/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260815",
+     "zip_name": "S206_20260815.zip",
+     "study_date": "20260815",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "ContrastBolusStartTime": [
+         "091500",
+         "SS-5.7"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": 590.0,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 6,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         6,
+         "R4"
+        ],
+        "SeriesTime": [
+         "092000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "092010",
+         "R4"
+        ],
+        "ContrastBolusStartTime": [
+         "091500",
+         "SS-5.7"
+        ],
+        "SeriesDescription": [
+         "SAG T1 BRAVO +C",
+         "R4"
+        ]
+       },
+       "folder": [
+        "T1_POST",
+        "CLS"
+       ],
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 900.0,
+        "series_rel_s": 890.0,
+        "bolus_rel_s": 590.0,
+        "desc_tokens": [
+         "BRAVO",
+         "C",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-CON-1": {
+     "outcome": {
+      "phases": {
+       "3": [
+        "pre",
+        "bolus_time"
+       ],
+       "6": [
+        "post",
+        "bolus_time"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.7 rule 1"
+    },
+    "R-CON-3": {
+     "outcome": {
+      "objective_contrast_flags": []
+     },
+     "oracle": "C,P",
+     "source": "plan 3.5 contrast check"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "3"
+        ],
+        "tier": "3d_ir_gre"
+       },
+       "T1_POST": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "6"
+        ],
+        "tier": "3d"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rule 4 (post phase gives T1_POST), 6.4"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "HC-07-XA-CLASSIC",
+   "uid_exam": 207,
+   "family": "hard_cases",
+   "description": "Siemens XA (MAGNETOM Vida, Manufacturer 'Siemens Healthineers', field 2.89 T) classic export: no AcquisitionMatrix, no InPlanePhaseEncodingDirection, no ImageTypeText.",
+   "roster_rows": [
+    [
+     "S207",
+     "8/16/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260816",
+     "zip_name": "S207_20260816.zip",
+     "study_date": "20260816",
+     "study_time": "100000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "XA_MPRAGE",
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "100500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "100510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "ISO",
+         "MPRAGE",
+         "SAG",
+         "T1"
+        ]
+       }
+      },
+      {
+       "uid_series": 7,
+       "protocol": "XA_SPACE_FLAIR",
+       "tags": {
+        "SeriesNumber": [
+         7,
+         "R4"
+        ],
+        "SeriesTime": [
+         "100800",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "100810",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 180.0,
+        "series_rel_s": 170.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "FLAIR",
+         "ISO",
+         "SAG",
+         "SPACE",
+         "T2"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-HDR-2": {
+     "outcome": {
+      "null_fields": {
+       "5": [
+        "acq_matrix",
+        "phase_dir",
+        "pct_phase_fov",
+        "sbs_mm"
+       ],
+       "7": [
+        "acq_matrix",
+        "phase_dir",
+        "pct_phase_fov",
+        "sbs_mm"
+       ]
+      },
+      "image_type_without_text": true
+     },
+     "oracle": "P,S",
+     "source": "scan-selection.md 5.1 (null when absent; never defaulted), 5.3"
+    },
+    "R-IDN-5": {
+     "outcome": {
+      "native_mm": {
+       "5": "unknown",
+       "7": "unknown"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.3 (missing matrix: native in-plane unknown, never the pixel spacing)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected_fallback",
+        "decided_by": "only_eligible",
+        "winner": [
+         "5"
+        ],
+        "tier": "any",
+        "warnings_include": [
+         "contrast_presumed_pre"
+        ]
+       },
+       "FLAIR": {
+        "outcome": "selected_fallback",
+        "decided_by": "only_eligible",
+        "winner": [
+         "7"
+        ],
+        "tier": "any"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "Owner decision 2026-11-24 (G1, HC-07 reading B, following scan-selection.md 10.1 case 35): an unknown native size cannot meet a limited tier, so the candidate falls to tier 'any'; native_unknown review applies only where a requirement option needs the native size"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection; owner decision 2026-11-24 (HC-07)"
+    },
+    "R-RNK-4": {
+     "outcome": {
+      "variants": {
+       "--max-voxel-mm 1.2": {
+        "T1": {
+         "outcome": "review_required",
+         "reasons_include": [
+          "native_unknown"
+         ]
+        },
+        "FLAIR": {
+         "outcome": "review_required",
+         "reasons_include": [
+          "native_unknown"
+         ]
+        }
+       },
+       "--field-strength 3": {
+        "session_excluded": false
+       },
+       "--manufacturer SIEMENS": {
+        "session_excluded": false
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "README Scan selection (a missing acquisition matrix gives native_unknown review; 2.89 counts as 3); scan-selection.md 7.1"
+    }
+   },
+   "owner_decisions": [
+    "2026-11-24 (G1): reading B. With the default profile an AcquisitionMatrix-less T1 or FLAIR falls to tier 'any' and is selected_fallback (scan-selection.md 10.1 case 35). native_unknown review applies only where a requirement option (--isotropic, --max-voxel-mm) needs the native size."
+   ]
+  },
+  {
+   "id": "HC-08-DUAL-ECHO-PD-T2",
+   "uid_exam": 208,
+   "family": "hard_cases",
+   "description": "GE 2D FSE dual echo (TE 12 and 96 ms) in one series, plus a T1 native.",
+   "roster_rows": [
+    [
+     "S208",
+     "8/17/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260817",
+     "zip_name": "S208_20260817.zip",
+     "study_date": "20260817",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "GE_PDT2",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090110",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "T2"
+        ]
+       }
+      },
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 240.0,
+        "series_rel_s": 230.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-HDR-3": {
+     "outcome": {
+      "echoes": {
+       "2": [
+        [
+         12,
+         1,
+         28
+        ],
+        [
+         96,
+         2,
+         28
+        ]
+       ]
+      },
+      "te_ms_null": [
+       "2"
+      ],
+      "mixed": {
+       "2": false
+      }
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 5.1 Stacks (groups that differ only in EchoTime are echoes of one acquisition)"
+    },
+    "R-IDN-2": {
+     "outcome": {
+      "families": {
+       "2:e2": "T2_2D_TSE",
+       "2:e1": "UNCLASSIFIED",
+       "3": "T1_3D_IRGRE"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 (TE >= 60 keeps the PD echo out of T2_2D_TSE; rule 5 gives the T2-labelled PD echo family UNCLASSIFIED); 10.1 case 5"
+    },
+    "R-IDN-4": {
+     "outcome": {
+      "acquisitions": [
+       [
+        "2:e1",
+        "2:e2"
+       ],
+       [
+        "3"
+       ]
+      ],
+      "duplicates": []
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.5 rule 1 (same series, differ in echo)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T2": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "metadata_unavailable"
+        ]
+       },
+       "T1": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "3"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.5 (an acquisition's family comes from its first-echo magnitude member, here the TE 12 echo), 6.2 (family UNCLASSIFIED is metadata_unavailable, evidence missing)"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   },
+   "owner_decisions": [
+    "2026-11-24 (G1): follow scan-selection.md 5.5 as written: the acquisition's family is the first (TE 12) echo's, which has none, so a dual-echo PD/T2 goes to review. Confirmed as intended for now."
+   ]
+  },
+  {
+   "id": "HC-09-TWO-ORIENTATIONS",
+   "uid_exam": 209,
+   "family": "hard_cases",
+   "description": "A T2 series whose instances form an axial and a coronal stack under one SeriesInstanceUID (mixed), plus a T1 native.",
+   "roster_rows": [
+    [
+     "S209",
+     "8/18/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260818",
+     "zip_name": "S209_20260818.zip",
+     "study_date": "20260818",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "GE_T2_FSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090110",
+         "R4"
+        ]
+       },
+       "stacks": [
+        {},
+        {
+         "geometry": {
+          "iop": [
+           1,
+           0,
+           0,
+           0,
+           0,
+           -1
+          ],
+          "first_position": [
+           -120.0,
+           -50.0,
+           120.0
+          ]
+         }
+        }
+       ],
+       "facts": {
+        "mixed": true,
+        "n_stacks": 2
+       }
+      },
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 240.0,
+        "series_rel_s": 230.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-HDR-3": {
+     "outcome": {
+      "mixed": {
+       "2": true
+      },
+      "n_stacks": {
+       "2": 2
+      },
+      "mixed_record_fields": [
+       "series_key",
+       "series_number",
+       "manufacturer",
+       "model",
+       "field_t",
+       "n_instances",
+       "n_stacks",
+       "mixed"
+      ]
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.1 (a mixed record keeps only these fields)"
+    },
+    "R-IDN-6": {
+     "outcome": {
+      "no_selected_volume_of": [
+       "2"
+      ]
+     },
+     "oracle": "P",
+     "source": "scan-selection.md D10"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T2": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "mixed_series"
+        ]
+       },
+       "T1": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "3"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.2 (mixed_series is evidence missing; no eligible candidate left gives review)"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "HC-10-SENTINELS",
+   "uid_exam": 210,
+   "family": "hard_cases",
+   "description": "Sentinel exam (plan 3.2): every identifying field of every instance holds R4SENT_<field>, PatientBirthDate 19010101, member paths carry R4SENT_MEMBER/. The planted AcquisitionTime 101010 (36610 s) must not reach any cache as a time of day.",
+   "roster_rows": [
+    [
+     "S210",
+     "8/19/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260819",
+     "zip_name": "S210_20260819.zip",
+     "study_date": "20260819",
+     "study_time": "100000",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "GE_T2_FSE",
+       "sentinels": true,
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "101000",
+         "PLAN-3.2"
+        ],
+        "AcquisitionTime": [
+         "101010",
+         "PLAN-3.2"
+        ]
+       },
+       "folder": [
+        "OTHER",
+        "CLS"
+       ],
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": []
+       }
+      },
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "sentinels": true,
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "101500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "101510",
+         "R4"
+        ]
+       },
+       "folder": [
+        "OTHER",
+        "CLS"
+       ],
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 300.0,
+        "series_rel_s": 290.0,
+        "bolus_rel_s": null,
+        "desc_tokens": []
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-HDR-4": {
+     "outcome": {
+      "cache_forbidden_text": [
+       "R4SENT_",
+       "1.2.826.0.1.3680043.8.498.4242.",
+       "101010",
+       "36610"
+      ],
+      "desc_tokens_within_vocabulary": true
+     },
+     "oracle": "P",
+     "source": "scan-selection.md D6; README Privacy; plan 3.2"
+    },
+    "R-PRV-6": {
+     "outcome": {
+      "reader_output_forbidden_text": [
+       "R4SENT_",
+       "19010101",
+       "1.2.826.0.1.3680043.8.498.4242."
+      ]
+     },
+     "oracle": "C",
+     "source": "spec D-10 and R-PRV-6"
+    },
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "2": [
+        "T2",
+        4
+       ],
+       "3": [
+        "T1",
+        4
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rule 4 (sentinel descriptions give label OTHER; parameters decide)"
+    }
+   }
+  }
+ ]
+}

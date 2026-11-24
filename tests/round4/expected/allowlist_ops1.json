@@ -1,0 +1,19 @@
+{
+ "description": "R-OPS-1 allow-list: the only paths below D:\\mri_project that may change across an owner run of select (fnmatch patterns relative to the project root; '*' matches '/' too). Cited: spec R-OPS-1, D-10; the README sections on report files and on keeping code and data apart.",
+ "oracle": "C",
+ "source": "Round 4 spec R-OPS-1 (2026-11-24)",
+ "allow": [
+  "DicomExtracted/.mri_dicom_pipeline.lock",
+  "Niftis/.mri_dicom_pipeline.lock",
+  "Reports/.mri_dicom_pipeline.lock",
+  "Reports/pipeline.log",
+  "Reports/pipeline.log.*",
+  "Reports/latest_select.log",
+  "Reports/run_history.csv",
+  "Reports/.selection_cache/*"
+ ],
+ "forbidden_after_normal_end": [
+  "*.mri_dicom_pipeline.lock.owner"
+ ],
+ "notes": "The names of rotated log copies are not stated in the README; 'Reports/pipeline.log.*' covers the usual RotatingFileHandler names. If the owner's run shows another rotated name, the testing agent records it as a finding for the owner to classify, without widening this list."
+}

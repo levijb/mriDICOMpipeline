@@ -1,0 +1,379 @@
+{
+ "catalog": "kept_roles",
+ "description": "Kept roles (spec 4.1 'Other kept roles'): a TOF MRA in two slabs with a MIP, and a three-plane localizer. Roles LOCALIZER, MRA, MRV and PERFUSION keep every volume (scan-selection.md D4, 6.1).",
+ "protocols_from": [
+  "structural"
+ ],
+ "sources": {
+  "SS-D4": "scan-selection.md D4 and 6.1 (kept roles)",
+  "SS-5.4-R2": "scan-selection.md 5.4 rule 2"
+ },
+ "protocols": {
+  "GE_TOF": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "3D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "GR"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SS",
+      "SP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "FAST_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "tof3d",
+     "R4"
+    ],
+    "RepetitionTime": [
+     25,
+     "SS-5.4-R2"
+    ],
+    "FlipAngle": [
+     20,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     1.0,
+     "R4"
+    ],
+    "SpacingBetweenSlices": [
+     1.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      320,
+      224,
+      0
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "ROW",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "R4"
+    ],
+    "SeriesDescription": [
+     "3D TOF MRA",
+     "R4"
+    ]
+   },
+   "echoes": [
+    3.4
+   ],
+   "slices": 60,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -100.0,
+     -100.0,
+     -30.0
+    ],
+    "step_mm": 1.0,
+    "pixel_spacing": [
+     6.25,
+     6.25
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "MRA",
+    "CLS"
+   ]
+  }
+ },
+ "exams": [
+  {
+   "id": "KR-01-TOF-MIP-LOCALIZER",
+   "uid_exam": 901,
+   "family": "kept_roles",
+   "roster_rows": [
+    [
+     "S901",
+     "10/5/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261005",
+     "zip_name": "S901_20261005.zip",
+     "study_date": "20261005",
+     "study_time": "085900",
+     "series": [
+      {
+       "uid_series": 1,
+       "protocol": "GE_LOCALIZER",
+       "tags": {
+        "SeriesNumber": [
+         1,
+         "R4"
+        ],
+        "SeriesTime": [
+         "085955",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090000",
+         "R4"
+        ]
+       },
+       "facts": {
+        "mixed": true,
+        "n_stacks": 3
+       }
+      },
+      {
+       "uid_series": 6,
+       "protocol": "GE_TOF",
+       "tags": {
+        "SeriesNumber": [
+         6,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": -30.0,
+        "pos_max": 29.0,
+        "step_mm": 1.0,
+        "extent_mm": 60.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 310.0,
+        "series_rel_s": 300.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "3D"
+        ]
+       }
+      },
+      {
+       "uid_series": 7,
+       "protocol": "GE_TOF",
+       "geometry": {
+        "first_position": [
+         -100.0,
+         -100.0,
+         30.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         7,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 60,
+        "pos_min": 30.0,
+        "pos_max": 89.0,
+        "step_mm": 1.0,
+        "extent_mm": 60.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 610.0,
+        "series_rel_s": 600.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "3D"
+        ]
+       }
+      },
+      {
+       "uid_series": 600,
+       "protocol": "GE_TOF",
+       "slices": 10,
+       "geometry": {
+        "frame": 6,
+        "step_mm": 6.0
+       },
+       "tags": {
+        "SeriesNumber": [
+         600,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SliceThickness": [
+         6.0,
+         "R4"
+        ],
+        "SpacingBetweenSlices": [
+         6.0,
+         "R4"
+        ],
+        "ImageType": [
+         [
+          "DERIVED",
+          "SECONDARY",
+          "PROJECTION IMAGE"
+         ],
+         "R4"
+        ],
+        "SeriesDescription": [
+         "3D TOF MRA MIP",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 10,
+        "pos_min": -30.0,
+        "pos_max": 24.0,
+        "step_mm": 6.0,
+        "extent_mm": 60.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 310.0,
+        "series_rel_s": 900.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "3D",
+         "MIP"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "1:*": [
+        "LOCALIZER",
+        1
+       ],
+       "6": [
+        "MRA",
+        2
+       ],
+       "7": [
+        "MRA",
+        2
+       ],
+       "600": [
+        "MRA",
+        2
+       ]
+      },
+      "warnings": {
+       "6": [
+        "label_parameter_conflict"
+       ],
+       "7": [
+        "label_parameter_conflict"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rules 1-2 (TOF: 3D GR, not prepared, single echo, TE 3.4, TR 25 also matches T1_3D_GRE)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "MRA": {
+        "outcome": "kept_all"
+       },
+       "LOCALIZER": {
+        "outcome": "kept_all"
+       },
+       "T1": {
+        "outcome": "missing"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.1, D4; 10.1 case 34"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "1:*": [
+        "kept",
+        "LOCALIZER"
+       ],
+       "6": [
+        "kept",
+        "MRA"
+       ],
+       "7": [
+        "kept",
+        "MRA"
+       ],
+       "600": [
+        "kept",
+        "MRA"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6 (kept: volume of a kept role)"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection; 10.1 case 34 (exit unaffected)"
+    }
+   }
+  }
+ ]
+}

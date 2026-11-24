@@ -1,0 +1,655 @@
+{
+ "description": "Tier 1 linking and contrast tables (R4-LNK-01, R4-CON-01). Series and acquisitions are given by the 5.1 facts the rules read; phase 2 builds the pipeline's records. Expected values were derived by hand from scan-selection.md 5.6 and 5.7. P only.",
+ "oracle": "P",
+ "linking": {
+  "requirement": "R-LNK-1 / R4-LNK-01",
+  "source": "scan-selection.md 5.6 (rung order; rungs the derived series cannot evaluate are passed over; the link is made at the first rung leaving one candidate; states unlinked, ambiguous and no_parent)",
+  "parent_base": {
+   "orientation": "AX",
+   "rows": 32,
+   "cols": 32,
+   "n_positions": 28,
+   "pos_min": -50.0,
+   "pos_max": 58.0,
+   "extent_mm": 112.0,
+   "tr_ms": 6000.0,
+   "ti_ms": null,
+   "flip_deg": 90.0,
+   "te_ms": 80.0,
+   "acq_rel_s": 0.0,
+   "series_number": 5,
+   "for_hash": "F1",
+   "series_key": "P1"
+  },
+  "cases": [
+   {
+    "id": "L01",
+    "group": {
+     "kind": "map",
+     "role": "ADC",
+     "ref_series_keys": [
+      "PB"
+     ],
+     "for_hash": "F1",
+     "series_number": 500
+    },
+    "parents": {
+     "A": {
+      "role": "DWI",
+      "series_key": "PA"
+     },
+     "B": {
+      "role": "DWI",
+      "series_key": "PB",
+      "series_number": 6
+     }
+    },
+    "state": "linked",
+    "rung": "reference",
+    "parent": "B"
+   },
+   {
+    "id": "L02",
+    "group": {
+     "kind": "map",
+     "role": "ADC",
+     "for_hash": "FB",
+     "series_number": 500
+    },
+    "parents": {
+     "A": {
+      "role": "DWI",
+      "for_hash": "FA"
+     },
+     "B": {
+      "role": "DWI",
+      "for_hash": "FB",
+      "series_number": 6
+     }
+    },
+    "state": "linked",
+    "rung": "frame_of_reference",
+    "parent": "B",
+    "work": "reference skipped (no references)"
+   },
+   {
+    "id": "L03",
+    "group": {
+     "kind": "map",
+     "role": "ADC",
+     "for_hash": "F1",
+     "n_positions": 28,
+     "pos_min": -50.0,
+     "pos_max": 58.0,
+     "series_number": 500
+    },
+    "parents": {
+     "A": {
+      "role": "DWI",
+      "n_positions": 20,
+      "pos_max": 26.0
+     },
+     "B": {
+      "role": "DWI",
+      "series_number": 6
+     }
+    },
+    "state": "linked",
+    "rung": "geometry",
+    "parent": "B"
+   },
+   {
+    "id": "L04",
+    "group": {
+     "kind": "projection",
+     "role": "SWI_MINIP",
+     "for_hash": "F1",
+     "orientation": "AX",
+     "pos_min": -40.0,
+     "pos_max": 40.0,
+     "series_number": 13
+    },
+    "parents": {
+     "A": {
+      "role": "SWI",
+      "pos_min": -10.0,
+      "pos_max": 30.0,
+      "extent_mm": 42.0
+     },
+     "B": {
+      "role": "SWI",
+      "pos_min": -60.0,
+      "pos_max": 58.0,
+      "extent_mm": 120.0,
+      "series_number": 11
+     }
+    },
+    "state": "linked",
+    "rung": "z_range",
+    "parent": "B",
+    "work": "only B's extent contains the minIP's slice range within 1 mm (10.1 case 9)"
+   },
+   {
+    "id": "L05",
+    "group": {
+     "kind": "reformat",
+     "role": "T1",
+     "for_hash": "F1",
+     "tr_ms": 6.0,
+     "ti_ms": 450.0,
+     "flip_deg": 13.0,
+     "te_ms": 2.4,
+     "series_number": 300
+    },
+    "parents": {
+     "A": {
+      "role": "T1",
+      "tr_ms": 6.0,
+      "ti_ms": 450.0,
+      "flip_deg": 13.0,
+      "te_ms": 2.4,
+      "series_number": 3
+     },
+     "B": {
+      "role": "T1",
+      "tr_ms": 6.0,
+      "ti_ms": 900.0,
+      "flip_deg": 13.0,
+      "te_ms": 2.4,
+      "series_number": 6
+     }
+    },
+    "state": "linked",
+    "rung": "parameters",
+    "parent": "A",
+    "work": "geometry is not a reformat rung; TI differs by 100%"
+   },
+   {
+    "id": "L06",
+    "group": {
+     "kind": "reformat",
+     "role": "T1",
+     "for_hash": "F1",
+     "tr_ms": 6.0,
+     "ti_ms": 450.0,
+     "flip_deg": 13.0,
+     "te_ms": 2.4,
+     "acq_rel_s": 900.0,
+     "series_number": 600
+    },
+    "parents": {
+     "A": {
+      "role": "T1",
+      "tr_ms": 6.0,
+      "ti_ms": 450.0,
+      "flip_deg": 13.0,
+      "te_ms": 2.4,
+      "acq_rel_s": 0.0,
+      "series_number": 3
+     },
+     "B": {
+      "role": "T1_POST",
+      "tr_ms": 6.0,
+      "ti_ms": 450.0,
+      "flip_deg": 13.0,
+      "te_ms": 2.4,
+      "acq_rel_s": 900.0,
+      "series_number": 6
+     }
+    },
+    "state": "linked",
+    "rung": "acquisition_time",
+    "parent": "B",
+    "work": "session F (10.1 case 9); T1 reformats link to either T1 role"
+   },
+   {
+    "id": "L07",
+    "group": {
+     "kind": "map",
+     "role": "ADC",
+     "for_hash": "F1",
+     "n_positions": 28,
+     "pos_min": -50.0,
+     "pos_max": 58.0,
+     "tr_ms": 6000.0,
+     "flip_deg": 90.0,
+     "te_ms": 80.0,
+     "acq_rel_s": 0.0,
+     "series_number": 7
+    },
+    "parents": {
+     "A": {
+      "role": "DWI",
+      "series_number": 5
+     },
+     "B": {
+      "role": "DWI",
+      "series_number": 9
+     }
+    },
+    "state": "linked",
+    "rung": "series_order",
+    "parent": "A",
+    "work": "the two DWIs agree on every earlier rung; only A has a lower SeriesNumber than the group"
+   },
+   {
+    "id": "L08",
+    "group": {
+     "kind": "map",
+     "role": "ADC",
+     "for_hash": "F9",
+     "series_number": 500
+    },
+    "parents": {
+     "A": {
+      "role": "DWI"
+     }
+    },
+    "state": "unlinked",
+    "rung": "frame_of_reference",
+    "work": "a frame of reference that matches nothing (10.1 case 9)"
+   },
+   {
+    "id": "L09",
+    "group": {
+     "kind": "map",
+     "role": "ADC",
+     "for_hash": "F1",
+     "n_positions": 28,
+     "pos_min": -50.0,
+     "pos_max": 58.0,
+     "tr_ms": 6000.0,
+     "flip_deg": 90.0,
+     "te_ms": 80.0,
+     "acq_rel_s": 0.0,
+     "series_number": 500
+    },
+    "parents": {
+     "A": {
+      "role": "DWI",
+      "series_number": 5
+     },
+     "B": {
+      "role": "DWI",
+      "series_number": 6
+     }
+    },
+    "state": "ambiguous",
+    "candidates": [
+     "A",
+     "B"
+    ],
+    "work": "two DWIs identical in every rung (10.1 case 9)"
+   },
+   {
+    "id": "L10",
+    "group": {
+     "kind": "map",
+     "role": "ADC",
+     "for_hash": "F1",
+     "series_number": 500
+    },
+    "parents": {},
+    "state": "no_parent",
+    "work": "no DWI acquisition in the session"
+   },
+   {
+    "id": "L11",
+    "group": {
+     "kind": "reformat",
+     "role": "T1",
+     "for_hash": null,
+     "tr_ms": 6.0,
+     "ti_ms": 450.0,
+     "flip_deg": 13.0,
+     "te_ms": 2.4,
+     "series_number": 300
+    },
+    "parents": {
+     "A": {
+      "role": "T1",
+      "tr_ms": 6.0,
+      "ti_ms": 450.0,
+      "flip_deg": 13.0,
+      "te_ms": 2.4,
+      "series_number": 3
+     },
+     "B": {
+      "role": "T1",
+      "tr_ms": 6.0,
+      "ti_ms": 900.0,
+      "flip_deg": 13.0,
+      "te_ms": 2.4,
+      "series_number": 6
+     }
+    },
+    "state": "linked",
+    "rung": "parameters",
+    "parent": "A",
+    "work": "frame_of_reference skipped: the derived series has no FrameOfReferenceUID"
+   },
+   {
+    "id": "L12",
+    "group": {
+     "kind": "map",
+     "role": "QSM",
+     "for_hash": "F1",
+     "series_number": 30
+    },
+    "parents": {
+     "A": {
+      "role": "SWI"
+     }
+    },
+    "state": "linked",
+    "rung": "frame_of_reference",
+    "parent": "A",
+    "work": "QSM maps may link to SWI (parent roles QSM, SWI, GRE)"
+   }
+  ]
+ },
+ "contrast": {
+  "requirement": "R-CON-1 / R4-CON-01",
+  "source": "scan-selection.md 5.7 rules 1-7 (first rule that applies decides; rules 1-3 for every series, then 4-7); default contrast_unknown presume_pre",
+  "cases": [
+   {
+    "id": "K01",
+    "series": {
+     "S": {
+      "acq_rel_s": 600.0,
+      "bolus_rel_s": 300.0
+     }
+    },
+    "phases": {
+     "S": [
+      "post",
+      "bolus_time"
+     ]
+    }
+   },
+   {
+    "id": "K02",
+    "series": {
+     "S": {
+      "acq_rel_s": 100.0,
+      "bolus_rel_s": 300.0
+     }
+    },
+    "phases": {
+     "S": [
+      "pre",
+      "bolus_time"
+     ]
+    }
+   },
+   {
+    "id": "K03",
+    "series": {
+     "S": {
+      "contrast_agent": true,
+      "acq_rel_s": 600.0
+     },
+     "T": {
+      "contrast_agent": false,
+      "acq_rel_s": 0.0
+     }
+    },
+    "phases": {
+     "S": [
+      "post",
+      "agent_tag"
+     ]
+    }
+   },
+   {
+    "id": "K04",
+    "series": {
+     "S": {
+      "contrast_agent": true
+     },
+     "T": {
+      "contrast_agent": true
+     }
+    },
+    "phases": {
+     "S": [
+      "unknown",
+      "agent_tag_exam_wide"
+     ],
+     "T": [
+      "unknown",
+      "agent_tag_exam_wide"
+     ]
+    }
+   },
+   {
+    "id": "K05",
+    "series": {
+     "S": {
+      "description": "AX T1 POST"
+     }
+    },
+    "phases": {
+     "S": [
+      "post",
+      "description"
+     ]
+    }
+   },
+   {
+    "id": "K06",
+    "series": {
+     "S": {
+      "description": "AX T1 +C"
+     }
+    },
+    "phases": {
+     "S": [
+      "post",
+      "description"
+     ]
+    }
+   },
+   {
+    "id": "K07",
+    "series": {
+     "S": {
+      "description": "AX T1 PRE CONTRAST"
+     }
+    },
+    "phases": {
+     "S": [
+      "pre",
+      "description"
+     ]
+    },
+    "work": "PRE is checked before CONTRAST ('PRE CONTRAST' is precontrast here, unlike classify.py)"
+   },
+   {
+    "id": "K08",
+    "series": {
+     "S": {
+      "description": "T1 WO"
+     }
+    },
+    "phases": {
+     "S": [
+      "pre",
+      "description"
+     ]
+    }
+   },
+   {
+    "id": "K09",
+    "series": {
+     "S": {
+      "description": "T1 GADOLINIUM"
+     }
+    },
+    "phases": {
+     "S": [
+      "post",
+      "description"
+     ]
+    },
+    "work": "GADO... prefix"
+   },
+   {
+    "id": "K10",
+    "series": {
+     "N": {
+      "description": "SAG T1",
+      "acq_rel_s": 0.0,
+      "series_number": 3
+     },
+     "R": {
+      "description": "AX T1 PRE REFORMAT",
+      "kind": "reformat",
+      "linked_to": "N",
+      "acq_rel_s": 0.0,
+      "series_number": 300
+     }
+    },
+    "phases": {
+     "N": [
+      "pre",
+      "reformat_description"
+     ],
+     "R": [
+      "pre",
+      "description"
+     ]
+    }
+   },
+   {
+    "id": "K11",
+    "series": {
+     "P": {
+      "contrast_agent": true,
+      "acq_rel_s": 600.0,
+      "series_number": 5
+     },
+     "A": {
+      "acq_rel_s": 900.0,
+      "series_number": 6
+     },
+     "B": {
+      "acq_rel_s": 100.0,
+      "series_number": 2
+     }
+    },
+    "phases": {
+     "P": [
+      "post",
+      "agent_tag"
+     ],
+     "A": [
+      "post",
+      "timing"
+     ],
+     "B": [
+      "pre",
+      "timing"
+     ]
+    }
+   },
+   {
+    "id": "K12",
+    "series": {
+     "P": {
+      "contrast_agent": true,
+      "acq_rel_s": 600.0,
+      "series_number": 5
+     },
+     "C": {
+      "acq_rel_s": 100.0,
+      "series_number": 9
+     }
+    },
+    "phases": {
+     "P": [
+      "post",
+      "agent_tag"
+     ],
+     "C": [
+      "unknown",
+      "none"
+     ]
+    },
+    "work": "C is before P in time but after it in SeriesNumber: rule 5 needs both orders to agree; rule 6 does not apply (post evidence exists); rule 7"
+   },
+   {
+    "id": "K13",
+    "series": {
+     "S": {
+      "acq_rel_s": 0.0
+     },
+     "T": {
+      "acq_rel_s": 300.0
+     }
+    },
+    "phases": {
+     "S": [
+      "pre",
+      "presumed"
+     ],
+     "T": [
+      "pre",
+      "presumed"
+     ]
+    },
+    "warnings": [
+     "contrast_presumed_pre"
+    ]
+   },
+   {
+    "id": "K14",
+    "profile": {
+     "contrast_unknown": "review"
+    },
+    "series": {
+     "S": {
+      "acq_rel_s": 0.0
+     }
+    },
+    "phases": {
+     "S": [
+      "unknown",
+      "none"
+     ]
+    },
+    "work": "rule 6 with contrast_unknown review"
+   },
+   {
+    "id": "K15",
+    "series": {
+     "M": {
+      "contrast_agent": true,
+      "acq_rel_s": 600.0,
+      "acquisition": "X"
+     },
+     "Q": {
+      "contrast_agent": false,
+      "acq_rel_s": 600.0,
+      "acquisition": "X",
+      "description": "SWI PRE"
+     },
+     "Z": {
+      "contrast_agent": false,
+      "acq_rel_s": 0.0
+     }
+    },
+    "acquisition_phase": {
+     "X": [
+      "unknown",
+      null
+     ]
+    },
+    "warnings": [
+     "contrast_members_disagree"
+    ],
+    "work": "M is post (agent tag), Q is pre (description): the acquisition takes unknown"
+   }
+  ]
+ }
+}

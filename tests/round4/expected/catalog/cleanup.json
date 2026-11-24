@@ -1,0 +1,536 @@
+{
+ "catalog": "cleanup",
+ "description": "The Uploads/ cleanup layouts A-K (TG-CLN, R-NAM-10). A layout lists what sits below DicomUploads/Uploads/ before prepare: ZIPs built from this file's sessions, plain and hidden files, empty folders, and a link (a junction on Windows, a symbolic link on Linux) whose target <tmp>/outside/target/ contains one empty folder sub/. 'after_present' and 'after_absent' are relative to DicomUploads/ (or <tmp>/). Expected results follow the owner's D-14 statement with the OQ-13 answer and the README of the commit under test. P only.",
+ "protocols_from": [
+  "structural",
+  "naming"
+ ],
+ "sources": {
+  "D-14": "round 4 spec D-14 and R-NAM-10 (owner's statement of the cleanup, with the OQ-13 answer of 2026-11-24)",
+  "README-CLEAN": "README, Uploads and canonical ZIPs (folder cleanup, commit 4d8a362)"
+ },
+ "exams": [
+  {
+   "id": "CLN-01-A",
+   "uid_exam": 801,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S801",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261120",
+     "upload_path": "Uploads/b1/S801/x.zip",
+     "study_date": "20261120",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "20261120"
+    }
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_absent": [
+       "Uploads/b1/S801",
+       "Uploads/b1"
+      ],
+      "after_present": [
+       "Uploads"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14 (R4-CLN-01; R4-CLN-10 merged here)"
+    }
+   }
+  },
+  {
+   "id": "CLN-02-B",
+   "uid_exam": 802,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S802",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261120",
+     "upload_path": "Uploads/b1/S802/x.zip",
+     "study_date": "20261120",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "20261120"
+    },
+    {
+     "file": "Uploads/b1/S802/notes.txt"
+    }
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_present": [
+       "Uploads/b1/S802/notes.txt",
+       "Uploads/b1/S802",
+       "Uploads/b1"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14 (a folder holding a file stays)"
+    }
+   }
+  },
+  {
+   "id": "CLN-03-C",
+   "uid_exam": 803,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S803",
+     "11/20/2026"
+    ],
+    [
+     "S804",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261120",
+     "key": "x",
+     "upload_path": "Uploads/b1/S803/x.zip",
+     "study_date": "20261120",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    },
+    {
+     "label": "held",
+     "key": "y",
+     "upload_path": "Uploads/b1/S804/y.zip",
+     "study_date": "20261127",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "x"
+    },
+    {
+     "zip": "y"
+    }
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_absent": [
+       "Uploads/b1/S803"
+      ],
+      "after_present": [
+       "Uploads/b1",
+       "Uploads/b1/S804",
+       "Uploads/b1/S804/y.zip"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14 (y is held: unlisted date)"
+    }
+   }
+  },
+  {
+   "id": "CLN-04-D",
+   "uid_exam": 804,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S805",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261120",
+     "upload_path": "Uploads/b1/deep/er/S805/x.zip",
+     "study_date": "20261120",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "20261120"
+    }
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_absent": [
+       "Uploads/b1/deep/er/S805",
+       "Uploads/b1/deep/er",
+       "Uploads/b1/deep",
+       "Uploads/b1"
+      ],
+      "after_present": [
+       "Uploads"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14; README Unnamed ZIPs (the subject is the ZIP's own folder, at any depth)"
+    }
+   }
+  },
+  {
+   "id": "CLN-05-E",
+   "uid_exam": 805,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S806",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261120",
+     "upload_path": "Uploads/b1/S806/x.zip",
+     "study_date": "20261120",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "20261120"
+    },
+    {
+     "dir": "Uploads/b2/empty"
+    }
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_absent": [
+       "Uploads/b1/S806",
+       "Uploads/b1"
+      ],
+      "after_present": [
+       "Uploads/b2/empty"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14 (a top-level folder that no moved ZIP left is untouched)"
+    }
+   }
+  },
+  {
+   "id": "CLN-06-F",
+   "uid_exam": 806,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S807",
+     "7/25/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260725",
+     "zip_name": "S807_20260725.zip",
+     "upload_path": "Uploads/S807_20260725.zip",
+     "study_date": "20260725",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "20260725"
+    }
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_present": [
+       "Uploads"
+      ],
+      "after_absent": [
+       "Uploads/S807_20260725.zip"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14 (Uploads/ itself is never removed)"
+    }
+   }
+  },
+  {
+   "id": "CLN-07-G",
+   "uid_exam": 807,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S808",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261120",
+     "upload_path": "Uploads/b1/S808/x.zip",
+     "study_date": "20261120",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "20261120"
+    },
+    {
+     "file": "Uploads/b1/S808/.hidden"
+    }
+   ],
+   "variant_windows": "a second run where Uploads/b1/S808/hidden.txt has the hidden attribute (attrib +h) in place of .hidden",
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_present": [
+       "Uploads/b1/S808",
+       "Uploads/b1"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14 (hidden entries count as entries)"
+    }
+   }
+  },
+  {
+   "id": "CLN-08-H",
+   "uid_exam": 808,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S809",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "held",
+     "upload_path": "Uploads/b1/S809/x.zip",
+     "study_date": "20261127",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "held"
+    }
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_present": [
+       "Uploads/b1/S809/x.zip",
+       "Uploads/b1/S809",
+       "Uploads/b1"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14 (no ZIP moved: nothing removed)"
+    }
+   }
+  },
+  {
+   "id": "CLN-09-I",
+   "uid_exam": 809,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S810",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261120",
+     "upload_path": "Uploads/b1/S810/x.zip",
+     "study_date": "20261120",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "20261120"
+    }
+   ],
+   "run": [
+    "prepare",
+    "--dry-run"
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_present": [
+       "Uploads/b1/S810/x.zip",
+       "Uploads/b1/S810",
+       "Uploads/b1"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14; README (a dry run changes nothing)"
+    }
+   }
+  },
+  {
+   "id": "CLN-11-J",
+   "uid_exam": 811,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S811",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261120",
+     "upload_path": "Uploads/b1/S811/x.zip",
+     "study_date": "20261120",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "20261120"
+    },
+    {
+     "dir": "Uploads/b1/S813"
+    }
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_absent": [
+       "Uploads/b1/S811",
+       "Uploads/b1/S813",
+       "Uploads/b1"
+      ]
+     },
+     "oracle": "P",
+     "source": "D-14 (already-empty folders inside the top-level folder go too)"
+    }
+   }
+  },
+  {
+   "id": "CLN-12-K",
+   "uid_exam": 812,
+   "family": "cleanup",
+   "roster_rows": [
+    [
+     "S812",
+     "11/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20261120",
+     "upload_path": "Uploads/b1/S812/x.zip",
+     "study_date": "20261120",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "NAM_SMALL"
+      }
+     ]
+    }
+   ],
+   "layout": [
+    {
+     "zip": "20261120"
+    },
+    {
+     "link": "Uploads/b1/link",
+     "target": "outside/target",
+     "target_contents": [
+      "outside/target/sub/"
+     ]
+    }
+   ],
+   "expected": {
+    "R-NAM-10": {
+     "outcome": {
+      "after_absent": [
+       "Uploads/b1/S812"
+      ],
+      "after_present": [
+       "Uploads/b1/link",
+       "Uploads/b1",
+       "<tmp>/outside/target/sub"
+      ],
+      "target_listing_unchanged": true
+     },
+     "oracle": "P",
+     "source": "D-14 (links and junctions are entries; never followed; their targets untouched)"
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,799 @@
+{
+ "catalog": "geometry",
+ "description": "Geometry variants (spec 4.1, D-2): one 3D IR-GRE T1 per exam, converted by real dcm2niix in tier 3, so that the pipeline's orientation label, positions, step, extent, native size and post-rotation slice count can be compared with the geometry oracle (R4-GEO-01, R4-GEO-03). Positions project ImagePositionPatient onto the normal of the image plane (DICOM PS3.3 image plane module); the oblique values were computed by hand with sin 15 = 0.258819045, cos 15 = 0.965925826, cos 30 = 0.866025404.",
+ "protocols_from": [
+  "structural"
+ ],
+ "sources": {
+  "PS3.3-GEO": "DICOM PS3.3 C.7.6.2.1.1 (image plane attributes)",
+  "SS-5.3-NAT": "scan-selection.md 5.3 (native sampling)"
+ },
+ "exams": [
+  {
+   "id": "GEO-01-SAGITTAL",
+   "uid_exam": 301,
+   "family": "geometry",
+   "description": "Sagittal 3D T1 (normal -x LPS); dcm2niix rotates it to the nearest orthogonal orientation.",
+   "roster_rows": [
+    [
+     "S301",
+     "9/1/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260901",
+     "zip_name": "S301_20260901.zip",
+     "study_date": "20260901",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "SAG",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "SAG",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-GEO-4": {
+     "outcome": {
+      "3": {
+       "orientation": "SAG",
+       "step_mm": 1.0,
+       "extent_mm": 120.0,
+       "native_mm": [
+        1.0,
+        1.0,
+        1.0
+       ]
+      }
+     },
+     "oracle": "C",
+     "source": "PS3.3 C.7.6.2.1.1; scan-selection.md 5.3"
+    },
+    "R-GEO-2": {
+     "outcome": {
+      "3": {
+       "n_slices": 120,
+       "slice_count_mismatch": false
+      }
+     },
+     "oracle": "C,T",
+     "source": "scan-selection.md 5.3 slice count; NiBabel affine axis mapping (oracles/geometry.nifti_slice_count)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "T1": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "3"
+        ],
+        "tier": "3d_ir_gre"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.2-6.4, 6.7"
+    }
+   }
+  },
+  {
+   "id": "GEO-02-CORONAL",
+   "uid_exam": 302,
+   "family": "geometry",
+   "description": "Coronal 3D T1: IOP (1,0,0, 0,0,-1), normal (0,1,0).",
+   "roster_rows": [
+    [
+     "S302",
+     "9/2/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260902",
+     "zip_name": "S302_20260902.zip",
+     "study_date": "20260902",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "geometry": {
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         0,
+         -1
+        ],
+        "first_position": [
+         -120.0,
+         -60.0,
+         120.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "COR T1 BRAVO",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "COR",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "COR",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-GEO-4": {
+     "outcome": {
+      "3": {
+       "orientation": "COR",
+       "step_mm": 1.0,
+       "extent_mm": 120.0,
+       "native_mm": [
+        1.0,
+        1.0,
+        1.0
+       ]
+      }
+     },
+     "oracle": "C",
+     "source": "PS3.3 C.7.6.2.1.1; scan-selection.md 5.3"
+    },
+    "R-GEO-2": {
+     "outcome": {
+      "3": {
+       "n_slices": 120,
+       "slice_count_mismatch": false
+      }
+     },
+     "oracle": "C,T",
+     "source": "scan-selection.md 5.3; NiBabel"
+    }
+   }
+  },
+  {
+   "id": "GEO-03-OBLIQUE-15",
+   "uid_exam": 303,
+   "family": "geometry",
+   "description": "Axial 3D T1 tilted 15 degrees about x: IOP (1,0,0, 0,cos 15,-sin 15), normal (0, sin 15, cos 15); largest component 0.966, so AX.",
+   "roster_rows": [
+    [
+     "S303",
+     "9/3/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260903",
+     "zip_name": "S303_20260903.zip",
+     "study_date": "20260903",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "geometry": {
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         0.9659258262890683,
+         -0.25881904510252074
+        ],
+        "first_position": [
+         -120.0,
+         -120.0,
+         -60.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "OBL T1 BRAVO",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 120,
+        "pos_min": -89.0138,
+        "pos_max": 29.9862,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "OBL",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-GEO-4": {
+     "outcome": {
+      "3": {
+       "orientation": "AX",
+       "step_mm": 1.0,
+       "extent_mm": 120.0,
+       "pos_min": -89.0138,
+       "native_mm": [
+        1.0,
+        1.0,
+        1.0
+       ]
+      }
+     },
+     "oracle": "C",
+     "source": "PS3.3 C.7.6.2.1.1: first position (-120,-120,-60) . (0, 0.258819, 0.965926) = -31.0583 - 57.9555 = -89.0138"
+    },
+    "R-GEO-2": {
+     "outcome": {
+      "3": {
+       "n_slices": 120,
+       "slice_count_mismatch": false
+      }
+     },
+     "oracle": "C,T",
+     "source": "scan-selection.md 5.3; NiBabel"
+    }
+   }
+  },
+  {
+   "id": "GEO-04-OBLIQUE-30",
+   "uid_exam": 304,
+   "family": "geometry",
+   "description": "Axial 3D T1 tilted 30 degrees about x: normal (0, 0.5, 0.866); largest component below 0.95, so 'oblique'.",
+   "roster_rows": [
+    [
+     "S304",
+     "9/4/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260904",
+     "zip_name": "S304_20260904.zip",
+     "study_date": "20260904",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "geometry": {
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         0.8660254037844386,
+         -0.5
+        ],
+        "first_position": [
+         -120.0,
+         -120.0,
+         -60.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "OBL T1 BRAVO",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "oblique",
+        "n_positions": 120,
+        "pos_min": -111.9615,
+        "pos_max": 7.0385,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "BRAVO",
+         "OBL",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-GEO-4": {
+     "outcome": {
+      "3": {
+       "orientation": "oblique",
+       "step_mm": 1.0,
+       "extent_mm": 120.0,
+       "pos_min": -111.9615,
+       "native_mm": [
+        1.0,
+        1.0,
+        1.0
+       ]
+      }
+     },
+     "oracle": "C",
+     "source": "PS3.3 C.7.6.2.1.1: (-120,-120,-60) . (0, 0.5, 0.866025) = -60 - 51.9615 = -111.9615; scan-selection.md 5.1 oblique below 0.95"
+    },
+    "R-GEO-2": {
+     "outcome": {
+      "3": {
+       "n_slices": 120,
+       "slice_count_mismatch": false
+      }
+     },
+     "oracle": "C,T",
+     "source": "scan-selection.md 5.3; NiBabel"
+    }
+   }
+  },
+  {
+   "id": "GEO-05-REVERSED-ORDER",
+   "uid_exam": 305,
+   "family": "geometry",
+   "description": "Axial 3D T1 whose instances are numbered from the top slice down (z from 59 to -60).",
+   "roster_rows": [
+    [
+     "S305",
+     "9/5/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260905",
+     "zip_name": "S305_20260905.zip",
+     "study_date": "20260905",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "geometry": {
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         1,
+         0
+        ],
+        "first_position": [
+         -120.0,
+         -120.0,
+         59.0
+        ],
+        "step_mm": -1.0
+       },
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "AX T1 BRAVO",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "BRAVO",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-GEO-4": {
+     "outcome": {
+      "3": {
+       "orientation": "AX",
+       "step_mm": 1.0,
+       "extent_mm": 120.0,
+       "native_mm": [
+        1.0,
+        1.0,
+        1.0
+       ]
+      }
+     },
+     "oracle": "C",
+     "source": "PS3.3 C.7.6.2.1.1 (distinct positions are sorted, so instance order does not matter)"
+    },
+    "R-GEO-2": {
+     "outcome": {
+      "3": {
+       "n_slices": 120,
+       "slice_count_mismatch": false
+      }
+     },
+     "oracle": "C,T",
+     "source": "scan-selection.md 5.3; NiBabel"
+    }
+   }
+  },
+  {
+   "id": "GEO-06-NONSQUARE-ROW",
+   "uid_exam": 306,
+   "family": "geometry",
+   "description": "Axial 3D T1 on a 40-row by 32-column grid with non-square pixels (6.0 x 7.5 mm) and a non-square acquisition matrix, phase ROW.",
+   "roster_rows": [
+    [
+     "S306",
+     "9/6/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260906",
+     "zip_name": "S306_20260906.zip",
+     "study_date": "20260906",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "geometry": {
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         1,
+         0
+        ],
+        "first_position": [
+         -120.0,
+         -120.0,
+         -60.0
+        ],
+        "rows": 40,
+        "cols": 32,
+        "pixel_spacing": [
+         6.0,
+         7.5
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "AX T1 BRAVO",
+         "R4"
+        ],
+        "AcquisitionMatrix": [
+         [
+          0,
+          256,
+          192,
+          0
+         ],
+         "R4"
+        ],
+        "InPlanePhaseEncodingDirection": [
+         "ROW",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "BRAVO",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-5": {
+     "outcome": {
+      "native_mm": {
+       "3": [
+        1.25,
+        0.9375,
+        1.0
+       ]
+      }
+     },
+     "oracle": "S,C",
+     "source": "scan-selection.md 5.3: fov_row = 32 x 7.5 = 240, fov_col = 40 x 6.0 = 240; ROW: row = 240/192, col = 240/256"
+    },
+    "R-GEO-4": {
+     "outcome": {
+      "3": {
+       "orientation": "AX",
+       "step_mm": 1.0,
+       "extent_mm": 120.0,
+       "native_mm": [
+        1.25,
+        0.9375,
+        1.0
+       ]
+      }
+     },
+     "oracle": "C",
+     "source": "PS3.3; scan-selection.md 5.3"
+    },
+    "R-GEO-2": {
+     "outcome": {
+      "3": {
+       "n_slices": 120,
+       "slice_count_mismatch": false
+      }
+     },
+     "oracle": "C,T",
+     "source": "scan-selection.md 5.3; NiBabel"
+    }
+   }
+  },
+  {
+   "id": "GEO-07-PHASE-COL",
+   "uid_exam": 307,
+   "family": "geometry",
+   "description": "Axial 3D T1, square grid, phase COL with 192 phase lines: native row and column sizes swap relative to GEO-06's assignment rule.",
+   "roster_rows": [
+    [
+     "S307",
+     "9/7/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260907",
+     "zip_name": "S307_20260907.zip",
+     "study_date": "20260907",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 3,
+       "protocol": "GE_BRAVO",
+       "geometry": {
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         1,
+         0
+        ],
+        "first_position": [
+         -120.0,
+         -120.0,
+         -60.0
+        ]
+       },
+       "tags": {
+        "SeriesNumber": [
+         3,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "AX T1 BRAVO",
+         "R4"
+        ],
+        "AcquisitionMatrix": [
+         [
+          256,
+          0,
+          0,
+          192
+         ],
+         "R4"
+        ],
+        "InPlanePhaseEncodingDirection": [
+         "COL",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 120,
+        "pos_min": -60.0,
+        "pos_max": 59.0,
+        "step_mm": 1.0,
+        "extent_mm": 120.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "BRAVO",
+         "T1"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-5": {
+     "outcome": {
+      "native_mm": {
+       "3": [
+        0.9375,
+        1.25,
+        1.0
+       ]
+      }
+     },
+     "oracle": "S,C",
+     "source": "scan-selection.md 5.3: fov 240 x 240; COL: col = 240/192 = 1.25, row = 240/256 = 0.9375"
+    },
+    "R-GEO-4": {
+     "outcome": {
+      "3": {
+       "orientation": "AX",
+       "step_mm": 1.0,
+       "extent_mm": 120.0,
+       "native_mm": [
+        0.9375,
+        1.25,
+        1.0
+       ]
+      }
+     },
+     "oracle": "C",
+     "source": "PS3.3; scan-selection.md 5.3"
+    },
+    "R-GEO-2": {
+     "outcome": {
+      "3": {
+       "n_slices": 120,
+       "slice_count_mismatch": false
+      }
+     },
+     "oracle": "C,T",
+     "source": "scan-selection.md 5.3; NiBabel"
+    }
+   }
+  }
+ ]
+}

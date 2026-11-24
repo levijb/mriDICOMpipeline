@@ -1,0 +1,624 @@
+{
+ "description": "Planted choices for oracles/objective_checks.py (R4-OR-04; plan 3.5). Each case starts from 'base_records' (header-reader-style records of one session), applies 'set' to named records, and calls check_choice(role, members, session). 'expected_categories' is the exact set of categories that must be flagged. Values were chosen by hand against the plan 3.5 table and the scan-selection.md 5.4 family text.",
+ "base_records": {
+  "t1": {
+   "series_key": "t1",
+   "mr_acq": "3D",
+   "scan_seq": [
+    "GR"
+   ],
+   "seq_var": [
+    "SS",
+    "SK"
+   ],
+   "scan_opt": [
+    "IR_GEMS"
+   ],
+   "tr_ms": 6.0,
+   "te_ms": 2.4,
+   "ti_ms": 450.0,
+   "flip_deg": 13.0,
+   "image_type": [
+    "ORIGINAL",
+    "OTHER",
+    "PRIMARY"
+   ],
+   "image_type_value1": [
+    "ORIGINAL"
+   ],
+   "contrast_agent": false,
+   "acq_rel_s": 300.0,
+   "bolus_rel_s": null,
+   "extent_mm": 120.0,
+   "mixed": false,
+   "for_sha256": "f1",
+   "orientation": "SAG",
+   "rows": 32,
+   "cols": 32,
+   "n_positions": 120,
+   "pos_min": -60.0,
+   "pos_max": 59.0,
+   "parts": {
+    "mag": 120
+   },
+   "echoes": null
+  },
+  "t2": {
+   "series_key": "t2",
+   "mr_acq": "2D",
+   "scan_seq": [
+    "SE"
+   ],
+   "seq_var": [
+    "SK"
+   ],
+   "scan_opt": [
+    "FAST_GEMS"
+   ],
+   "tr_ms": 6000.0,
+   "te_ms": 100.0,
+   "ti_ms": 0.0,
+   "flip_deg": 90.0,
+   "image_type": [
+    "ORIGINAL",
+    "OTHER",
+    "PRIMARY"
+   ],
+   "image_type_value1": [
+    "ORIGINAL"
+   ],
+   "contrast_agent": false,
+   "acq_rel_s": 60.0,
+   "bolus_rel_s": null,
+   "extent_mm": 112.0,
+   "mixed": false,
+   "for_sha256": "f2",
+   "orientation": "AX",
+   "rows": 32,
+   "cols": 32,
+   "n_positions": 28,
+   "pos_min": -50.0,
+   "pos_max": 58.0,
+   "parts": {
+    "mag": 28
+   },
+   "echoes": null
+  },
+  "flair": {
+   "series_key": "flair",
+   "mr_acq": "3D",
+   "scan_seq": [
+    "SE",
+    "IR"
+   ],
+   "seq_var": [
+    "SK",
+    "SS"
+   ],
+   "scan_opt": [
+    "IR_GEMS"
+   ],
+   "tr_ms": 6000.0,
+   "te_ms": 120.0,
+   "ti_ms": 1700.0,
+   "flip_deg": 90.0,
+   "image_type": [
+    "ORIGINAL",
+    "OTHER",
+    "PRIMARY"
+   ],
+   "image_type_value1": [
+    "ORIGINAL"
+   ],
+   "contrast_agent": false,
+   "acq_rel_s": 600.0,
+   "bolus_rel_s": null,
+   "extent_mm": 115.5,
+   "mixed": false,
+   "for_sha256": "f3",
+   "orientation": "SAG",
+   "rows": 32,
+   "cols": 32,
+   "n_positions": 230,
+   "pos_min": -57.5,
+   "pos_max": 57.0,
+   "parts": {
+    "mag": 230
+   },
+   "echoes": null
+  },
+  "dwi": {
+   "series_key": "dwi",
+   "mr_acq": "2D",
+   "scan_seq": [
+    "EP",
+    "SE"
+   ],
+   "seq_var": [
+    "SK"
+   ],
+   "scan_opt": [],
+   "tr_ms": 6000.0,
+   "te_ms": 80.0,
+   "ti_ms": null,
+   "flip_deg": 90.0,
+   "image_type": [
+    "ORIGINAL",
+    "OTHER",
+    "PRIMARY"
+   ],
+   "image_type_value1": [
+    "ORIGINAL"
+   ],
+   "contrast_agent": false,
+   "acq_rel_s": 900.0,
+   "bolus_rel_s": null,
+   "extent_mm": 112.0,
+   "mixed": false,
+   "for_sha256": "f4",
+   "orientation": "AX",
+   "rows": 32,
+   "cols": 32,
+   "n_positions": 28,
+   "pos_min": -50.0,
+   "pos_max": 58.0,
+   "parts": {
+    "mag": 196
+   },
+   "echoes": null
+  },
+  "swi": {
+   "series_key": "swi",
+   "mr_acq": "3D",
+   "scan_seq": [
+    "GR"
+   ],
+   "seq_var": [
+    "SP"
+   ],
+   "scan_opt": [],
+   "tr_ms": 49.0,
+   "te_ms": 40.0,
+   "ti_ms": null,
+   "flip_deg": 15.0,
+   "image_type": [
+    "M",
+    "ND",
+    "ORIGINAL",
+    "PRIMARY"
+   ],
+   "image_type_value1": [
+    "ORIGINAL"
+   ],
+   "contrast_agent": false,
+   "acq_rel_s": 1200.0,
+   "bolus_rel_s": null,
+   "extent_mm": 120.0,
+   "mixed": false,
+   "for_sha256": "f5",
+   "orientation": "AX",
+   "rows": 32,
+   "cols": 32,
+   "n_positions": 60,
+   "pos_min": -60.0,
+   "pos_max": 58.0,
+   "parts": {
+    "mag": 60
+   },
+   "echoes": null
+  }
+ },
+ "cases": [
+  {
+   "id": "OC-01",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "expected_categories": [],
+   "work": "BRAVO parameters meet T1_3D_IRGRE; no contrast evidence; extent 120"
+  },
+  {
+   "id": "OC-02",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "set": {
+    "t1": {
+     "bolus_rel_s": 200.0
+    }
+   },
+   "expected_categories": [
+    "contrast"
+   ],
+   "work": "bolus 200 s before acquisition 300 s on a precontrast choice"
+  },
+  {
+   "id": "OC-03",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "set": {
+    "t1": {
+     "contrast_agent": true
+    }
+   },
+   "expected_categories": [
+    "contrast"
+   ],
+   "work": "agent tag, no bolus time, and the T2 lacks the tag"
+  },
+  {
+   "id": "OC-04",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "set": {
+    "t1": {
+     "contrast_agent": true
+    },
+    "t2": {
+     "contrast_agent": true
+    },
+    "flair": {
+     "contrast_agent": true
+    },
+    "dwi": {
+     "contrast_agent": true
+    },
+    "swi": {
+     "contrast_agent": true
+    }
+   },
+   "expected_categories": [],
+   "work": "the tag is on every MR series, so it says nothing about this series: not flagged (R4-OR-04)"
+  },
+  {
+   "id": "OC-05",
+   "role": "T1_POST",
+   "members": [
+    "t1"
+   ],
+   "set": {
+    "t1": {
+     "bolus_rel_s": 400.0,
+     "contrast_agent": true
+    }
+   },
+   "expected_categories": [
+    "contrast"
+   ],
+   "work": "bolus 400 s after acquisition 300 s on a postcontrast choice"
+  },
+  {
+   "id": "OC-05B",
+   "role": "T1_POST",
+   "members": [
+    "t1"
+   ],
+   "set": {
+    "t1": {
+     "bolus_rel_s": 200.0,
+     "contrast_agent": true
+    }
+   },
+   "expected_categories": [],
+   "work": "bolus before acquisition: consistent with post"
+  },
+  {
+   "id": "OC-06",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "set": {
+    "t1": {
+     "image_type": [
+      "AVERAGE",
+      "DERIVED",
+      "REFORMATTED",
+      "SECONDARY"
+     ],
+     "image_type_value1": [
+      "DERIVED"
+     ]
+    }
+   },
+   "expected_categories": [
+    "derived_as_native"
+   ],
+   "work": "GE reformat chosen as the native"
+  },
+  {
+   "id": "OC-06B",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "set": {
+    "t1": {
+     "image_type": [
+      "ORIGINAL",
+      "PRIMARY",
+      "MNIP"
+     ],
+     "image_type_value1": [
+      "ORIGINAL"
+     ]
+    }
+   },
+   "expected_categories": [
+    "derived_as_native"
+   ],
+   "work": "projection token with value 1 ORIGINAL"
+  },
+  {
+   "id": "OC-07",
+   "role": "T1",
+   "members": [
+    "flair"
+   ],
+   "expected_categories": [
+    "modality"
+   ],
+   "work": "FLAIR parameters (SE IR, TI 1700, TR 6000, TE 120) match no T1 family"
+  },
+  {
+   "id": "OC-08",
+   "role": "FLAIR",
+   "members": [
+    "flair"
+   ],
+   "expected_categories": [],
+   "work": "FLAIR_3D"
+  },
+  {
+   "id": "OC-08B",
+   "role": "FLAIR",
+   "members": [
+    "t2"
+   ],
+   "expected_categories": [
+    "modality"
+   ],
+   "work": "T2_2D_TSE parameters match no FLAIR family"
+  },
+  {
+   "id": "OC-08C",
+   "role": "T2",
+   "members": [
+    "t2"
+   ],
+   "expected_categories": [],
+   "work": "T2_2D_TSE; TI 0 is no inversion"
+  },
+  {
+   "id": "OC-09",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "extent_mm": 109.9,
+   "expected_categories": [
+    "coverage"
+   ],
+   "work": "109.9 < 110"
+  },
+  {
+   "id": "OC-09B",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "extent_mm": 110.0,
+   "expected_categories": [],
+   "work": "110.0 is not below 110"
+  },
+  {
+   "id": "OC-10",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "volume": {
+    "shape": [
+     32,
+     32,
+     119
+    ],
+    "rows": 32,
+    "cols": 32,
+    "n_slices": 120
+   },
+   "expected_categories": [
+    "slice_count"
+   ],
+   "work": "119 slices in the grid for 120 positions"
+  },
+  {
+   "id": "OC-10B",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "volume": {
+    "shape": [
+     120,
+     32,
+     32
+    ],
+    "rows": 32,
+    "cols": 32,
+    "n_slices": 120
+   },
+   "expected_categories": [],
+   "work": "rotated grid holds 32, 32, 120 in another order"
+  },
+  {
+   "id": "OC-11",
+   "role": "DWI",
+   "members": [
+    "dwi"
+   ],
+   "volume": {
+    "shape": [
+     32,
+     32,
+     28,
+     7
+    ],
+    "rows": 32,
+    "cols": 32,
+    "n_slices": 28,
+    "n_bvals": 6,
+    "b_values": [
+     0,
+     1000,
+     1000,
+     1000,
+     1000,
+     1000
+    ]
+   },
+   "expected_categories": [
+    "gradients"
+   ],
+   "work": "6 b-values for 7 volumes"
+  },
+  {
+   "id": "OC-11B",
+   "role": "DWI",
+   "members": [
+    "dwi"
+   ],
+   "volume": {
+    "shape": [
+     32,
+     32,
+     28,
+     7
+    ],
+    "rows": 32,
+    "cols": 32,
+    "n_slices": 28,
+    "n_bvals": 7,
+    "b_values": [
+     0,
+     1000,
+     1000,
+     1000,
+     1000,
+     1000,
+     1000
+    ]
+   },
+   "expected_categories": [],
+   "work": "counts agree; b 1000 present"
+  },
+  {
+   "id": "OC-12",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "set": {
+    "t1": {
+     "mixed": true
+    }
+   },
+   "expected_categories": [
+    "copies"
+   ],
+   "work": "a mixed series chosen without an override"
+  },
+  {
+   "id": "OC-12B",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "set": {
+    "t1": {
+     "mixed": true
+    }
+   },
+   "chosen_by_override": true,
+   "expected_categories": [],
+   "work": "chosen by an override: not flagged"
+  },
+  {
+   "id": "OC-13",
+   "role": "T1",
+   "members": [
+    "t1"
+   ],
+   "add": {
+    "t1copy": {
+     "from": "t1",
+     "series_key": "t1copy"
+    }
+   },
+   "expected_categories": [
+    "copies"
+   ],
+   "work": "another series with the same frame of reference, time, geometry, TR, TI, flip, TE and part"
+  },
+  {
+   "id": "OC-14",
+   "role": "DWI",
+   "members": [
+    "dwi"
+   ],
+   "volume": {
+    "shape": [
+     32,
+     32,
+     28,
+     2
+    ],
+    "rows": 32,
+    "cols": 32,
+    "n_slices": 28,
+    "n_bvals": 2,
+    "b_values": [
+     0,
+     50
+    ]
+   },
+   "expected_categories": [
+    "modality"
+   ],
+   "work": "no b-value above 50"
+  },
+  {
+   "id": "OC-15",
+   "role": "SWI",
+   "members": [
+    "swi"
+   ],
+   "expected_categories": [],
+   "work": "GR present"
+  },
+  {
+   "id": "OC-15B",
+   "role": "SWI",
+   "members": [
+    "swi"
+   ],
+   "set": {
+    "swi": {
+     "scan_seq": [
+      "SE"
+     ]
+    }
+   },
+   "expected_categories": [
+    "modality"
+   ],
+   "work": "ScanningSequence lacks GR"
+  }
+ ]
+}

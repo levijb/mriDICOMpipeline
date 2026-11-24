@@ -1,0 +1,19 @@
+{
+  "description": "Hand-worked cases for oracles/pixel_sampler.py (oracle rule 5). A 5-slice axial DICOM stack (8 x 8, PixelSpacing [2, 3]: 2 mm between rows, 3 mm between columns; IPP_k = (-10, -20, 5k); IOP (1,0,0, 0,1,0)) and a NIfTI built by hand from it. Five slices, not three: under the plan 3.6 mirror rule the middle slice of an odd stack mirrors onto itself and is never kept, so a 3-slice stack could not meet the 3-slice spread rule.",
+  "stack": {"rows": 8, "cols": 8, "slices": 5, "pixel_spacing": [2.0, 3.0], "iop": [1, 0, 0, 0, 1, 0], "first_position": [-10.0, -20.0, 0.0], "step_mm": 5.0},
+  "affine": [[-3.0, 0, 0, 10.0], [0, -2.0, 0, 20.0], [0, 0, 5.0, 0.0], [0, 0, 0, 1]],
+  "nifti_index_of_pixel": "(i, j, k) = (c, r, k)",
+  "work": "Pixel (r, c, k): LPS P = (-10 + 3c, -20 + 2r, 5k), so RAS = (10 - 3c, 20 - 2r, 5k). The affine maps voxel (i, j, k) to RAS (10 - 3i, 20 - 2j, 5k), so (i, j, k) = (c, r, k) and the NIfTI array is nifti[i, j, k] = dicom_k[r = j, c = i].",
+  "point": {"r": 1, "c": 2, "k": 1, "expected_ras": [4.0, 18.0, 5.0], "expected_voxel": [2, 1, 1]},
+  "cases": [
+    {"id": "PS-01", "nifti": "correct", "expected_status": "matched"},
+    {"id": "PS-01-FLIP0", "nifti": "flip axis 0", "expected_status": "mismatched"},
+    {"id": "PS-01-FLIP1", "nifti": "flip axis 1", "expected_status": "mismatched"},
+    {"id": "PS-01-FLIP2", "nifti": "flip axis 2", "expected_status": "mismatched"},
+    {"id": "PS-02", "nifti": "scaled: stored int16, scl_slope 2, scl_inter 10", "expected_status": "matched", "work": "dataobj returns 2*stored + 10; the sampler recovers stored = (value - 10) / 2"},
+    {"id": "PS-03", "nifti": "affine shifted by half a voxel along i", "expected_status": "mismatched", "work": "every voxel index is off by 0.5: 'off grid'"},
+    {"id": "PS-04", "nifti": "4D, two volumes stored in swapped order", "expected_status": "volume order differs", "work": "every sample of volume 0 is found at volume 1 and the reverse"},
+    {"id": "PS-05", "nifti": "flip axis 1", "ge_pepolar_mode": 1, "expected_status": "known GE row reversal", "work": "axis 1 of the NIfTI carries the DICOM row index (j = r), so flipping it reverses the row order; the DICOM marks GE epi_pepolar mode 1 (owner decision at G1)"},
+    {"id": "PS-05B", "nifti": "flip axis 1", "ge_pepolar_mode": 0, "expected_status": "mismatched", "work": "the same row reversal in a forward (mode 0) pepolar series is not explained"}
+  ]
+}

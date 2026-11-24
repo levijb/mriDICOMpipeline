@@ -1,0 +1,333 @@
+{
+ "description": "BIDS plan table (R4-BPL-01, R4-BPL-02): one case per row of bids-output-research.md tables 4.1 and 4.2, with the expected planned file(s) and export status. 'exam' names the catalog exam and series that supply the volume; 'input' describes a plan input where no catalog exam holds the case. Paths are relative to the BIDS root. Default contrast agent 'unknown' (4.1, 11). P and S.",
+ "source": "bids-output-research.md 4.1, 4.2, 4.3, 4.4, 4.5 and 11 (2026-11-20); BIDS 1.11",
+ "cases": [
+  {
+   "id": "P01",
+   "row": "T1",
+   "exam": [
+    "STR-01-GE-PREMIER-CENSUS",
+    "3"
+   ],
+   "files": [
+    "sub-S101/ses-20260725/anat/sub-S101_ses-20260725_T1w.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P02",
+   "row": "T1_POST",
+   "exam": [
+    "STR-04-GE-SESSION-F-CONTRAST",
+    "6"
+   ],
+   "files": [
+    "sub-S104/ses-20260803/anat/sub-S104_ses-20260803_ce-unknown_T1w.nii.gz"
+   ],
+   "sidecar_adds": {
+    "ContrastBolusIngredient": "UNKNOWN"
+   },
+   "status": "standard",
+   "oracle": "P,S",
+   "work": "default agent 'unknown' writes UNKNOWN (11)"
+  },
+  {
+   "id": "P03",
+   "row": "T2",
+   "exam": [
+    "STR-01-GE-PREMIER-CENSUS",
+    "2"
+   ],
+   "files": [
+    "sub-S101/ses-20260725/anat/sub-S101_ses-20260725_T2w.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P04",
+   "row": "FLAIR",
+   "exam": [
+    "STR-01-GE-PREMIER-CENSUS",
+    "4"
+   ],
+   "files": [
+    "sub-S101/ses-20260725/anat/sub-S101_ses-20260725_FLAIR.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P05",
+   "row": "DWI",
+   "exam": [
+    "DIF-01-GE-TENSOR-ADC-EADC",
+    "5"
+   ],
+   "files": [
+    "sub-S401/ses-20260910/dwi/sub-S401_ses-20260910_dwi.nii.gz",
+    "sub-S401/ses-20260910/dwi/sub-S401_ses-20260910_dwi.bval",
+    "sub-S401/ses-20260910/dwi/sub-S401_ses-20260910_dwi.bvec"
+   ],
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P06",
+   "row": "Reverse phase-encoding b0 partner",
+   "exam": [
+    "DIF-03-REVERSE-PE-B0",
+    "7"
+   ],
+   "files": [
+    "sub-S403/ses-20260912/fmap/sub-S403_ses-20260912_acq-dwi_dir-jneg_epi.nii.gz"
+   ],
+   "sidecar_adds": {
+    "IntendedFor": [
+     "bids::sub-S403/ses-20260912/dwi/sub-S403_ses-20260912_dwi.nii.gz"
+    ]
+   },
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P07",
+   "row": "ADC / EADC (linked)",
+   "exam": [
+    "DIF-01-GE-TENSOR-ADC-EADC",
+    "500,501"
+   ],
+   "files": [
+    "sub-S401/ses-20260910/dwi/sub-S401_ses-20260910_ADC.nii.gz",
+    "sub-S401/ses-20260910/dwi/sub-S401_ses-20260910_expADC.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S",
+   "work": "linked maps share the DWI's entities, which are none here"
+  },
+  {
+   "id": "P08",
+   "row": "Scanner trace image (DERIVED, TRACEW), linked",
+   "input": {
+    "role": "DWI",
+    "kind": "map",
+    "image_type": [
+     "DERIVED",
+     "PRIMARY",
+     "DIFFUSION",
+     "TRACEW",
+     "ND"
+    ],
+    "linked_to_selected_dwi": true,
+    "subject": "S900",
+    "session": "20261201"
+   },
+   "files": [
+    "sub-S900/ses-20261201/dwi/sub-S900_ses-20261201_trace.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P09",
+   "row": "GRE single echo",
+   "exam": [
+    "SUS-03-QSM-MULTI-ECHO",
+    "4"
+   ],
+   "files": [
+    "sub-S503/ses-20260922/anat/sub-S503_ses-20260922_T2starw.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P10",
+   "row": "GRE multi-echo",
+   "exam": [
+    "SUS-04-MULTI-ECHO-GRE",
+    "4"
+   ],
+   "files": [
+    "sub-S504/ses-20260923/anat/sub-S504_ses-20260923_echo-1_MEGRE.nii.gz",
+    "sub-S504/ses-20260923/anat/sub-S504_ses-20260923_echo-2_MEGRE.nii.gz",
+    "sub-S504/ses-20260923/anat/sub-S504_ses-20260923_echo-3_MEGRE.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P11",
+   "row": "QSM source echoes (native, magnitude and phase)",
+   "exam": [
+    "SUS-03-QSM-MULTI-ECHO",
+    "20"
+   ],
+   "files_pattern": "sub-S503/ses-20260922/anat/sub-S503_ses-20260922_acq-qsm_echo-{1..4}_part-{mag,phase}_MEGRE.nii.gz",
+   "n_files": 8,
+   "phase_sidecar_adds": {
+    "Units": "arbitrary"
+   },
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P12",
+   "row": "QSM map (derived, image type QSM)",
+   "exam": [
+    "SUS-03-QSM-MULTI-ECHO",
+    "30"
+   ],
+   "files": [
+    "sub-S503/ses-20260922/anat/sub-S503_ses-20260922_acq-qsm_QSM.nii.gz"
+   ],
+   "status": "conventional",
+   "bidsignore": "**/*_QSM.*",
+   "oracle": "P"
+  },
+  {
+   "id": "P13",
+   "row": "SWI magnitude originals",
+   "exam": [
+    "SUS-01-SIEMENS-SWI-BUNDLE",
+    "10"
+   ],
+   "files": [
+    "sub-S501/ses-20260920/anat/sub-S501_ses-20260920_acq-swi_part-mag_T2starw.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P14",
+   "row": "SWI phase originals (SWI_PHASE)",
+   "exam": [
+    "SUS-01-SIEMENS-SWI-BUNDLE",
+    "11"
+   ],
+   "files": [
+    "sub-S501/ses-20260920/anat/sub-S501_ses-20260920_acq-swi_part-phase_T2starw.nii.gz"
+   ],
+   "sidecar_adds": {
+    "Units": "arbitrary"
+   },
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P15",
+   "row": "Scanner-processed SWI",
+   "exam": [
+    "SUS-01-SIEMENS-SWI-BUNDLE",
+    "12"
+   ],
+   "files": [
+    "sub-S501/ses-20260920/anat/sub-S501_ses-20260920_acq-swi_swi.nii.gz"
+   ],
+   "status": "conventional",
+   "bidsignore": "**/*_swi.*",
+   "oracle": "P"
+  },
+  {
+   "id": "P16",
+   "row": "SWI_MINIP",
+   "exam": [
+    "SUS-01-SIEMENS-SWI-BUNDLE",
+    "13"
+   ],
+   "files": [
+    "sub-S501/ses-20260920/anat/sub-S501_ses-20260920_acq-swi_minIP.nii.gz"
+   ],
+   "status": "conventional",
+   "bidsignore": "**/*_minIP.*",
+   "oracle": "P"
+  },
+  {
+   "id": "P17",
+   "row": "MRA (kept role, two acquisitions) and its MIP",
+   "exam": [
+    "KR-01-TOF-MIP-LOCALIZER",
+    "6,7,600"
+   ],
+   "files": [
+    "sub-S901/ses-20261005/anat/sub-S901_ses-20261005_run-1_angio.nii.gz",
+    "sub-S901/ses-20261005/anat/sub-S901_ses-20261005_run-2_angio.nii.gz",
+    "sub-S901/ses-20261005/anat/sub-S901_ses-20261005_rec-mip_angio.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S",
+   "judgment": "The two TOF acquisitions would share a name, so they are numbered run-1 and run-2 in series order (11, Runs). The MIP is named as in the 4.1 row and in section 11's run example, where a lone MRA MIP has no run. Section 11 also gives unlinked kept maps acq-unlinked, and a kept-role MIP has no parent, so the two passages point different ways for this case."
+  },
+  {
+   "id": "P18",
+   "row": "MRV",
+   "input": {
+    "role": "MRV",
+    "kind": "native",
+    "subject": "S900",
+    "session": "20261201"
+   },
+   "files": [
+    "sub-S900/ses-20261201/anat/sub-S900_ses-20261201_acq-mrv_angio.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P,S"
+  },
+  {
+   "id": "P19",
+   "row": "PERFUSION, LOCALIZER, UNCLASSIFIED",
+   "exam": [
+    "KR-01-TOF-MIP-LOCALIZER",
+    "1"
+   ],
+   "files": [],
+   "omitted": {
+    "1:*": "role_not_exported"
+   },
+   "status": "omitted",
+   "oracle": "P"
+  },
+  {
+   "id": "P20",
+   "row": "Map whose source is not exported (R4-BPL-05)",
+   "exam": [
+    "DIF-13-UNLINKED-ADC",
+    "500"
+   ],
+   "override": "choose the ADC map",
+   "files": [
+    "sub-S413/ses-20260922/dwi/sub-S413_ses-20260922_acq-unlinked_ADC.nii.gz"
+   ],
+   "status": "standard",
+   "oracle": "P",
+   "work": "11 Maps without their source"
+  },
+  {
+   "id": "P21",
+   "row": "dcm2niix _ADC companion of a DWI",
+   "exam": [
+    "DIF-12-GE-DWI-COMBINED-IMAGE",
+    "5"
+   ],
+   "files": [
+    "sub-S412/ses-20260921/dwi/sub-S412_ses-20260921_dwi.nii.gz",
+    "sub-S412/ses-20260921/dwi/sub-S412_ses-20260921_dwi.bval",
+    "sub-S412/ses-20260921/dwi/sub-S412_ses-20260921_dwi.bvec"
+   ],
+   "omitted_companions": {
+    "5:adc": "companion_not_exported"
+   },
+   "status": "standard",
+   "oracle": "P"
+  }
+ ],
+ "subject_ids": {
+  "refused": [
+   "S-1",
+   "S_1"
+  ],
+  "source": "bids-output-research.md 3 (--bids refuses an ID with - or _ rather than stripping characters)",
+  "oracle": "S,P"
+ }
+}

@@ -1,0 +1,2228 @@
+{
+ "catalog": "diffusion",
+ "description": "Diffusion families (spec 4.1). DWI series are axial 2D EPI, 32 x 32 over 240 mm, 28 slices of 4 mm. Gradient tables go into the DICOM through the standard diffusion attributes and the vendor tags dcm2niix reads. 'sidecar_hints' are what the fake converter writes in tier 2. The Siemens field-map fixtures carry the tags that make real dcm2niix write a signed phase-encoding direction and a readout time (source DCM2NIIX-SIEMENS-PE).",
+ "protocols_from": [
+  "structural"
+ ],
+ "sources": {
+  "SS-5.2": "scan-selection.md 5.2 (gradient statistics)",
+  "SS-5.4-DWI": "scan-selection.md 5.4 rule 3 and the DWI families",
+  "SS-6.4-7": "scan-selection.md 6.4 step 7 (reverse phase-encoding partner)",
+  "SS-6.5": "scan-selection.md 6.5 (derived roles)",
+  "SS-10.1-DWI": "scan-selection.md 10.1, cases 4, 7, 9 and 23-27",
+  "PS3.3-DIFF": "DICOM PS3.3 C.8.13.5.9 (MR diffusion attributes)",
+  "DCM2NIIX-SIEMENS-PE": "converter fact, checked on 2026-11-24 with dcm2niix v1.0.20261029 on synthetic series: (0019,1028) set to 20 yields TotalReadoutTime 0.0484375 s; a CSA image header item PhaseEncodingDirectionPositive of 0 yields 'j' and of 1 yields 'j-'; without that item only PhaseEncodingAxis appears",
+  "BIDS-4.3": "bids-output-research.md 4.3 (when a partner becomes a field map, and the omission reasons), 2.3 (dir labels), 2.4 (IntendedFor URIs)",
+  "BIDS-4.4": "bids-output-research.md 4.4 (companions) and 11 (maps without an exported source)",
+  "README-GE-COMBINED": "README, Parallel work and recovery (GE combined diffusion image becomes an _ADC companion); scan-selection.md 5.2",
+  "SS-6.5-UNLINKED": "scan-selection.md 5.6 (unlinked), 6.5 step 6, 6.6 (fates)"
+ },
+ "protocols": {
+  "GE_DWI": {
+   "base": "GE_PREMIER",
+   "tags": {
+    "MRAcquisitionType": [
+     "2D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "EP",
+      "SE"
+     ],
+     "SS-10.1-DWI"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SS"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "EPI_GEMS"
+     ],
+     "VEN"
+    ],
+    "SequenceName": [
+     "epi2",
+     "R4"
+    ],
+    "RepetitionTime": [
+     6000,
+     "SS-10.1-DWI"
+    ],
+    "FlipAngle": [
+     90,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     4.0,
+     "R4"
+    ],
+    "SpacingBetweenSlices": [
+     4.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      0,
+      128,
+      128,
+      0
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "COL",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "OTHER"
+     ],
+     "R4"
+    ],
+    "SeriesDescription": [
+     "AX DWI",
+     "R4"
+    ]
+   },
+   "echoes": [
+    80
+   ],
+   "slices": 28,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -50.0
+    ],
+    "step_mm": 4.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "DWI",
+    "CLS"
+   ]
+  },
+  "GE_DWI_MAP": {
+   "base": "GE_DWI",
+   "tags": {
+    "SeriesDescription": [
+     "ADC (10^-6 mm2/s)",
+     "R4"
+    ]
+   },
+   "gradients": null,
+   "folder": [
+    "ADC",
+    "CLS"
+   ]
+  },
+  "SIEMENS_DWI": {
+   "base": "SIEMENS_AERA",
+   "tags": {
+    "MRAcquisitionType": [
+     "2D",
+     "R4"
+    ],
+    "ScanningSequence": [
+     [
+      "EP"
+     ],
+     "VEN"
+    ],
+    "SequenceVariant": [
+     [
+      "SK",
+      "SP"
+     ],
+     "VEN"
+    ],
+    "ScanOptions": [
+     [
+      "PFP",
+      "FS"
+     ],
+     "R4"
+    ],
+    "SequenceName": [
+     "ep_b",
+     "R4"
+    ],
+    "RepetitionTime": [
+     6000,
+     "R4"
+    ],
+    "FlipAngle": [
+     90,
+     "R4"
+    ],
+    "EchoTrainLength": [
+     1,
+     "R4"
+    ],
+    "SliceThickness": [
+     4.0,
+     "R4"
+    ],
+    "SpacingBetweenSlices": [
+     4.0,
+     "R4"
+    ],
+    "AcquisitionMatrix": [
+     [
+      128,
+      0,
+      0,
+      128
+     ],
+     "R4"
+    ],
+    "InPlanePhaseEncodingDirection": [
+     "COL",
+     "R4"
+    ],
+    "ImageType": [
+     [
+      "ORIGINAL",
+      "PRIMARY",
+      "DIFFUSION",
+      "NONE",
+      "ND"
+     ],
+     "VEN"
+    ],
+    "SeriesDescription": [
+     "ep2d_diff_DTI_tra",
+     "R4"
+    ],
+    "ProtocolName": [
+     "ep2d_diff_DTI_tra",
+     "R4"
+    ]
+   },
+   "echoes": [
+    89
+   ],
+   "slices": 28,
+   "geometry": {
+    "iop": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0
+    ],
+    "first_position": [
+     -120.0,
+     -120.0,
+     -50.0
+    ],
+    "step_mm": 4.0,
+    "pixel_spacing": [
+     7.5,
+     7.5
+    ],
+    "rows": 32,
+    "cols": 32
+   },
+   "folder": [
+    "DWI",
+    "CLS"
+   ]
+  },
+  "SIEMENS_DWI_PE": {
+   "base": "SIEMENS_DWI",
+   "private_tags": [
+    {
+     "tag": "0019,1028",
+     "creator": "SIEMENS MR HEADER",
+     "vr": "FD",
+     "value": 20.0,
+     "source": "DCM2NIIX-SIEMENS-PE"
+    },
+    {
+     "tag": "0029,1010",
+     "creator": "SIEMENS CSA HEADER",
+     "vr": "OB",
+     "csa": {
+      "PhaseEncodingDirectionPositive": "0"
+     },
+     "source": "DCM2NIIX-SIEMENS-PE"
+    }
+   ],
+   "sidecar_hints": {
+    "PhaseEncodingDirection": "j",
+    "TotalReadoutTime": 0.0484375
+   },
+   "gradients": {
+    "bvals": [
+     0,
+     1000,
+     1000,
+     1000,
+     1000,
+     1000,
+     1000
+    ],
+    "bvecs": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      1,
+      0
+     ],
+     [
+      0,
+      0,
+      1
+     ],
+     [
+      0.7071067811865476,
+      0.7071067811865476,
+      0
+     ],
+     [
+      0.7071067811865476,
+      0,
+      0.7071067811865476
+     ],
+     [
+      0,
+      0.7071067811865476,
+      0.7071067811865476
+     ]
+    ],
+    "source": "SS-5.2"
+   },
+   "tags": {
+    "SeriesNumber": [
+     5,
+     "R4"
+    ],
+    "SeriesTime": [
+     "090500",
+     "R4"
+    ],
+    "AcquisitionTime": [
+     "090510",
+     "R4"
+    ]
+   },
+   "facts": {
+    "orientation": "AX",
+    "n_positions": 28,
+    "pos_min": -50.0,
+    "pos_max": 58.0,
+    "step_mm": 4.0,
+    "extent_mm": 112.0,
+    "uniform_spacing": true,
+    "acq_rel_s": 0.0,
+    "series_rel_s": -10.0,
+    "bolus_rel_s": null,
+    "desc_tokens": [
+     "DTI"
+    ]
+   }
+  },
+  "SIEMENS_B0_REV": {
+   "base": "SIEMENS_DWI",
+   "private_tags": [
+    {
+     "tag": "0019,1028",
+     "creator": "SIEMENS MR HEADER",
+     "vr": "FD",
+     "value": 20.0,
+     "source": "DCM2NIIX-SIEMENS-PE"
+    },
+    {
+     "tag": "0029,1010",
+     "creator": "SIEMENS CSA HEADER",
+     "vr": "OB",
+     "csa": {
+      "PhaseEncodingDirectionPositive": "1"
+     },
+     "source": "DCM2NIIX-SIEMENS-PE"
+    }
+   ],
+   "sidecar_hints": {
+    "PhaseEncodingDirection": "j-",
+    "TotalReadoutTime": 0.0484375
+   },
+   "gradients": {
+    "bvals": [
+     0,
+     0
+    ],
+    "bvecs": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "source": "SS-5.2"
+   },
+   "geometry": {
+    "frame": 5
+   },
+   "tags": {
+    "SeriesNumber": [
+     7,
+     "R4"
+    ],
+    "SeriesTime": [
+     "091000",
+     "R4"
+    ],
+    "AcquisitionTime": [
+     "091010",
+     "R4"
+    ],
+    "SeriesDescription": [
+     "ep2d_diff_b0_PA",
+     "R4"
+    ],
+    "ProtocolName": [
+     "ep2d_diff_b0_PA",
+     "R4"
+    ]
+   },
+   "folder": [
+    "OTHER",
+    "CLS"
+   ],
+   "facts": {
+    "orientation": "AX",
+    "n_positions": 28,
+    "pos_min": -50.0,
+    "pos_max": 58.0,
+    "step_mm": 4.0,
+    "extent_mm": 112.0,
+    "uniform_spacing": true,
+    "acq_rel_s": 300.0,
+    "series_rel_s": 290.0,
+    "bolus_rel_s": null,
+    "desc_tokens": []
+   }
+  }
+ },
+ "exams": [
+  {
+   "id": "DIF-01-GE-TENSOR-ADC-EADC",
+   "uid_exam": 401,
+   "family": "diffusion",
+   "description": "GE tensor DWI (1 b0 + 6 directions at b 1000) with a scanner ADC and an EADC map, both labelled ORIGINAL and sharing the DWI's frame of reference.",
+   "roster_rows": [
+    [
+     "S401",
+     "9/10/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260910",
+     "zip_name": "S401_20260910.zip",
+     "study_date": "20260910",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "GE_DWI",
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "gradients": {
+        "bvals": [
+         0,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000
+        ],
+        "bvecs": [
+         [
+          0,
+          0,
+          0
+         ],
+         [
+          1,
+          0,
+          0
+         ],
+         [
+          0,
+          1,
+          0
+         ],
+         [
+          0,
+          0,
+          1
+         ],
+         [
+          0.7071067811865476,
+          0.7071067811865476,
+          0
+         ],
+         [
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+         ],
+         [
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+         ]
+        ],
+        "source": "SS-5.2"
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "DWI"
+        ]
+       }
+      },
+      {
+       "uid_series": 500,
+       "protocol": "GE_DWI_MAP",
+       "geometry": {
+        "frame": 5
+       },
+       "tags": {
+        "SeriesNumber": [
+         500,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": 290.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "ADC"
+        ]
+       }
+      },
+      {
+       "uid_series": 501,
+       "protocol": "GE_DWI_MAP",
+       "geometry": {
+        "frame": 5
+       },
+       "tags": {
+        "SeriesNumber": [
+         501,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091100",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "EADC",
+         "R4"
+        ]
+       },
+       "folder": [
+        "EADC",
+        "CLS"
+       ],
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": 350.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "EADC"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-7": {
+     "outcome": {
+      "gradients": {
+       "5": {
+        "b0": 1,
+        "shells": [
+         1000
+        ],
+        "b_max": 1000,
+        "n_dirs": 6,
+        "mismatch": false
+       }
+      },
+      "families": {
+       "5": "DWI_TENSOR"
+      }
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 5.2, 5.4 DWI families; oracles/gradients.py"
+    },
+    "R-IDN-3": {
+     "outcome": {
+      "kinds": {
+       "5": "native",
+       "500": "map",
+       "501": "map"
+      },
+      "warnings": {
+       "500": [
+        "derived_by_role"
+       ],
+       "501": [
+        "derived_by_role"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 Derived (role ADC or EADC; ImageType ORIGINAL adds derived_by_role); 10.1 case 24"
+    },
+    "R-LNK-1": {
+     "outcome": {
+      "links": {
+       "500": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "5"
+        ]
+       },
+       "501": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "5"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.6 (maps: reference skipped, frame_of_reference leaves one)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "DWI": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "5"
+        ],
+        "tier": "tensor"
+       },
+       "ADC": {
+        "outcome": "selected",
+        "decided_by": "follows_source",
+        "winner": [
+         "500"
+        ]
+       },
+       "EADC": {
+        "outcome": "selected",
+        "decided_by": "follows_source",
+        "winner": [
+         "501"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4, 6.5 step 4; 10.1 case 24"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "5": [
+        "selected",
+        "DWI"
+       ],
+       "500": [
+        "selected_derived",
+        "ADC"
+       ],
+       "501": [
+        "selected_derived",
+        "EADC"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "DIF-02-TENSOR-VS-TRACE",
+   "uid_exam": 402,
+   "family": "diffusion",
+   "description": "A 6-direction tensor DWI and a 3-direction trace DWI on separate frames of reference, and a scanner ADC computed from the trace (its frame of reference).",
+   "roster_rows": [
+    [
+     "S402",
+     "9/11/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260911",
+     "zip_name": "S402_20260911.zip",
+     "study_date": "20260911",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "GE_DWI",
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "AX DTI",
+         "R4"
+        ]
+       },
+       "gradients": {
+        "bvals": [
+         0,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000
+        ],
+        "bvecs": [
+         [
+          0,
+          0,
+          0
+         ],
+         [
+          1,
+          0,
+          0
+         ],
+         [
+          0,
+          1,
+          0
+         ],
+         [
+          0,
+          0,
+          1
+         ],
+         [
+          0.7071067811865476,
+          0.7071067811865476,
+          0
+         ],
+         [
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+         ],
+         [
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+         ]
+        ],
+        "source": "SS-5.2"
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "DTI"
+        ]
+       }
+      },
+      {
+       "uid_series": 6,
+       "protocol": "GE_DWI",
+       "tags": {
+        "SeriesNumber": [
+         6,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "R4"
+        ],
+        "SeriesDescription": [
+         "AX DWI TRACE",
+         "R4"
+        ]
+       },
+       "gradients": {
+        "bvals": [
+         0,
+         1000,
+         1000,
+         1000
+        ],
+        "bvecs": [
+         [
+          0,
+          0,
+          0
+         ],
+         [
+          1,
+          0,
+          0
+         ],
+         [
+          0,
+          1,
+          0
+         ],
+         [
+          0,
+          0,
+          1
+         ]
+        ],
+        "source": "SS-5.2"
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 300.0,
+        "series_rel_s": 290.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "DWI",
+         "TRACE"
+        ]
+       }
+      },
+      {
+       "uid_series": 600,
+       "protocol": "GE_DWI_MAP",
+       "geometry": {
+        "frame": 6
+       },
+       "tags": {
+        "SeriesNumber": [
+         600,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "091010",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 300.0,
+        "series_rel_s": 590.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "ADC"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-7": {
+     "outcome": {
+      "families": {
+       "5": "DWI_TENSOR",
+       "6": "DWI_TRACE"
+      },
+      "gradients": {
+       "6": {
+        "b0": 1,
+        "shells": [
+         1000
+        ],
+        "b_max": 1000,
+        "n_dirs": 3,
+        "mismatch": false
+       }
+      }
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 5.2, 5.4"
+    },
+    "R-LNK-1": {
+     "outcome": {
+      "links": {
+       "600": {
+        "state": "linked",
+        "rung": "frame_of_reference",
+        "parent": [
+         "6"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.6"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "DWI": {
+        "outcome": "selected",
+        "decided_by": "tier",
+        "winner": [
+         "5"
+        ],
+        "runner_up": [
+         "6"
+        ],
+        "tier": "tensor"
+       },
+       "ADC": {
+        "outcome": "no_eligible_candidate",
+        "reasons_include": [
+         "source_not_selected"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.5 step 7; 10.1 case 23"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "5": [
+        "selected",
+        "DWI"
+       ],
+       "6": [
+        "alternative",
+        "OTHER/DWI"
+       ],
+       "600": [
+        null,
+        "OTHER/ADC"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6 and 6.5 step 7 (a map whose source lost is filed under OTHER/ADC); the design gives no fate name for series 600"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 0
+     },
+     "oracle": "P",
+     "source": "README Scan selection (no_eligible_candidate is not review)"
+    }
+   }
+  },
+  {
+   "id": "DIF-03-REVERSE-PE-B0",
+   "uid_exam": 403,
+   "family": "diffusion",
+   "description": "Siemens tensor DWI (CSA PhaseEncodingDirectionPositive 0: 'j') and a b0-only scan on the same frame of reference and grid with the opposite sign (1: 'j-'); both carry BandwidthPerPixelPhaseEncode, so dcm2niix writes TotalReadoutTime (BEX-02 case 1: same grid with readout times).",
+   "roster_rows": [
+    [
+     "S403",
+     "9/12/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260912",
+     "zip_name": "S403_20260912.zip",
+     "study_date": "20260912",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI_PE",
+       "facts": {}
+      },
+      {
+       "uid_series": 7,
+       "protocol": "SIEMENS_B0_REV",
+       "facts": {}
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "5": [
+        "DWI",
+        3
+       ],
+       "7": [
+        "DWI",
+        3
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rule 3 (b0-only scans have a .bval file)"
+    },
+    "R-IDN-7": {
+     "outcome": {
+      "families": {
+       "5": "DWI_TENSOR",
+       "7": "DWI_B0_ONLY"
+      }
+     },
+     "oracle": "P,C",
+     "source": "scan-selection.md 5.4"
+    },
+    "R-RNK-7": {
+     "outcome": {
+      "fates": {
+       "7": [
+        "companion",
+        "DWI"
+       ]
+      }
+     },
+     "oracle": "P,S",
+     "source": "scan-selection.md 6.4 step 7; 10.1 case 27"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "DWI": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "5"
+        ],
+        "tier": "tensor"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.2 (b0_only is confirmed), 6.4"
+    },
+    "R-BID-5": {
+     "outcome": {
+      "fmap": "fmap/sub-S403_ses-20260912_acq-dwi_dir-jneg_epi.nii.gz",
+      "intended_for": [
+       "bids::sub-S403/ses-20260912/dwi/sub-S403_ses-20260912_dwi.nii.gz"
+      ],
+      "fmap_sidecar": {
+       "PhaseEncodingDirection": "j-",
+       "TotalReadoutTime_positive": true
+      },
+      "phase_axis_same_image_axis_in_both": true,
+      "partner_bval_exported": false
+     },
+     "oracle": "S,T,P",
+     "source": "BIDS-4.3; BIDS 1.11 fmap case 4; NiBabel affine check of the phase-encoding axis (R4-BEX-02)"
+    },
+    "R-BID-5-DIR": {
+     "outcome": {
+      "dir_entity_on_every_exported_epi": true
+     },
+     "oracle": "P",
+     "source": "bids-output-research.md 2.3 and 4.3 (the export writes dir-<d> on every field map); owner decision at G1 2026-11-24: a policy expectation, since the BIDS schema makes dir optional on epi"
+    }
+   }
+  },
+  {
+   "id": "DIF-04-XA-DWI-NO-GRADIENTS",
+   "uid_exam": 404,
+   "family": "diffusion",
+   "description": "Siemens XA classic DWI: ImageType carries DIFFUSION, four volumes, no diffusion tags, so dcm2niix writes no .bval/.bvec.",
+   "roster_rows": [
+    [
+     "S404",
+     "9/13/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260913",
+     "zip_name": "S404_20260913.zip",
+     "study_date": "20260913",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI",
+       "volumes": 4,
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ],
+        "Manufacturer": [
+         "Siemens Healthineers",
+         "VEN"
+        ],
+        "ManufacturerModelName": [
+         "MAGNETOM Vida",
+         "R4"
+        ],
+        "MagneticFieldStrength": [
+         2.89,
+         "R4"
+        ],
+        "SoftwareVersions": [
+         [
+          "syngo MR XA30"
+         ],
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "DTI"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-IDN-1": {
+     "outcome": {
+      "roles": {
+       "5": [
+        "DWI",
+        3
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 rule 3 (ImageType contains DIFFUSION)"
+    },
+    "R-IDN-7": {
+     "outcome": {
+      "families": {
+       "5": "DWI_UNKNOWN"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.4 (no gradient files)"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "DWI": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "no_gradient_table"
+        ]
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.2; 10.1 case 26"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "DIF-05-PARTNER-WITHOUT-READOUT",
+   "uid_exam": 405,
+   "family": "diffusion",
+   "description": "DIF-03 with the partner lacking BandwidthPerPixelPhaseEncode, so its sidecar has no TotalReadoutTime (BEX-02 case 2).",
+   "roster_rows": [
+    [
+     "S405",
+     "9/14/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260914",
+     "zip_name": "S405_20260914.zip",
+     "study_date": "20260914",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI_PE",
+       "facts": {}
+      },
+      {
+       "uid_series": 7,
+       "protocol": "SIEMENS_B0_REV",
+       "facts": {},
+       "private_tags": [
+        {
+         "tag": "0029,1010",
+         "creator": "SIEMENS CSA HEADER",
+         "vr": "OB",
+         "csa": {
+          "PhaseEncodingDirectionPositive": "1"
+         },
+         "source": "DCM2NIIX-SIEMENS-PE"
+        }
+       ],
+       "sidecar_hints": {
+        "PhaseEncodingDirection": "j-"
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-RNK-7": {
+     "outcome": {
+      "fates": {
+       "7": [
+        "companion",
+        "DWI"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 7 (readout times are not compared)"
+    },
+    "R-BID-5": {
+     "outcome": {
+      "fmap": null,
+      "omitted": {
+       "7": "missing_readout_metadata"
+      },
+      "dangling_intended_for": false
+     },
+     "oracle": "P,S",
+     "source": "BIDS-4.3"
+    }
+   }
+  },
+  {
+   "id": "DIF-06-DWI-WITHOUT-READOUT",
+   "uid_exam": 406,
+   "family": "diffusion",
+   "description": "DIF-03 with the DWI lacking BandwidthPerPixelPhaseEncode (no TotalReadoutTime on the DWI; BEX-02 case 3).",
+   "roster_rows": [
+    [
+     "S406",
+     "9/15/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260915",
+     "zip_name": "S406_20260915.zip",
+     "study_date": "20260915",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI_PE",
+       "facts": {},
+       "private_tags": [
+        {
+         "tag": "0029,1010",
+         "creator": "SIEMENS CSA HEADER",
+         "vr": "OB",
+         "csa": {
+          "PhaseEncodingDirectionPositive": "0"
+         },
+         "source": "DCM2NIIX-SIEMENS-PE"
+        }
+       ],
+       "sidecar_hints": {
+        "PhaseEncodingDirection": "j"
+       }
+      },
+      {
+       "uid_series": 7,
+       "protocol": "SIEMENS_B0_REV",
+       "facts": {}
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-RNK-7": {
+     "outcome": {
+      "fates": {
+       "7": [
+        "companion",
+        "DWI"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 7"
+    },
+    "R-BID-5": {
+     "outcome": {
+      "fmap": null,
+      "omitted": {
+       "7": "missing_readout_metadata"
+      },
+      "dangling_intended_for": false
+     },
+     "oracle": "P,S",
+     "source": "BIDS-4.3 (the corrected image needs TotalReadoutTime too)"
+    }
+   }
+  },
+  {
+   "id": "DIF-07-PARTNER-SHIFTED-GRID",
+   "uid_exam": 407,
+   "family": "diffusion",
+   "description": "The partner's grid is shifted 3 mm along x (same frame of reference, orientation, rows and columns), more than half the smallest voxel side (0.5 x 4 mm = 2 mm; BEX-02 case 4).",
+   "roster_rows": [
+    [
+     "S407",
+     "9/16/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260916",
+     "zip_name": "S407_20260916.zip",
+     "study_date": "20260916",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI_PE",
+       "facts": {}
+      },
+      {
+       "uid_series": 7,
+       "protocol": "SIEMENS_B0_REV",
+       "geometry": {
+        "first_position": [
+         -117.0,
+         -120.0,
+         -50.0
+        ]
+       },
+       "facts": {}
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-RNK-7": {
+     "outcome": {
+      "fates": {
+       "7": [
+        "companion",
+        "DWI"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 7 (no voxel-position comparison; bids-output-research.md 4.3)"
+    },
+    "R-BID-5": {
+     "outcome": {
+      "fmap": null,
+      "omitted": {
+       "7": "grid_mismatch"
+      },
+      "dangling_intended_for": false
+     },
+     "oracle": "P,C,T",
+     "source": "BIDS-4.3; oracles/geometry.same_grid on the NiBabel affines (R4-GEO-02)"
+    }
+   }
+  },
+  {
+   "id": "DIF-08-PARTNER-ROTATED-GRID",
+   "uid_exam": 408,
+   "family": "diffusion",
+   "description": "The partner is tilted 10 degrees about x: still AX (normal (0, 0.1736, 0.9848)), same rows and columns, so a 6.4 partner, but its grid differs (BEX-02 case 5). Positions: (-120,-120,-50) . (0, sin 10, cos 10) = -20.8378 - 49.2404 = -70.0782.",
+   "roster_rows": [
+    [
+     "S408",
+     "9/17/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260917",
+     "zip_name": "S408_20260917.zip",
+     "study_date": "20260917",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI_PE",
+       "facts": {}
+      },
+      {
+       "uid_series": 7,
+       "protocol": "SIEMENS_B0_REV",
+       "geometry": {
+        "iop": [
+         1,
+         0,
+         0,
+         0,
+         0.984807753012208,
+         -0.17364817766693
+        ]
+       },
+       "facts": {
+        "pos_min": -70.0782,
+        "pos_max": 37.9218
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-RNK-7": {
+     "outcome": {
+      "fates": {
+       "7": [
+        "companion",
+        "DWI"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 7 (orientation category, rows and columns only)"
+    },
+    "R-BID-5": {
+     "outcome": {
+      "fmap": null,
+      "omitted": {
+       "7": "grid_mismatch"
+      },
+      "dangling_intended_for": false
+     },
+     "oracle": "P,C,T",
+     "source": "BIDS-4.3; oracles/geometry.same_grid"
+    }
+   }
+  },
+  {
+   "id": "DIF-09-DWI-NOT-EXPORTED",
+   "uid_exam": 409,
+   "family": "diffusion",
+   "description": "DIF-03 plus a T2, exported with --modalities T2, so the DWI is not exported (BEX-02 case 6).",
+   "roster_rows": [
+    [
+     "S409",
+     "9/18/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260918",
+     "zip_name": "S409_20260918.zip",
+     "study_date": "20260918",
+     "study_time": "085500",
+     "series": [
+      {
+       "uid_series": 2,
+       "protocol": "AERA_T2_TSE",
+       "tags": {
+        "SeriesNumber": [
+         2,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090010",
+         "R4"
+        ]
+       }
+      },
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI_PE"
+      },
+      {
+       "uid_series": 7,
+       "protocol": "SIEMENS_B0_REV"
+      }
+     ]
+    }
+   ],
+   "run_options": [
+    "--bids",
+    "--publish",
+    "--modalities",
+    "T2"
+   ],
+   "expected": {
+    "R-BID-5": {
+     "outcome": {
+      "fmap": null,
+      "dwi": null,
+      "exported_anat": [
+       "anat/sub-S409_ses-20260918_T2w.nii.gz"
+      ],
+      "intended_for_anywhere": false
+     },
+     "oracle": "P",
+     "source": "BIDS-4.3 (target_not_exported); bids-output-research.md 4.4 rules 2-3 (IntendedFor never points at an omitted file); README --modalities"
+    }
+   }
+  },
+  {
+   "id": "DIF-10-PARTNER-SAME-SIGN",
+   "uid_exam": 410,
+   "family": "diffusion",
+   "description": "The b0-only scan has the same phase-encoding sign as the DWI (both CSA 0: 'j').",
+   "roster_rows": [
+    [
+     "S410",
+     "9/19/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260919",
+     "zip_name": "S410_20260919.zip",
+     "study_date": "20260919",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI_PE",
+       "facts": {}
+      },
+      {
+       "uid_series": 7,
+       "protocol": "SIEMENS_B0_REV",
+       "facts": {},
+       "private_tags": [
+        {
+         "tag": "0019,1028",
+         "creator": "SIEMENS MR HEADER",
+         "vr": "FD",
+         "value": 20.0,
+         "source": "DCM2NIIX-SIEMENS-PE"
+        },
+        {
+         "tag": "0029,1010",
+         "creator": "SIEMENS CSA HEADER",
+         "vr": "OB",
+         "csa": {
+          "PhaseEncodingDirectionPositive": "0"
+         },
+         "source": "DCM2NIIX-SIEMENS-PE"
+        }
+       ],
+       "sidecar_hints": {
+        "PhaseEncodingDirection": "j",
+        "TotalReadoutTime": 0.0484375
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-RNK-7": {
+     "outcome": {
+      "reasons": {
+       "7": [
+        "b0_only"
+       ]
+      },
+      "fates": {
+       "7": [
+        "excluded",
+        "OTHER/DWI"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 7 and 6.2 b0_only; 10.1 case 27"
+    },
+    "R-BID-5": {
+     "outcome": {
+      "fmap": null
+     },
+     "oracle": "P",
+     "source": "BIDS-4.3 (only companions become field maps)"
+    }
+   }
+  },
+  {
+   "id": "DIF-11-PARTNER-NO-SIGN",
+   "uid_exam": 411,
+   "family": "diffusion",
+   "description": "The b0-only scan has no CSA polarity item, so dcm2niix writes only PhaseEncodingAxis (no signed PhaseEncodingDirection).",
+   "roster_rows": [
+    [
+     "S411",
+     "9/20/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260920",
+     "zip_name": "S411_20260920.zip",
+     "study_date": "20260920",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI_PE",
+       "facts": {}
+      },
+      {
+       "uid_series": 7,
+       "protocol": "SIEMENS_B0_REV",
+       "facts": {},
+       "private_tags": [
+        {
+         "tag": "0019,1028",
+         "creator": "SIEMENS MR HEADER",
+         "vr": "FD",
+         "value": 20.0,
+         "source": "DCM2NIIX-SIEMENS-PE"
+        }
+       ],
+       "sidecar_hints": {
+        "PhaseEncodingAxis": "j",
+        "TotalReadoutTime": 0.0484375
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-RNK-7": {
+     "outcome": {
+      "reasons": {
+       "7": [
+        "b0_only"
+       ]
+      },
+      "fates": {
+       "7": [
+        "excluded",
+        "OTHER/DWI"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 7 (a partner needs a signed phase-encoding direction on both scans)"
+    },
+    "R-BID-5": {
+     "outcome": {
+      "fmap": null
+     },
+     "oracle": "P",
+     "source": "BIDS-4.3"
+    }
+   }
+  },
+  {
+   "id": "DIF-12-GE-DWI-COMBINED-IMAGE",
+   "uid_exam": 412,
+   "family": "diffusion",
+   "description": "GE tensor DWI whose series also holds the combined image (a b 1000 volume with a zero gradient vector) after the six directions.",
+   "roster_rows": [
+    [
+     "S412",
+     "9/21/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260921",
+     "zip_name": "S412_20260921.zip",
+     "study_date": "20260921",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "GE_DWI",
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "gradients": {
+        "bvals": [
+         0,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000
+        ],
+        "bvecs": [
+         [
+          0,
+          0,
+          0
+         ],
+         [
+          1,
+          0,
+          0
+         ],
+         [
+          0,
+          1,
+          0
+         ],
+         [
+          0,
+          0,
+          1
+         ],
+         [
+          0.7071067811865476,
+          0.7071067811865476,
+          0
+         ],
+         [
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+         ],
+         [
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+         ],
+         [
+          0,
+          0,
+          0
+         ]
+        ],
+        "source": "README-GE-COMBINED"
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "DWI"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-HDR-5": {
+     "outcome": {
+      "5": {
+       "companions": [
+        "adc",
+        "bval",
+        "bvec"
+       ],
+       "dims4": 7,
+       "gradients": {
+        "n_volumes": 7,
+        "b0": 1,
+        "shells": [
+         1000
+        ],
+        "n_dirs": 6,
+        "mismatch": false
+       }
+      }
+     },
+     "oracle": "T,C",
+     "source": "README-GE-COMBINED (dcm2niix moves the combined image into the _ADC companion); NiBabel; oracles/gradients.py"
+    },
+    "R-RNK-3": {
+     "outcome": {
+      "decisions": {
+       "DWI": {
+        "outcome": "selected",
+        "decided_by": "only_eligible",
+        "winner": [
+         "5"
+        ],
+        "tier": "tensor"
+       },
+       "ADC": {
+        "outcome": "missing"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 5.2 (the _ADC companion is never an ADC map), 6.4"
+    },
+    "R-RNK-6": {
+     "outcome": {
+      "fates": {
+       "5": [
+        "selected",
+        "DWI"
+       ]
+      },
+      "companion_with": {
+       "5:adc": "DWI"
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.6 (a volume's companions go where it goes)"
+    },
+    "R-BID-4": {
+     "outcome": {
+      "exported_companions": [],
+      "omitted_companions": {
+       "5:adc": "companion_not_exported"
+      }
+     },
+     "oracle": "P",
+     "source": "BIDS-4.4"
+    }
+   }
+  },
+  {
+   "id": "DIF-13-UNLINKED-ADC",
+   "uid_exam": 413,
+   "family": "diffusion",
+   "description": "A GE tensor DWI and a scanner ADC map whose frame of reference matches no series (frame 99), so the ladder leaves no parent (R4-LNK-03).",
+   "roster_rows": [
+    [
+     "S413",
+     "9/22/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260922",
+     "zip_name": "S413_20260922.zip",
+     "study_date": "20260922",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "GE_DWI",
+       "tags": {
+        "SeriesNumber": [
+         5,
+         "R4"
+        ],
+        "SeriesTime": [
+         "090500",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "gradients": {
+        "bvals": [
+         0,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000,
+         1000
+        ],
+        "bvecs": [
+         [
+          0,
+          0,
+          0
+         ],
+         [
+          1,
+          0,
+          0
+         ],
+         [
+          0,
+          1,
+          0
+         ],
+         [
+          0,
+          0,
+          1
+         ],
+         [
+          0.7071067811865476,
+          0.7071067811865476,
+          0
+         ],
+         [
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+         ],
+         [
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+         ]
+        ],
+        "source": "SS-5.2"
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": -10.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "AX",
+         "DWI"
+        ]
+       }
+      },
+      {
+       "uid_series": 500,
+       "protocol": "GE_DWI_MAP",
+       "geometry": {
+        "frame": 99
+       },
+       "tags": {
+        "SeriesNumber": [
+         500,
+         "R4"
+        ],
+        "SeriesTime": [
+         "091000",
+         "R4"
+        ],
+        "AcquisitionTime": [
+         "090510",
+         "R4"
+        ]
+       },
+       "facts": {
+        "orientation": "AX",
+        "n_positions": 28,
+        "pos_min": -50.0,
+        "pos_max": 58.0,
+        "step_mm": 4.0,
+        "extent_mm": 112.0,
+        "uniform_spacing": true,
+        "acq_rel_s": 0.0,
+        "series_rel_s": 290.0,
+        "bolus_rel_s": null,
+        "desc_tokens": [
+         "ADC"
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-LNK-1": {
+     "outcome": {
+      "links": {
+       "500": {
+        "state": "unlinked",
+        "rung": "frame_of_reference"
+       }
+      }
+     },
+     "oracle": "P",
+     "source": "SS-6.5-UNLINKED (reference skipped; frame_of_reference leaves none)"
+    },
+    "R-LNK-3": {
+     "outcome": {
+      "decisions": {
+       "ADC": {
+        "outcome": "review_required",
+        "reasons_include": [
+         "derived_unlinked"
+        ]
+       },
+       "DWI": {
+        "outcome": "selected",
+        "winner": [
+         "5"
+        ]
+       }
+      },
+      "fates": {
+       "500": [
+        [
+         "unlinked",
+         "pending_review"
+        ],
+        "OTHER/ADC"
+       ]
+      },
+      "not_in": [
+       "ADC/"
+      ]
+     },
+     "oracle": "P",
+     "source": "SS-6.5-UNLINKED; spec R4-LNK-03 (review, or fate unlinked in OTHER/ADC/)"
+    },
+    "R-REV-3": {
+     "outcome": {
+      "exit_code": 2
+     },
+     "oracle": "P",
+     "source": "README Scan selection"
+    }
+   }
+  },
+  {
+   "id": "DIF-14-PARTNER-AXIS-ORDER",
+   "uid_exam": 414,
+   "family": "diffusion",
+   "description": "The partner covers the same voxel centres as the DWI but with rows and columns swapped (IOP (0,1,0, 1,0,0), normal (0,0,-1)) and slices from z = 58 down to -50: the same physical grid in another axis order (R4-GEO-02).",
+   "roster_rows": [
+    [
+     "S414",
+     "9/23/2026"
+    ]
+   ],
+   "sessions": [
+    {
+     "label": "20260923",
+     "zip_name": "S414_20260923.zip",
+     "study_date": "20260923",
+     "study_time": "090000",
+     "series": [
+      {
+       "uid_series": 5,
+       "protocol": "SIEMENS_DWI_PE",
+       "facts": {}
+      },
+      {
+       "uid_series": 7,
+       "protocol": "SIEMENS_B0_REV",
+       "geometry": {
+        "iop": [
+         0,
+         1,
+         0,
+         1,
+         0,
+         0
+        ],
+        "first_position": [
+         -120.0,
+         -120.0,
+         58.0
+        ]
+       },
+       "facts": {
+        "pos_min": -58.0,
+        "pos_max": 50.0
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "R-RNK-7": {
+     "outcome": {
+      "fates": {
+       "7": [
+        "companion",
+        "DWI"
+       ]
+      }
+     },
+     "oracle": "P",
+     "source": "scan-selection.md 6.4 step 7 (orientation AX, 32 rows and columns)"
+    },
+    "R-GEO-3": {
+     "outcome": {
+      "rule": "the pipeline's field-map decision equals oracles/geometry.same_grid on the two converted affines; oracles/geometry.same_physical_grid_any_order is recorded beside it (both answers kept)"
+     },
+     "oracle": "T,C,P",
+     "source": "spec R4-GEO-02 (keep both answers for the axis-order case); BIDS-4.3"
+    }
+   }
+  }
+ ]
+}

@@ -18,6 +18,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Operating System :: POSIX :: Linux",
   "Operating System :: Microsoft :: Windows",
   "Topic :: Scientific/Engineering :: Medical Science Apps.",
@@ -28,6 +29,10 @@ test = ["pytest>=8,<10"]
 # setuptools 77 writes Metadata-Version 2.4. twine 5.1 rejects it (its pinned pkginfo is
 # too old); twine 6.1 reads metadata through packaging and checks it reliably.
 dev = ["pytest>=8,<10", "build>=1,<2", "twine>=6.1,<7"]
+# Round 4 test-only oracles and tools (spec D-6), pinned to the versions recorded at Gate G0.
+# PyBIDS, the BIDS validator and pip-audit stay out: on Python 3.15 PyBIDS pulls in docopt
+# built from source and a wrapt pre-release, which must not enter the gating test job.
+round4 = ["nibabel==5.5.0", "hypothesis==6.170.17", "coverage==7.17.5"]
 
 [project.scripts]
 mri-dicom-pipeline = "mri_dicom_pipeline.cli:main"
@@ -40,3 +45,9 @@ include = ["mri_dicom_pipeline*"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
+markers = [
+  "r4real: round 4 test that needs MRI_PIPELINE_DCM2NIIX (dcm2niix v1.0.20261029)",
+  "r4tool: round 4 test that needs the BIDS validator and PyBIDS",
+  "r4calib: round 4 oracle calibration on the public dcm_qa vendor datasets (D-13)",
+  "r4slow: round 4 slow test (package build and install)",
+]
