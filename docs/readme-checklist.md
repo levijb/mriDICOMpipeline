@@ -21,6 +21,7 @@ establishes it. Review this list whenever the README changes.
 | Obviously short uncompressed image objects are rejected; so is an object that looks cut off; other `DICM` files without a SOP class are left out; the reason gives the member's position, not its name | `test_inputs.py::test_image_shorter_than_its_declared_size_fails_the_zip`, `test_object_cut_inside_its_header_fails_the_zip`, `test_unreadable_member_named_dcm_fails_the_zip`, `test_dicm_file_without_an_image_class_is_left_out`, `test_big_endian_object_without_a_file_header_is_extracted` |
 | Viewer software, DICOMDIR indices and non-DICOM files are omitted; member paths are never extraction paths | `test_inputs.py::test_dicomdir_and_viewer_copies_are_omitted`, `test_member_names_never_become_paths`, `test_large_zero_filled_member_is_omitted_quickly` |
 | ZIPs are moved (or prepared in place in SubjectsSorted), never modified or deleted; unaccepted ZIPs stay | `test_inputs.py::test_sorted_zips_are_prepared_in_place_and_never_deleted`, `test_pipeline.py::test_duplicates_and_conflicts_are_cached` |
+| Upload folders left empty by the move are deleted; folders holding any file, hidden folders, top-level folders no ZIP moved out of and Uploads itself stay | `test_naming.py::test_folders_left_empty_by_moving_zips_out_of_uploads_are_deleted` |
 | An accepted canonical ZIP is immutable; outputs stay unchanged | `test_inputs.py::test_changed_canonical_zip_is_held_and_outputs_unchanged`, `test_canonical_conflict_blocks_conversion` |
 | A restored canonical ZIP is accepted without extracting again | `test_inputs.py::test_restored_canonical_zip_accepted_without_reextract` |
 | `--force-reextract` never accepts changed bytes | `test_inputs.py::test_force_reextract_refuses_changed_bytes` |
@@ -28,7 +29,7 @@ establishes it. Review this list whenever the README changes.
 | Byte-identical repeats are stored once; conflicting repeats and multi-study ZIPs are held | `test_inputs.py::test_repeated_identical_instances_written_once`, `test_conflicting_repeated_instance_held`, `test_multi_study_held_until_accepted` |
 | Free-space check before extraction | `test_inputs.py::test_free_space_check_refuses_extraction_and_keeps_zip` |
 | `prepare --audit` re-hashes canonical ZIPs; a changed-ZIP hold stays until the original bytes are back | `test_inputs.py::test_audit_rehashes_canonical_zip`, `test_changed_zip_hold_survives_plain_runs_until_the_bytes_are_back` |
-| A moved project is refused | `test_inputs.py::test_moved_project_refused` |
+| A moved project is refused by `prepare`, `convert` and `select` | `test_inputs.py::test_moved_project_refused_by_every_command` |
 | `--session` limits both commands | `test_inputs.py::test_session_filter_limits_prepare`, `test_conversion.py::test_session_filter_limits_work` |
 | `--limit N` selects work after cache checks | `test_project_configuration.py::test_limit_selects_new_work_after_cache_checks` |
 | Interrupted work is retried automatically, except an interrupted explicit reconversion | `test_recovery.py::test_interrupted_conversion_is_retried_by_the_next_plain_run`, `test_interrupted_explicit_reconversion_is_not_retried` |

@@ -148,6 +148,12 @@ once its size or modification time changes.
 
 Preparation moves accepted ZIPs into SubjectsSorted. It never modifies or
 deletes a ZIP, and a ZIP it cannot accept stays where it is, with an issue.
+At the end of the run it deletes the folders the moves left empty: in each
+top-level folder below `Uploads/` that a ZIP was moved out of, every empty
+folder goes (including ones that were already empty), then that top-level
+folder itself if nothing is left in it. A folder holding any file (a held
+ZIP, `desktop.ini`, notes) stays, as do hidden folders, links, top-level
+folders no ZIP was moved out of, and `Uploads/` itself.
 **An accepted ZIP in SubjectsSorted is immutable:** if different bytes appear
 at that path (for example a re-export copied over it), the session is held
 and its extraction and NIfTI outputs stay unchanged. A corrected export
@@ -214,8 +220,8 @@ receipt/inventory files in each session; deleting these removes the
 fast-resume information.
 
 State keeps absolute paths. **Moving a project is not supported yet:** when no
-recorded ZIP lies under the configured uploads folder, both commands refuse to
-run and say the project appears moved.
+recorded ZIP lies under the configured uploads folder, `prepare`, `convert` and
+`select` refuse to run and say the project appears moved.
 
 Unchanged failures/partial conversions are recorded and **not retried by
 default**, so repeated batches do not continually reprocess a known bad scan.
@@ -512,6 +518,9 @@ The outputs carry identifiers and dates through these channels, and the
 pipeline does not de-identify any of them:
 
 * file and folder names (subject ID and session date);
+* the paths of upload ZIPs below `Uploads/`, including the names of the
+  folders they were uploaded in, in `Reports/renamed_uploads.csv`,
+  `issues.csv`, the state files and the logs;
 * JSON sidecar fields (a selected technical list; no patient names, IDs or
   free text);
 * NIfTI header text, which dcm2niix fills with fields such as

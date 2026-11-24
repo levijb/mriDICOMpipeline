@@ -13,6 +13,7 @@ mean the run was stopped by SIGTERM or Ctrl+C.
 1.  Keep a copy of every ZIP outside the project. `prepare` moves accepted
     ZIPs into `DicomUploads/SubjectsSorted/` and never modifies or deletes
     them, but a separate copy protects against mistakes outside the pipeline.
+    Upload folders left empty by the move are deleted at the end of the run.
 2.  Put `sessions.csv` in the project folder and check that every subject ID
     and scan date is listed.
 3.  Put the ZIPs in `DicomUploads/Uploads/`, or, if they already have their

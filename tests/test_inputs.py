@@ -13,7 +13,7 @@ import zipfile
 from pydicom.uid import generate_uid
 import pytest
 
-from mri_dicom_pipeline import config, convert, fsutil, prepare
+from mri_dicom_pipeline import config, convert, fsutil, locks, prepare, runner
 from support import (OTHER_SOP_CLASSES, archive, archive_objects, archive_with_damaged_member, call,
                      csa_non_image_bytes, dicom_bytes, mr_series, other_class_objects, state)
 
@@ -103,12 +103,27 @@ def test_empty_state_adopts_matching_extraction(project, tmp_path, monkeypatch):
     assert state(project)['sessions'][KEY]['status'] == 'ready'
 
 
-def test_moved_project_refused(project, tmp_path, capsys):
+def test_moved_project_refused_by_every_command(project, tmp_path, converter, capsys):
+    """Every command refuses a moved project before writing state or output (select added 2026-11-24).
+
+    select used to read every session of a moved project as not converted and exit 0.
+    """
     prepared(project, tmp_path)
+    assert call(project, 'convert', '--dcm2niix-bin', converter) == 0
     moved = tmp_path / 'moved'
     project.rename(moved)
-    assert call(moved, 'prepare') == 2
-    assert 'appears moved' in capsys.readouterr().err
+    index = (moved / 'Reports/.state/index.json').read_bytes()
+    capsys.readouterr()
+    for phase, *extra in (['prepare'], ['convert', '--dcm2niix-bin', converter], ['select'], ['select', '--publish'],
+                          ['select', '--bids', '--publish']):
+        # select takes no --workers, which call() adds
+        code = runner.main(phase, ['--project-root', str(moved), *extra]) if phase == 'select' else call(moved, phase, *extra)
+        assert code == 2, (phase, extra)
+        assert 'appears moved' in capsys.readouterr().err, (phase, extra)
+    assert (moved / 'Reports/.state/index.json').read_bytes() == index
+    assert not (moved / 'Reports/.selection_cache').exists()
+    for output in ('Selected', 'BIDS'):  # the lock creates the output root; nothing else is written there
+        assert {p.name for p in (moved / output).iterdir()} == {locks.LOCK_NAME}, output
 
 
 def test_session_filter_limits_prepare(project, tmp_path):

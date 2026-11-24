@@ -29,7 +29,7 @@ from . import __version__, bids, config, convert, fsutil, identity, receipts, re
 from . import selection_identity as sid_
 from . import selection_metadata as meta
 from . import selection_rules as rules
-from .state import State
+from .state import State, refuse_moved_project
 
 OVERRIDE_ROLES = set(rules.RANKED) | set(rules.FOLLOWING)
 SELECTOR_VERSION = f"{__version__}+rules{rules.RULES_REVISION}"
@@ -618,11 +618,12 @@ def _run(cfg, roster_warnings, stopper, logger, summary):
             "selector_version": SELECTOR_VERSION}
     subjects = load_subjects(cfg.subjects, cfg.subject_column) if cfg.subjects else None
     overrides = load_overrides(cfg.overrides)
-    agent = bids_root(cfg, profile, logger)
     state = State(cfg.reports, cfg.run_id)
     if state.recovered_from_backup:
         logger.error("State index %s could not be read; using %s and its journals (read only)", state.path,
                      state.backup)
+    refuse_moved_project(cfg, state)  # before bids_root, which writes the BIDS marker
+    agent = bids_root(cfg, profile, logger)
     if cfg.publish and not cfg.dry_run:
         cleanup_output(cfg, logger)
     blocked, intent_keys = recovery.blocked_keys(state), _open_intent_keys(cfg)

@@ -7,6 +7,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import stat
 import tempfile
 import uuid
 import zipfile
@@ -233,8 +234,9 @@ def extract_archive(source, stage, stop=None, accept_multi_study=False):
 
 
 def move_archive(source, destination, cfg, fingerprint):
+    """Move an accepted ZIP to its canonical path; return whether it moved (False when already there)."""
     if source == destination:
-        return
+        return False
     fsutil.owned(source, cfg.uploads)
     fsutil.owned(destination, cfg.uploads / "SubjectsSorted")
     if fsutil.signature(source) != fingerprint:
@@ -245,6 +247,54 @@ def move_archive(source, destination, cfg, fingerprint):
     # Both locations are inside DicomUploads. Refuse cross-device moves rather
     # than silently copying/deleting sources on a differently mounted filesystem.
     fsutil.retry_locked(lambda: source.rename(destination))
+    return True
+
+
+def _plain_folder(path):
+    """A real folder: not a link, and on Windows not a junction or another reparse point."""
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    return stat.S_ISDIR(info.st_mode) and not getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+
+
+def _remove_empty(folder):
+    """Delete the empty folders in folder, deepest first, then folder itself if it is left empty; return the count."""
+    if not _plain_folder(folder):
+        return 0
+    try:
+        with os.scandir(folder) as entries:
+            names = [entry.path for entry in entries if not entry.name.startswith(".")]
+    except OSError:
+        return 0
+    removed = sum(_remove_empty(name) for name in names)  # files and links count 0
+    try:
+        # rmdir deletes only an empty folder: anything that arrived meanwhile keeps it.
+        fsutil.retry_locked(lambda: os.rmdir(folder))
+    except OSError:
+        return removed  # not empty, held open, or already gone
+    return removed + 1
+
+
+def remove_emptied_folders(cfg, moved, logger):
+    """Delete the folders in Uploads that moving ZIPs out of them left empty (owner request, 2026-11-24).
+
+    moved: the Uploads paths this run moved ZIPs from. In each top-level Uploads folder they came from,
+    every empty folder is deleted, deepest first, then the top-level folder itself if nothing is left.
+    A folder holding any file (a held ZIP, desktop.ini, notes) stays, as do hidden folders, links and
+    Uploads itself.
+    """
+    uploads, tops = cfg.uploads / "Uploads", set()
+    for path in map(Path, moved):
+        parts = path.relative_to(uploads).parts if path.is_relative_to(uploads) else ()
+        if len(parts) > 1:  # a ZIP directly in Uploads leaves no folder behind
+            tops.add(uploads / parts[0])
+    for top in sorted(tops):
+        removed = _remove_empty(top)
+        if removed:
+            logger.info("Removed %s empty folder%s left in %s after its ZIPs moved to SubjectsSorted",
+                        removed, "" if removed == 1 else "s", top)
 
 
 def prepare_one(candidate, previous, cfg, stop=None):
@@ -281,7 +331,8 @@ def prepare_one(candidate, previous, cfg, stop=None):
             # A published extraction that state does not record (Q12 adoption rule, D6).
             if not receipts.adoptable(destination, "extract", digest):
                 raise HoldError("The extraction on disk does not match this ZIP and was left untouched")
-            move_archive(source, canonical, cfg, fingerprint)
+            if move_archive(source, canonical, cfg, fingerprint):
+                event["moved_from"] = str(source)  # its emptied folders are deleted after the run
             active_source = canonical
             inventory = fsutil.read_json(destination / receipts.INVENTORY)
             event.update(outcome="adopted", note="published extraction adopted after checking every listed file",
@@ -319,7 +370,8 @@ def prepare_one(candidate, previous, cfg, stop=None):
                                     "--accept-date-mismatch SUBJECT/SESSION")
                 if stop is not None and stop.is_set():
                     raise InterruptedError("Preparation interrupted")
-                move_archive(source, canonical, cfg, fingerprint)
+                if move_archive(source, canonical, cfg, fingerprint):
+                    event["moved_from"] = str(source)
                 active_source = canonical
                 receipt_id = uuid.uuid4().hex
                 fsutil.atomic_json(stage / receipts.INVENTORY, inventory)

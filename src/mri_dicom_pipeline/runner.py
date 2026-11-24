@@ -20,7 +20,7 @@ import threading
 import time
 
 from . import config, convert, identity, locks, naming, prepare, recovery, reports, selection
-from .state import State
+from .state import State, refuse_moved_project
 
 
 class StopSignal:
@@ -42,18 +42,6 @@ class StopSignal:
 # Run-summary counter for each worker outcome; anything else counts as completed.
 OUTCOME_COUNTERS = {"duplicate": "duplicate", "failed": "failed", "interrupted": "failed",
                     "held": "held", "refresh": "cached"}
-
-
-def refuse_moved_project(cfg, state):
-    """Refuse to run when no recorded canonical ZIP lies under the uploads root (Q23).
-
-    State keeps absolute paths, so a moved project would re-extract every
-    session and flag every conversion. The check compares strings only.
-    """
-    archives = [entry["archive"] for entry in state.data["sessions"].values() if entry.get("archive")]
-    if archives and not any(Path(archive).is_relative_to(cfg.uploads) for archive in archives):
-        raise ValueError(f"Project appears moved: no recorded ZIP lies under {cfg.uploads}. Moving a project is "
-                         "not supported yet; run from the original location")
 
 
 def process_subject(items, cfg, phase, session_state, events, stop):
@@ -175,12 +163,15 @@ def _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summ
     events, stop = queue.Queue(), stopper.event
     counts.update(completed=0, duplicate=0, failed=0)
     last_progress, last_report = time.monotonic(), time.monotonic()
+    moved = []  # Uploads paths that prepare moved ZIPs from
     if stop.is_set():
         tasks = {}  # A stop that arrived before the workers started.
 
     def accept(event):
         state.checkpoint(event)
         recovery.clear_intents(cfg.reports, event.get("intents", []))
+        if event.get("moved_from"):
+            moved.append(event["moved_from"])
         outcome = event["outcome"]
         counts[OUTCOME_COUNTERS.get(outcome, "completed")] += 1
         level = logging.ERROR if outcome in ("failed", "interrupted") else logging.WARNING if outcome == "held" else logging.INFO
@@ -224,6 +215,9 @@ def _run(cfg, phase, ids, pairs, roster_warnings, stopper, logger, started, summ
             save_failed = True
             logger.error("Could not save state at the end of the run; the journals keep every result: %s", e)
         reports.reports(state, cfg, pairs, logger)
+    if moved:
+        # After the workers, so no folder is deleted while a ZIP in it is still being worked on.
+        prepare.remove_emptied_folders(cfg, moved, logger)
     terminated, interrupted = stopper.signum == signal.SIGTERM, stopper.signum is not None
     unresolved = reports.unresolved(state)
     outcome = ("terminated" if terminated else "interrupted" if interrupted

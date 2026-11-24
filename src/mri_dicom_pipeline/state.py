@@ -23,6 +23,20 @@ class StateError(ValueError):
     """The state index cannot be used; the run stops without writing."""
 
 
+def refuse_moved_project(cfg, state):
+    """Refuse to run when no recorded canonical ZIP lies under the uploads root (Q23).
+
+    State keeps absolute paths, so a moved project would re-extract every
+    session and flag every conversion, and select would find every session
+    not converted. Every command checks before it writes. The check compares
+    strings only.
+    """
+    archives = [entry["archive"] for entry in state.data["sessions"].values() if entry.get("archive")]
+    if archives and not any(Path(archive).is_relative_to(cfg.uploads) for archive in archives):
+        raise ValueError(f"Project appears moved: no recorded ZIP lies under {cfg.uploads}. Moving a project is "
+                         "not supported yet; run from the original location")
+
+
 def _read_index(path):
     """The parsed index at path, or _MISSING, or _UNREADABLE.
 

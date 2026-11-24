@@ -112,6 +112,32 @@ def test_re_export_of_a_prepared_study_is_named_alike_and_found_duplicate(projec
     assert 'same study as session 20260725' in renames(project)[-1]['note']
 
 
+def test_folders_left_empty_by_moving_zips_out_of_uploads_are_deleted(project, tmp_path):
+    """Owner request 2026-11-24: once its ZIPs move to SubjectsSorted, an emptied upload folder is deleted.
+
+    Only empty folders go, and only in top-level folders a ZIP moved out of: a folder still holding a held
+    ZIP or any other file stays, as do untouched folders, hidden folders and Uploads itself.
+    """
+    uploads = project / 'DicomUploads/Uploads'
+    upload(project, '11_133_upload/S001/x7f3k.zip', exam(tmp_path))
+    (uploads / '11_133_upload/S001/empty/deeper').mkdir(parents=True)
+    upload(project, 'batch/S001/a.zip', exam(tmp_path, date='20260801'))
+    held = upload(project, 'batch/S002/c.zip', exam(tmp_path, date='20260710'))  # unlisted date
+    upload(project, 'notes/S001/b.zip', exam(tmp_path, time='140000'))  # a second session on 20260725
+    (uploads / 'notes/readme.txt').write_text('kept')
+    (uploads / 'notes/.sync').mkdir()
+    upload(project, 'S002_20260725.zip', exam(tmp_path))
+    (uploads / 'untouched/empty').mkdir(parents=True)
+    assert call(project, 'prepare') == 2  # the held ZIP
+    for name in ('S001_20260725.zip', 'S001_20260725_2.zip', 'S001_20260801.zip', 'S002_20260725.zip'):
+        assert sorted_zip(project, name).exists(), name
+    assert not (uploads / '11_133_upload').exists()
+    assert held.exists() and not (uploads / 'batch/S001').exists()
+    assert (uploads / 'notes/readme.txt').exists() and (uploads / 'notes/.sync').is_dir()
+    assert not (uploads / 'notes/S001').exists()
+    assert (uploads / 'untouched/empty').is_dir() and uploads.is_dir()
+
+
 def test_dry_run_renames_nothing(project, tmp_path, capsys):
     source = upload(project, 'batch/S001/a.zip', exam(tmp_path))
     assert call(project, 'prepare', '--dry-run') == 0
