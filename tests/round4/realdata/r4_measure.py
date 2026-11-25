@@ -125,11 +125,24 @@ def main(argv=None):
         per_decision = defaultdict(list)
         for r in obj:
             per_decision[(r["visit"], r["role"])].append(r)
+        # The owner's verdicts on choices checked by eye (R4-F-027), kept as a coded file in the evidence folder:
+        # {"decisions": [{"visit", "role", "answer", "verdict"}...]}. A flagged choice the owner judged right is not
+        # counted as an error.
+        review_path = os.path.join(a.evidence, "owner_image_review.json")
+        owner_right = set()
+        if os.path.exists(review_path):
+            with open(review_path, encoding="utf-8") as f:
+                owner_right = {(r["visit"], r["role"]) for r in json.load(f)["decisions"] if r["verdict"] == "choice right"}
         classes = {}
+        before_review = set()
         listing = []
         for k, rows in sorted(per_decision.items()):
             fc = [flag_class(r) for r in rows]
             cls = next(c for c in ("consequential", "voxel copy", "R4-F-026") if c in fc)
+            if cls == "consequential":
+                before_review.add(k)
+                if k in owner_right:
+                    cls = "owner: choice right"
             classes[k] = cls
             ps = [p for r in rows for p in partners.get((r["visit"], r["role"], r["series_number"]), [])]
             listing.append({"visit": k[0], "role": k[1], "series_number": rows[0]["series_number"],
@@ -151,7 +164,10 @@ def main(argv=None):
         measures["consequential_errors"] = {
             "decisions_where_select_chose": len(chose),
             "headline": r4real.wilson(sum(1 for d in chose if key(d) in headline), len(chose)),
-            "headline_basis": "frozen checks plus the owner's SWI amendment, with readings R4-F-026 and voxel copies (owner, 2026-11-25)",
+            "headline_basis": ("frozen checks plus the owner's SWI amendment, with readings R4-F-026 and voxel copies "
+                               "(owner, 2026-11-25), less the choices the owner judged right by eye (owner_image_review.json)"),
+            "headline_before_image_review": r4real.wilson(sum(1 for d in chose if key(d) in before_review), len(chose)),
+            "owner_judged_right": sorted([list(k) for k in owner_right & before_review]),
             "conservative": r4real.wilson(sum(1 for d in chose if key(d) in conservative), len(chose)),
             "conservative_basis": "as the headline, but a choice whose partner is a voxel copy of it still counts",
             "rate_frozen_checks_only": r4real.wilson(sum(1 for d in chose if key(d) in flagged_frozen), len(chose)),
