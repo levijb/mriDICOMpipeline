@@ -25,8 +25,10 @@ SPECIALIZED = frozenset({"ADC", "EADC", "SWI", "SWI_PHASE", "SWI_MINIP", "QSM", 
 STRUCTURAL_LABELS = frozenset({"T1", "T1_POST", "T2", "FLAIR", "DWI"})
 # Roles whose volumes are derived by definition (5.4).
 DERIVED_ROLES = frozenset({"ADC", "EADC", "SWI_MINIP"})
+# ImageType tokens of derived images, also when value 1 says ORIGINAL (5.4). Siemens labels its processed SWI
+# image ORIGINAL\PRIMARY\M\SWI although it computes it from the magnitude and phase images (R4-F-019).
 DERIVED_TOKENS = frozenset({"REFORMATTED", "MPR", "MIP", "MIN IP", "MINIP", "MNIP", "PROJECTION IMAGE",
-                            "ADC", "EADC", "TRACEW", "FA"})
+                            "ADC", "EADC", "TRACEW", "FA", "SWI"})
 REFORMAT_TOKENS = frozenset({"REFORMATTED", "MPR"})
 PROJECTION_TOKENS = frozenset({"MIP", "MIN IP", "MINIP", "MNIP", "PROJECTION IMAGE"})
 VARIANT_TOKENS = frozenset({"DIS2D", "DIS3D", "ND", "NORM"})
@@ -389,10 +391,28 @@ def _identity_match(a, b):
     return all(close(a.s(key), b.s(key)) for key in ("tr_ms", "ti_ms", "flip_deg"))
 
 
+def _clash(xs, ys):
+    """True when two groups hold volumes of different series with the same TE and part: duplicates (5.5)."""
+    return any(x.series["series_key"] != y.series["series_key"] and x.part == y.part and close(x.te, y.te)
+               for x in xs for y in ys)
+
+
+def _join_order(xs, ys):
+    """Rule 2 joins series pair by series pair: the most shared echo times first, then by series number (5.5)."""
+    shared = {x.te for x in xs if x.te is not None and any(y.te is not None and close(x.te, y.te) for y in ys)}
+    numbers = sorted((n is None, n or 0) for n in (xs[0].s("series_number"), ys[0].s("series_number")))
+    return -len(shared), numbers, sorted((min(v.relpath for v in xs), min(v.relpath for v in ys)))
+
+
 def build_acquisitions(volumes):
-    """Group native volumes into acquisitions and record duplicates (5.5)."""
+    """Group native volumes into acquisitions and record duplicates (5.5).
+
+    Rule 1 joins the outputs of each series first. Rule 2 then joins series pair by series pair and never puts
+    two volumes of different series with the same TE and part into one acquisition, even when each of them
+    matches a third series: such an acquisition would list itself in duplicate_of (R4-F-019, R4-F-020).
+    """
     natives = [v for v in volumes if v.kind == "native" and v.role and v.role not in KEPT_ROLES]
-    parent = {id(v): id(v) for v in natives}
+    parent = list(range(len(natives)))
 
     def find(x):
         while parent[x] != x:
@@ -400,16 +420,20 @@ def build_acquisitions(volumes):
             x = parent[x]
         return x
 
-    duplicates = []
+    duplicates, joins = [], []
     for i, a in enumerate(natives):
-        for b in natives[i + 1:]:
+        for j in range(i + 1, len(natives)):
+            b = natives[j]
             if a.series is None or b.series is None or a.mixed or b.mixed:
                 continue
             same_series = a.series["series_key"] == b.series["series_key"]
             if not same_series and not _identity_match(a, b):
                 continue
             if a.part != b.part or not close(a.te, b.te):
-                parent[find(id(a))] = find(id(b))
+                if same_series:
+                    parent[find(i)] = find(j)
+                else:
+                    joins.append((i, j))
             elif same_series:
                 for v in (a, b):
                     if "multiple_outputs_same_series" not in v.issues:
@@ -417,8 +441,14 @@ def build_acquisitions(volumes):
             else:
                 duplicates.append((a, b))
     groups = {}
-    for v in natives:
-        groups.setdefault(find(id(v)), []).append(v)
+    for i, v in enumerate(natives):
+        groups.setdefault(find(i), []).append(v)
+    pairs = {tuple(sorted((find(i), find(j)))) for i, j in joins}
+    for x, y in sorted(pairs, key=lambda pair: _join_order(groups[pair[0]], groups[pair[1]])):
+        x, y = find(x), find(y)
+        if x != y and not _clash(groups[x], groups[y]):
+            parent[x] = y
+            groups[y] += groups.pop(x)
     acquisitions = []
     for members in groups.values():
         members.sort(key=lambda v: v.relpath)
