@@ -151,22 +151,35 @@ def _ras(img):
     return data, ras_zooms, int(ornt[2, 0]), slope, inter, rgb
 
 
+def _fill(v):
+    """The value that fills at least 10 % of the voxels (a background such as 0, or a no-data value such as
+    -32768 outside a mask), with its share; (None, 0.0) when there is none."""
+    values, counts = np.unique(v, return_counts=True)
+    top = int(np.argmax(counts))
+    share = counts[top] / v.size
+    return (float(values[top]), float(share)) if share >= 0.10 else (None, 0.0)
+
+
 def _window(vol):
-    """Display range: symmetric about zero for signed data such as phase, else the minimum to the 99.5th
-    percentile of the non-zero voxels."""
+    """Display range, leaving out a fill value: symmetric about zero for signed data such as phase or QSM, else
+    from the lowest value (or a zero background) to the 99.5th percentile."""
     v = vol[np.isfinite(vol)]
     if v.size > 2_000_000:
         v = v[:: v.size // 2_000_000 + 1]
     if not v.size:
         return 0.0, 1.0
-    lo, hi = float(v.min()), float(v.max())
+    fill, _share = _fill(v)
+    rest = v[v != fill] if fill is not None else v
+    if not rest.size:
+        return fill - 1.0, fill + 1.0
+    lo, hi = float(rest.min()), float(rest.max())
     if lo < 0 and -lo > 0.1 * max(hi, 0.0):
-        m = float(np.percentile(np.abs(v), 99.5)) or max(-lo, hi) or 1.0
+        m = float(np.percentile(np.abs(rest), 99.5)) or max(-lo, hi) or 1.0
         return -m, m
-    nonzero = v[v != 0]
-    if nonzero.size:
-        hi = float(np.percentile(nonzero, 99.5))
-    return (lo, hi) if hi > lo else (lo, float(v.max()) if v.max() > lo else lo + 1.0)
+    hi = float(np.percentile(rest, 99.5))
+    if fill is not None and 0 <= fill <= lo:
+        lo = fill
+    return (lo, hi) if hi > lo else (lo, float(rest.max()) if rest.max() > lo else lo + 1.0)
 
 
 def _plane(vol, axis, i):
@@ -218,7 +231,15 @@ def _stats(data, slope, inter, rgb):
             ("Mean / standard deviation", f"{x.mean():.6g} / {x.std():.6g}"),
             ("1st / 50th / 99th percentile", f"{p1:.6g} / {p50:.6g} / {p99:.6g}"),
             ("Zero voxels", f"{np.mean(x == 0) * 100:.1f}%"), ("Negative voxels", f"{np.mean(x < 0) * 100:.1f}%")]
-    head = x[:500_000]
+    fill, share = _fill(x)
+    if fill is not None:
+        rows.append(("Most common value", f"{fill:g} in {share * 100:.1f}% of voxels (left out of the display range)"))
+        rest = x[x != fill]
+        if rest.size:
+            q1, q50, q99 = np.percentile(rest, [1, 50, 99])
+            rows.append(("Without it: min / 1st / 50th / 99th percentile / max",
+                         f"{rest.min():.6g} / {q1:.6g} / {q50:.6g} / {q99:.6g} / {rest.max():.6g}"))
+    head = x[:: max(1, x.size // 500_000)]
     distinct = np.unique(head)
     if distinct.size <= 12:
         rows.append(("Distinct values", " ".join(f"{d:g}" for d in distinct)))

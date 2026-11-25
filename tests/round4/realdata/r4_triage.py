@@ -350,9 +350,12 @@ def reviews(a):
         for item in [x for x in d["reasons"].split(";") if x]:
             reason = item.split("(")[0]
             cls, basis = classify(d, visit, reason)
+            groups = {r["derived_group_id"] for r in by_session[(d["subject_id"], d["session"])]
+                      if r["role"] == d["role"] and r["kind"] != "native" and r["derived_group_id"]}
             out.append({"visit": visit, "role": d["role"], "manufacturer": maker.get((d["subject_id"], d["session"]), "?"),
-                        "reason": reason, "class": cls, "basis": basis, "reasons_of_decision": d["reasons"]})
-    fields = ["visit", "role", "manufacturer", "reason", "class", "basis", "reasons_of_decision"]
+                        "reason": reason, "class": cls, "basis": basis, "reasons_of_decision": d["reasons"],
+                        "derived_groups_of_role": len(groups)})
+    fields = ["visit", "role", "manufacturer", "reason", "class", "basis", "reasons_of_decision", "derived_groups_of_role"]
     r4real.write_csv(os.path.join(a.evidence, "reviews.csv"), out, fields)
     table = Counter((r["role"], r["reason"], r["class"], r["basis"]) for r in out)
     per_decision = {}
@@ -370,18 +373,26 @@ def reviews(a):
     moved = sum(1 for r in r4real.read_csv(fe_path) if r["text_outcome"].startswith("review_required")) if os.path.exists(fe_path) else 0
     follows = {k for k, v in per_decision.items() if v == {"defect"}
                and all("follows R4-F-021" in r["basis"] for r in out if (r["visit"], r["role"]) == k)}
-    no_parent = {(r["visit"], r["role"]) for r in out if r["basis"].startswith(("R4-F-028", "R4-F-029"))}
+    no_parent = {(r["visit"], r["role"]): r["derived_groups_of_role"] for r in out
+                 if r["basis"].startswith(("R4-F-028", "R4-F-029"))}
+    single = {k for k, n in no_parent.items() if n == 1}
     left = len(per_decision) - len(follows) + moved
+    total = sum(1 for d in decisions if d["outcome"] == "review_required")
+    summary["no_parent_maps"] = {"decisions": len(no_parent), "one_candidate": len(single),
+                                 "two_or_more": len(no_parent) - len(single),
+                                 "by_groups": dict(Counter(f"{k[1]}: {n} group(s)" for k, n in no_parent.items()))}
     summary["what_if"] = {
         "note": ("what-if only. after_phase_4: the R4-F-021 decisions and the reviews that follow them resolved, "
                  "R4-F-016's text rule applied (R4-F-029's map then has no parent and stays, as R4-F-028). "
-                 "and_no_parent_not_review: also if the owner's reading of R4-F-028 takes a map with no parent "
-                 "out of review"),
+                 "owner_rule_R4_F_028 (2026-11-25): a map with no possible parent is selected as a fallback when it is "
+                 "the only candidate of its role, and goes to review with two or more; applied to the first run as it "
+                 "is, and after phase 4"),
         "after_phase_4": {"reviews": left, "rate": r4real.wilson(left, base)},
-        "and_no_parent_not_review": {"reviews": left - len(no_parent), "rate": r4real.wilson(left - len(no_parent), base)}}
+        "first_run_with_owner_rule_R4_F_028": {"reviews": total - len(single), "rate": r4real.wilson(total - len(single), base)},
+        "after_phase_4_with_owner_rule_R4_F_028": {"reviews": left - len(single), "rate": r4real.wilson(left - len(single), base)}}
     with open(os.path.join(a.evidence, "reviews_summary.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(summary, fh, indent=1, sort_keys=True)
-    print(json.dumps({k: summary[k] for k in ("review_decisions_after_r4_f_021", "decisions_by_class", "what_if")}))
+    print(json.dumps({k: summary[k] for k in ("review_decisions_after_r4_f_021", "decisions_by_class", "no_parent_maps", "what_if")}, indent=1))
 
 
 def _tesla(value):
