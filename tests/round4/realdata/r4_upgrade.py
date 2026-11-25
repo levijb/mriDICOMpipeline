@@ -20,11 +20,14 @@ compare: takes the same record now and compares it with the baseline.
     hash changes or a listed file is missing):
     *   kept: same receipt ID, every file present with the same size and modification time;
     *   kept_but_files_changed: same receipt ID, but a file was added, removed or touched;
-    *   replaced_decision_changed: new receipt ID, and the manifest's roles or files differ;
-    *   replaced_version_only: new receipt ID, the manifest's roles and files are the same, and only its other
-        fields differ (for example selector_version, which carries the rules revision);
     *   replaced_restored: new receipt ID after a listed file was missing before;
-    *   replaced_without_change: new receipt ID with an identical manifest and nothing missing before;
+    *   replaced_expected: new receipt ID, explained (the owner's reading of R4-OPS-02, 2026-11-25) by a changed
+        decision (the manifest's roles or files differ), by an R4-F-023/024 fact that changed in the session's
+        cache (pos_min, pos_max, step_mm, extent_mm, orientation), or by the version alone (only selector_version,
+        or a BIDS manifest's exporter_revision, differs); where the decision did not change, the image files
+        (NIfTI, bval, bvec) hold the same bytes before and after (their inventory SHA-256 values);
+    *   replaced_images_changed: as above without a decision change, but an image file's bytes differ;
+    *   replaced_unexplained: new receipt ID with none of those explanations;
     *   new, removed, no_receipt.
     Each visit's published roles are also checked against the run's own report (selection.csv in the output
     root): a kept visit whose current decision differs is kept_despite_decision_change. Replaced and new visits
@@ -58,7 +61,13 @@ INVENTORY = ".inventory.json"
 DECISION_KEYS = ("roles", "files")
 LEFTOVER = (".staging_", ".incoming_", ".previous_")
 NOT_RECHECKED = {"software"}  # r4_facts.py compares it with the DICOM's value order, which the saved records lack
-FAIL = {"kept_but_files_changed", "kept_despite_decision_change", "replaced_without_change",
+# The owner's reading of R4-OPS-02 (2026-11-25): a replaced visit is expected when a changed decision, a fact changed
+# by R4-F-023 or R4-F-024, or the version alone explains it; where the decision did not change, the image files must
+# be byte-identical before and after. Anything else is a failure.
+FACT_FIELDS = {"pos_min", "pos_max", "step_mm", "extent_mm", "orientation"}  # the facts R4-F-023 and R4-F-024 change
+VERSION_FIELDS = {"selector_version", "exporter_revision"}  # manifest fields that only carry a version
+IMAGE_SUFFIXES = (".nii.gz", ".nii", ".bval", ".bvec")
+FAIL = {"kept_but_files_changed", "kept_despite_decision_change", "replaced_unexplained", "replaced_images_changed",
         "replaced_differs_from_report", "removed", "no_receipt", "inventory_mismatch"}
 
 
@@ -227,31 +236,48 @@ def roles_from_report(report, rec):
     return report.get((sid, label)) or report.get((sid, label[:8]))
 
 
-def classify(b, n, report, root, verify):
-    if b is None:
-        cls = "new"
-    elif n is None:
-        return "removed", {}
-    elif not n["receipt_id"]:
-        return "no_receipt", {}
-    elif n["receipt_id"] == b["receipt_id"]:
-        cls = "kept" if n["files"] == b["files"] else "kept_but_files_changed"
-    elif any(b["files"].get(name, [None])[0] != size for name, (size, _h) in b["inventory"].items()):
-        cls = "replaced_restored"
-    elif n["decision_digest"] != b["decision_digest"]:
-        cls = "replaced_decision_changed"
-    elif n["manifest_sha256"] != b["manifest_sha256"]:
-        cls = "replaced_version_only"
-    else:
-        cls = "replaced_without_change"
+def image_hashes(rec):
+    return sorted(h for name, (_size, h) in rec["inventory"].items() if name.lower().endswith(IMAGE_SUFFIXES))
+
+
+def classify(b, n, report, root, verify, facts_changed=frozenset()):
+    """(class, info) for one visit. facts_changed: the R4-F-023/024 fact fields whose cached values changed for any
+    series of the visit's session."""
     info = {}
+    if n is None:
+        return "removed", {}
     if b is not None:
-        changed_roles = sorted(k for k in set(b["roles"]) | set(n["roles"]) if b["roles"].get(k) != n["roles"].get(k))
-        info["roles_changed"] = changed_roles
+        info["roles_changed"] = sorted(k for k in set(b["roles"]) | set(n["roles"]) if b["roles"].get(k) != n["roles"].get(k))
         info["meta_changed"] = sorted(k for k in set(b["meta"]) | set(n["meta"]) if b["meta"].get(k) != n["meta"].get(k))
         same = [f for f in n["files"] if b["files"].get(f) == n["files"][f]]
         info["files_same"] = len(same)
         info["files_changed"] = len(set(n["files"]) | set(b["files"])) - len(same)
+    if b is None:
+        cls = "new"
+    elif not n["receipt_id"]:
+        return "no_receipt", info
+    elif n["receipt_id"] == b["receipt_id"]:
+        cls = "kept" if n["files"] == b["files"] else "kept_but_files_changed"
+    elif any(b["files"].get(name, [None])[0] != size for name, (size, _h) in b["inventory"].items()):
+        cls = "replaced_restored"
+    else:
+        explained = []
+        decision = n["decision_digest"] != b["decision_digest"]
+        if decision:
+            explained.append("decision")
+        if facts_changed:
+            explained.append("facts R4-F-023/024 (" + ",".join(sorted(facts_changed)) + ")")
+        if info["meta_changed"] and set(info["meta_changed"]) <= VERSION_FIELDS:
+            explained.append("version (" + ",".join(info["meta_changed"]) + ")")
+        info["explained_by"] = explained
+        if not explained:
+            cls = "replaced_unexplained"
+        elif not decision and image_hashes(n) != image_hashes(b):
+            cls = "replaced_images_changed"
+        else:
+            cls = "replaced_expected"
+        if not decision:
+            info["images_identical"] = image_hashes(n) == image_hashes(b)
     current = roles_from_report(report, n)
     if current is not None:
         common = set(current) & set(n["roles"])
@@ -334,20 +360,29 @@ def compare(a, codes):
     now = snapshot(a.project, a.output_root)
     write_json(os.path.join(a.private, "upgrade", f"after_{a.run}.json"), now)
     rows, summary = [], {"run": a.run, "baseline_utc": base["taken_utc"], "now_utc": now["taken_utc"], "roots": {}}
+    cache_rows, rewritten = compare_cache(a, base["cache"], now["cache"], codes)
+    facts_by_session = {}
+    for r in cache_rows:
+        if r["change"] == "changed" and r["field"] in FACT_FIELDS:
+            facts_by_session.setdefault(r["session"], set()).add(r["field"])
     for root in a.output_root:
         key = os.path.normcase(os.path.abspath(root))
         if key not in base["roots"]:
             raise SystemExit(f"the baseline holds no record of {os.path.basename(root)}")
         b, n = base["roots"][key], now["roots"][key]
         report = report_roles(root)
-        classes, meta = Counter(), Counter()
+        classes, meta, explanations = Counter(), Counter(), Counter()
         for vk in sorted(set(b["visits"]) | set(n["visits"])):
             bv, nv = b["visits"].get(vk), n["visits"].get(vk)
-            cls, info = classify(bv, nv, report, root, a.verify_hashes)
+            rec = nv or bv
+            code = codes.session(rec["subject_id"], rec["session"])
+            cls, info = classify(bv, nv, report, root, a.verify_hashes, frozenset(facts_by_session.get(code, ())))
             classes[cls] += 1
             meta.update(info.get("meta_changed", []))
-            rec = nv or bv
-            rows.append({"layout": b["layout"], "visit": codes.session(rec["subject_id"], rec["session"]), "class": cls,
+            explanations.update([";".join(info["explained_by"])] if info.get("explained_by") else [])
+            rows.append({"layout": b["layout"], "visit": code, "class": cls,
+                         "explained_by": ";".join(info.get("explained_by", [])),
+                         "images_identical": info.get("images_identical", ""),
                          "fail": cls in FAIL, "roles_changed": ";".join(info.get("roles_changed", [])),
                          "meta_changed": ";".join(info.get("meta_changed", [])),
                          "differs_from_report": ";".join(info.get("differs_from_report", [])),
@@ -361,12 +396,13 @@ def compare(a, codes):
         summary["roots"][b["layout"]] = {
             "visits_before": len(b["visits"]), "visits_now": len(n["visits"]), "classes": dict(classes),
             "fail": sum(v for k, v in classes.items() if k in FAIL), "manifest_fields_changed": dict(meta),
+            "replaced_expected_by": dict(explanations),
             "leftover_folders": len(leftovers), "other_files_changed": len(changed_other),
             "other_files_changed_names": [p for p in changed_other if not p.startswith(("sub-", "Subjects/"))]}
-    fields = ["layout", "visit", "class", "fail", "roles_changed", "meta_changed", "differs_from_report", "files_same",
+    fields = ["layout", "visit", "class", "explained_by", "images_identical", "fail", "roles_changed", "meta_changed",
+              "differs_from_report", "files_same",
               "files_changed", "inventory_problems", "receipt_before", "receipt_after"]
     r4real.write_csv(os.path.join(a.evidence, f"upgrade_{a.run}_visits.csv"), rows, fields)
-    cache_rows, rewritten = compare_cache(a, base["cache"], now["cache"], codes)
     r4real.write_csv(os.path.join(a.evidence, f"upgrade_{a.run}_cache.csv"), cache_rows,
                      ["session", "series", "field", "change", "after_vs_reader"])
     summary["cache"] = {"files_before": len(base["cache"]), "files_now": len(now["cache"]), "files_rewritten": rewritten,
