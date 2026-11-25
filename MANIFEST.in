@@ -3,6 +3,7 @@ recursive-include examples *.csv
 recursive-include Scripts *.py *.sh
 include Scripts/requirements.txt
 recursive-include tests *.py
+recursive-include tests/round4/expected *.json
 recursive-include .github *.yml
 prune DicomUploads
 prune DicomExtracted

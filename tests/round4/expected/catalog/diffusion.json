@@ -15,7 +15,8 @@
   "BIDS-4.3": "bids-output-research.md 4.3 (when a partner becomes a field map, and the omission reasons), 2.3 (dir labels), 2.4 (IntendedFor URIs)",
   "BIDS-4.4": "bids-output-research.md 4.4 (companions) and 11 (maps without an exported source)",
   "README-GE-COMBINED": "README, Parallel work and recovery (GE combined diffusion image becomes an _ADC companion); scan-selection.md 5.2",
-  "SS-6.5-UNLINKED": "scan-selection.md 5.6 (unlinked), 6.5 step 6, 6.6 (fates)"
+  "SS-6.5-UNLINKED": "scan-selection.md 5.6 (unlinked), 6.5 step 6, 6.6 (fates)",
+  "DCM2NIIX-GE-ADC": "dcm2niix v1.0.20261029: a GE diffusion volume with b > 0 and a zero gradient vector is moved out of the DWI into the _ADC file when GE's number of diffusion directions is 0 for it (nii_dicom_batch.cpp, nii_saveDTI); the converter reads that number from private element (0021,105A), block GEMS_RELA_01, as IS. Confirmed by running the converter on this series on 2026-11-25 (with SS it is not read)"
  },
  "protocols": {
   "GE_DWI": {
@@ -1884,7 +1885,25 @@
          "AX",
          "DWI"
         ]
-       }
+       },
+       "volume_private_tags": [
+        {
+         "tag": "0021,105A",
+         "creator": "GEMS_RELA_01",
+         "vr": "IS",
+         "values": [
+          "6",
+          "6",
+          "6",
+          "6",
+          "6",
+          "6",
+          "6",
+          "0"
+         ],
+         "source": "DCM2NIIX-GE-ADC"
+        }
+       ]
       }
      ]
     }
@@ -1957,7 +1976,10 @@
      "oracle": "P",
      "source": "BIDS-4.4"
     }
-   }
+   },
+   "owner_decisions": [
+    "2026-11-25 (R4-F-015): not accepted as untestable. The combined volume now carries GE's number of diffusion directions, 0 (the other volumes 6), so dcm2niix writes the _ADC companion; the expected outcomes are unchanged."
+   ]
   },
   {
    "id": "DIF-13-UNLINKED-ADC",

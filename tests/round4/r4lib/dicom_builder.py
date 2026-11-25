@@ -210,6 +210,9 @@ def _stack_instances(exam, session, series, sentinels, start):
                     offset = float(slice_positions[k]) if slice_positions else k * step
                     ipp = first + offset * normal
                     ds = _base_dataset(exam, session, series, sentinels)
+                    # Per-volume private elements: ``values`` holds one value per volume (time point).
+                    for spec in series.get("volume_private_tags", []):
+                        add_private(ds, spec, value=spec["values"][vol])
                     ds.SOPInstanceUID = sop_uid(uid_e, uid_s, instance)
                     ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
                     ds.InstanceNumber = str(instance)

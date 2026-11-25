@@ -118,6 +118,11 @@ def expand_series(raw, protocols, sources, where):
     for spec in series.get("private_tags", []):
         if spec.get("source") not in sources:
             raise CatalogError(f"{where}: private tag {spec.get('tag')} cites unknown source")
+    for spec in series.get("volume_private_tags", []):
+        if spec.get("source") not in sources:
+            raise CatalogError(f"{where}: volume private tag {spec.get('tag')} cites unknown source")
+        if len(spec.get("values", [])) != n_volumes(series):
+            raise CatalogError(f"{where}: volume private tag {spec.get('tag')} needs one value per volume")
     if "image_type_text" in series:
         value, src = series["image_type_text"]
         if src not in sources:

@@ -11,14 +11,20 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python: ['3.11', '3.12', '3.13', '3.14']
+        # 3.15: production and local testing run Python 3.15.2 (round 4 spec D-12).
+        python: ['3.11', '3.12', '3.13', '3.14', '3.15']
+    env:
+      # Round 4 Hypothesis properties run with fixed seeds in CI (spec D-6).
+      HYPOTHESIS_PROFILE: ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install -e ".[test]"
-      - run: python -m pytest
+      - run: python -m pip install -e ".[test,round4]"
+      # Branch coverage is reported, with no failure threshold (round 4 spec D-6).
+      - run: python -m coverage run --branch -m pytest
+      - run: python -m coverage report
 
   real-converter:
     name: real-converter (${{ matrix.os }}, dcm2niix ${{ matrix.version }})
@@ -42,7 +48,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e ".[test]"
+      - run: python -m pip install -e ".[test,round4]"
       - name: Download dcm2niix ${{ matrix.version }}
         shell: python
         run: |
@@ -67,6 +73,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write(f'MRI_PIPELINE_DCM2NIIX={exe}\n')
       - run: python -m pytest tests/test_real_converter.py -rs
+      - run: python -m pytest tests/round4 -m r4real -rs
 
   bids:
     # select --bids output: the published synthetic dataset must pass the BIDS validator with
@@ -77,12 +84,48 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e ".[test]" "bids-validator-deno==3.0.2" "pybids==0.22.0"
+      - run: python -m pip install -e ".[test,round4]" "bids-validator-deno==3.0.2" "pybids==0.22.0"
       - name: Fail here rather than let the checks skip silently
         run: |
           bids-validator-deno --version
           python -c "import bids.layout"
       - run: python -m pytest tests/test_bids_export.py -rs
+      - run: python -m pytest tests/round4 -m r4tool -rs
+
+  round4-calibration:
+    # Round 4 D-13: the header reader and the pixel sampler on the public dcm_qa vendor datasets.
+    # Never gating: a GitHub archive whose bytes change, or a calibration difference, is reported here.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e ".[test,round4]"
+      - name: Fetch the vendor datasets at their pinned commits and verify their checksums
+        shell: python
+        run: |
+          import hashlib, json, os, urllib.request, zipfile
+          spec = json.load(open('tests/round4/expected/vendor_datasets.json', encoding='utf-8'))
+          root = os.path.join(os.environ['RUNNER_TEMP'], 'vendor_datasets')
+          for entry in spec['datasets']:
+              name = entry['repo'].split('/')[1]
+              url = f"https://codeload.github.com/{entry['repo']}/zip/{entry['commit']}"
+              folder = os.path.join(root, name)
+              os.makedirs(os.path.join(folder, 'archive'), exist_ok=True)
+              archive = os.path.join(folder, 'archive', f"{name}-{entry['commit']}.zip")
+              urllib.request.urlretrieve(url, archive)
+              with open(archive, 'rb') as f:
+                  digest = hashlib.sha256(f.read()).hexdigest()
+              if digest != entry['archive_sha256']:
+                  raise SystemExit(f"{name}: archive checksum mismatch: {digest}")
+              # The data is only read by the tests; nothing in it is executed.
+              with zipfile.ZipFile(archive) as z:
+                  z.extractall(os.path.join(folder, 'extracted'))
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'R4_VENDOR_DIR={root}\n')
+      - run: python -m pytest tests/round4/test_r4_oracles.py -m r4calib -rs
 
   package:
     runs-on: ubuntu-latest
@@ -98,3 +141,16 @@ jobs:
       - run: python -m pip install dist/*.whl
       - run: mri-dicom-pipeline --help
       - run: python -m mri_dicom_pipeline prepare --help
+      # Round 4 R-PRV-4: dependency vulnerability scan, pinned to the version recorded at Gate G0;
+      # reported, never gating.
+      - name: pip-audit
+        continue-on-error: true
+        run: |
+          python -m pip install "pip-audit==2.10.1"
+          python -m pip_audit --format json --output pip-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-report
+          path: pip-audit.json
+          if-no-files-found: warn

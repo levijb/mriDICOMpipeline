@@ -891,15 +891,16 @@
     "b": {
      "family": "FLAIR_3D",
      "native": [
-      1.0,
-      1.0,
+      1.25,
+      1.25,
       1.0
      ]
     },
     "tier_both": "any",
     "outcome": "review_required",
     "reason": "undecidable_missing_field",
-    "work": "10.1 case 35: one candidate lacks AcquisitionMatrix; a missing value never decides"
+    "work": "10.1 case 35: one candidate lacks AcquisitionMatrix; a missing value never decides. b's in-plane 1.25 mm exceeds tier 3d's 1.2 mm (6.7), so both candidates are in tier any",
+    "correction": "2026-11-25, owner-approved (finding R4-F-013): b was [1.0, 1.0, 1.0], which meets FLAIR tier 3d and contradicted tier_both any; changed to [1.25, 1.25, 1.0] to match case 35"
    }
   ]
  },

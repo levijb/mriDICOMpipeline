@@ -105,3 +105,26 @@ def r4_project(tmp_path):
                 writer.writerows(rows)
 
     return Project()
+
+
+# ---------------------------------------------------------------------------- phase 2 fixtures
+
+@pytest.fixture(scope="session")
+def exam_store(tmp_path_factory):
+    """Catalog exams prepared and converted once per test session (r4lib.e2e.ExamStore)."""
+    from r4lib.e2e import ExamStore
+
+    return ExamStore(tmp_path_factory.mktemp("exams"))
+
+
+@pytest.fixture
+def real_exam(exam_store, r4_dcm2niix):
+    """real_exam(catalog, exam_id): the exam converted with the real dcm2niix (tier 3)."""
+    return lambda cat_name, exam_id: exam_store.get(cat_name, exam_id, "real")
+
+
+@pytest.fixture
+def fake_exam(exam_store):
+    """fake_exam(catalog, exam_id): the exam converted with the tier 2 converter."""
+    pytest.importorskip("nibabel")
+    return lambda cat_name, exam_id: exam_store.get(cat_name, exam_id, "fake")

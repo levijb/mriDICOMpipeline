@@ -802,14 +802,18 @@
       ],
       "n_echoes": {
        "10": 4
+      },
+      "has_phase": {
+       "10": true
       }
      },
      "oracle": "P",
-     "source": "scan-selection.md 5.5 rule 1"
+     "source": "scan-selection.md 5.5 rule 1; has_phase per the owner's decision of 2026-11-25 (the converter's phase token on GE phase volumes)"
     }
    },
    "owner_decisions": [
-    "2026-11-24 (G1): deferred. In phase 2, has_phase is set from what dcm2niix writes for GE phase volumes (a converter fact), with the owner's approval recorded; if no phase token appears, it is recorded as a known limit under scan-selection.md section 8."
+    "2026-11-24 (G1): deferred. In phase 2, has_phase is set from what dcm2niix writes for GE phase volumes (a converter fact), with the owner's approval recorded; if no phase token appears, it is recorded as a known limit under scan-selection.md section 8.",
+    "2026-11-25 (after phase 2, finding record in R4_GATES.md): approved. dcm2niix v1.0.20261029 writes PHASE in the sidecar ImageType of the GE phase volumes (MAGNITUDE on the others), so has_phase is true for series 10."
    ],
    "notes": [
     "Whether the phase volumes dcm2niix writes carry a phase token in their sidecar ImageType decides the volume part (5.2) and so has_phase; scan-selection.md section 8 lists GE phase detection from (0043,102F) per volume as a later item. No has_phase or SWI decision is expected until phase 2 shows what the converter writes."

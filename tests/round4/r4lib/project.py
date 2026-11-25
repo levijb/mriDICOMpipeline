@@ -85,9 +85,11 @@ class R4Project:
         return out
 
     # -------------------------------------------------------------- commands
-    def run(self, command, *args, env=None, timeout=600):
+    def run(self, command, *args, env=None, timeout=600, cwd=None):
+        """Run a command in a child process. ``cwd`` defaults to the project root; Windows cannot start
+        a process whose working folder is longer than 260 characters, so long-path tests pass another."""
         argv = [sys.executable, "-m", "mri_dicom_pipeline", command, "--project-root", self.root, *map(str, args)]
-        proc = subprocess.run(argv, capture_output=True, text=True, env=env, timeout=timeout, cwd=self.root)
+        proc = subprocess.run(argv, capture_output=True, text=True, env=env, timeout=timeout, cwd=cwd or self.root)
         return Result(proc.returncode, proc.stdout, proc.stderr)
 
     # -------------------------------------------------------------- outputs
