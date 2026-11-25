@@ -90,7 +90,9 @@ def test_r4_prv_01_no_sentinel_in_new_outputs(sentinel_run):
     assert not hits, hits
 
 
-ALLOWED_PATH_CHANNELS = ("Reports/renamed_uploads.csv", "Reports/issues.csv", "Reports/.state/")
+# Reports/.naming_cache.json joined the listed channels by the owner's decision on R4-F-008 (2026-11-25): the README
+# privacy section lists it as holding upload folder names, with no code change.
+ALLOWED_PATH_CHANNELS = ("Reports/renamed_uploads.csv", "Reports/issues.csv", "Reports/.state/", "Reports/.naming_cache.json")
 
 
 def test_r4_prv_02a_upload_names_only_in_listed_channels(sentinel_run):
@@ -109,7 +111,7 @@ def test_r4_prv_02a_upload_names_only_in_listed_channels(sentinel_run):
     assert not unlisted, unlisted
     text = open(README, encoding="utf-8").read()
     privacy = text[text.index("## Privacy"):text.index("## Where to look")]
-    for channel in ("renamed_uploads.csv", "issues.csv", "state files", "logs"):
+    for channel in ("renamed_uploads.csv", "issues.csv", "state files", "logs", ".naming_cache.json"):
         assert channel in privacy, channel
 
 

@@ -17,7 +17,10 @@ jobs:
       # Round 4 Hypothesis properties run with fixed seeds in CI (spec D-6).
       HYPOTHESIS_PROFILE: ci
     steps:
+      # Full history: the R4-DST tests build from `git archive 4d8a362...` (R4-F-032, owner approval 2026-11-25).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
