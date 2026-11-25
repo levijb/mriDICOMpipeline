@@ -4,6 +4,7 @@ import importlib
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -80,8 +81,19 @@ def test_killed_holder_releases_its_locks(project):
     owner = project / 'Reports' / locks.OWNER_NAME
     assert 'HOLDER-RUN' in owner.read_text()  # the killed holder could not remove it
     cfg = config.configure(config.config_parser('prepare').parse_args(['--project-root', str(project)]), 'prepare')
-    with locks.RootLocks(cfg.lock_roots, 'prepare', 'NEXT-RUN'):
-        assert 'NEXT-RUN' in owner.read_text()
+    # wait() can return before the lock is free: on Windows a venv's python.exe is a launcher whose child holds the
+    # lock and is still ending when the launcher has exited. So the second attempt is retried for up to 5 seconds;
+    # a lock that is never released still fails the test (round 4 finding R4-F-033, owner's approval 2026-11-25).
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            with locks.RootLocks(cfg.lock_roots, 'prepare', 'NEXT-RUN'):
+                assert 'NEXT-RUN' in owner.read_text()
+            break
+        except locks.LockBusy:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
     assert not owner.exists()
     assert call(project, 'prepare') == 0
 
