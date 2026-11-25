@@ -4,7 +4,7 @@
     python tests/round4/realdata/r4_timed.py --evidence FILE.json --pytest -- tests -q
 
 The command runs inside this process (mri_dicom_pipeline.cli.main, or pytest.main with --pytest),
-since on Windows the mri-dicom-pipeline launcher, like the .venv\Scripts\python.exe stub, hands the
+since on Windows the mri-dicom-pipeline launcher, like the .venv/Scripts/python.exe stub, hands the
 work to a second interpreter process: timing the process the owner launches would measure only the small
 launcher. Writes wall time, exit code and this process's peak working set (Windows:
 GetProcessMemoryInfo through ctypes; Linux: getrusage) to the evidence file. With --pytest the figure
