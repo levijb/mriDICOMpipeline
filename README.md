@@ -103,9 +103,10 @@ The ZIP is renamed in place (`S001_20260725.zip` in the same folder) and then
 moved into SubjectsSorted like any accepted ZIP. A ZIP that cannot be named
 (no StudyDate, several StudyDates, no matching listed date, two listed dates
 in range, a folder that is not a subject ID, a name already used in that
-folder) stays unnamed with an issue. Every rename is appended to
-`Reports/renamed_uploads.csv` (old and new path, StudyDate, listed date,
-note), which is also the record for undoing one. `prepare --dry-run` prints
+folder, a damaged or encrypted ZIP) stays unnamed with an issue. Every rename
+is appended to `Reports/renamed_uploads.csv` (old and new path, StudyDate,
+listed date, note), which is also the record for undoing one; if a run is
+killed right after a rename, the next run writes its row. `prepare --dry-run` prints
 each proposed name as `WOULD RENAME` and renames nothing. It ends with a
 summary: how many ZIPs would be named, prepared or skipped, then every held
 ZIP with its reason, and every proposed name worth checking (a near date, an
@@ -352,6 +353,8 @@ mri-dicom-pipeline select --publish --subjects project_ids.csv --output-root /da
     --modalities T1,FLAIR --isotropic --max-voxel-mm 1.2 --field-strength 3 --complete-only
 ```
 
+With `--publish` every evaluated visit is published, also one whose
+modalities all wait for review (its folder then holds only `selection.json`).
 Each published session looks like this:
 
 ```text
@@ -510,6 +513,9 @@ BIDS/
   (the visit was published or already up to date); a report-only run, a held
   or refused visit, and `--complete-only` leave it `false`. `--extras` and
   `--modalities` naming LOCALIZER or PERFUSION are refused.
+* **A visit with nothing to export** (every modality in review, or none
+  listed) still gets its `ses-` folder, holding only the hidden manifest and
+  receipt, and its rows in `participants.tsv` and the sessions table.
 * **The root** must be empty or made by `--bids`, and the default layout
   refuses a BIDS root. The dataset files are rebuilt from every published
   visit after each `--publish` run; rows and columns added to

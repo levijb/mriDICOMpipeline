@@ -226,7 +226,11 @@ Look at every row whose `outcome` is not `selected`, `kept_all` or `missing`:
   say; check the scanner and run without that option for the session.
 * **`source_not_ready`:** the session was not evaluated. `not_converted`
   needs `convert` first; `output_modified` and `extraction_invalid` follow
-  the procedures above. For a visit of several sessions on one date, the
+  the procedures above. `metadata_read_failed:<error>` means a file
+  `select` reads could not be read: a sidecar, a NIfTI header, or an
+  extracted DICOM object (`UnreadableObject`). `select --audit --session KEY`
+  checks the files against their receipts; a changed file then shows as
+  `output_modified` or `extraction_invalid`. For a visit of several sessions on one date, the
   reason names the session that is not ready, for example
   `20260725_2: not_converted`; the visit waits for it.
 

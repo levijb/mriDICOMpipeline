@@ -432,9 +432,10 @@ def _bids_outputs(cfg, subject, label, plan):
             for c in v.companions:
                 if c["kind"] in ("bval", "bvec"):
                     outputs.append(("copy", f"{stem}.{c['kind']}", nifti_folder / c["name"], c["sha256"]))
-    scans = f"sub-{subject}_ses-{label}_scans"
-    outputs.append(("bytes", scans + ".tsv", bids.scans_tsv(plan)))
-    outputs.append(("bytes", scans + ".json", _dump(bids.SCANS_JSON)))
+    if outputs:  # a visit with nothing exportable holds only its hidden manifest and receipt (R4-F-003)
+        scans = f"sub-{subject}_ses-{label}_scans"
+        outputs.append(("bytes", scans + ".tsv", bids.scans_tsv(plan)))
+        outputs.append(("bytes", scans + ".json", _dump(bids.SCANS_JSON)))
     return outputs
 
 
@@ -442,14 +443,13 @@ def publish_session(cfg, subject, label, sessions, session, decisions, fates, co
                     logger, plan=None, agent=None):
     """Build or update one visit in the output root (7.5); sessions and conversions are its sessions'.
 
-    With a BIDS plan (bids.plan_visit) the visit becomes sub-<id>/ses-<date>/ instead.
-    Returns 'published', 'unchanged', 'skipped: ...' (nothing to copy) or 'refused: ...'.
+    With a BIDS plan (bids.plan_visit) the visit becomes sub-<id>/ses-<date>/ instead. Every evaluated visit is
+    published, also one with nothing to copy: its folder then holds its manifest and receipt only (7.5 rule 1,
+    R4-F-003). Returns 'published', 'unchanged' or 'refused: ...'.
     """
     if plan is None:
         destination = cfg.output / "Subjects" / subject / label
         chosen = [v for v in session.volumes if copied(v, fates[v], profile)]
-        if not chosen:
-            return "skipped: nothing selected in the listed modalities"
         manifest = _dump(_manifest(subject, label, sessions, session, decisions, fates, conversions, profile,
                                    digest_profile))
         outputs = _default_outputs(cfg, subject, label, chosen, fates, profile)
@@ -457,8 +457,6 @@ def publish_session(cfg, subject, label, sessions, session, decisions, fates, co
         layout = {}
     else:
         destination = cfg.output / f"sub-{subject}" / f"ses-{label}"
-        if all(e["status"] == "omitted" for e in plan):
-            return "skipped: nothing exportable in the listed modalities"
         manifest = _dump(_bids_manifest(subject, label, sessions, plan, decisions, conversions, profile,
                                         digest_profile, agent))
         outputs = _bids_outputs(cfg, subject, label, plan)

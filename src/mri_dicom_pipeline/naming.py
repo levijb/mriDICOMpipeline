@@ -22,12 +22,16 @@ from datetime import datetime
 import hashlib
 from pathlib import Path
 import zipfile
+import zlib
 
 from . import fsutil, identity, prepare
 
 NAME_LOG = "renamed_uploads.csv"
 NAME_FIELDS = ["run_id", "subject_id", "session", "old_path", "new_path", "study_date", "listed_date", "note"]
 CACHE = ".naming_cache.json"
+# Key in the naming cache: the log rows of renames recorded before they are made, so a run killed between a
+# rename and its log row leaves the row for the next run to write (R4-F-002).
+PENDING = "pending_renames"
 SAMPLE = 100  # DICOM headers read per ZIP; preparation later reads every object
 
 
@@ -51,7 +55,17 @@ def _skipped(member):
 
 
 def zip_facts(path):
-    """StudyDates and studies (hashed StudyInstanceUID -> StudyTime) from a sample of the ZIP's DICOM headers."""
+    """StudyDates and studies (hashed StudyInstanceUID -> StudyTime) from a sample of the ZIP's DICOM headers.
+
+    Corrupt compressed data in a member is reported as zipfile.BadZipFile, like the ZIP's other damage (R4-F-001).
+    """
+    try:
+        return _zip_facts(path)
+    except zlib.error:
+        raise zipfile.BadZipFile("corrupt compressed data in a member") from None
+
+
+def _zip_facts(path):
     import pydicom
     dates, studies = set(), {}
     with zipfile.ZipFile(path) as archive:
@@ -139,6 +153,8 @@ class _Facts:
                 self.data = {}
         except (OSError, ValueError):
             self.data = {}
+        pending = self.data.pop(PENDING, [])
+        self.pending = [p for p in pending if isinstance(p, dict)] if isinstance(pending, list) else []
         self.used = set()
 
     def get(self, path):
@@ -159,8 +175,12 @@ class _Facts:
         self.used.discard(str(old))
         self.used.add(str(new))
 
-    def save(self):
-        fsutil.atomic_json(self.path, {k: v for k, v in sorted(self.data.items()) if k in self.used})
+    def save(self, prune=True):
+        """Write the cache: with prune, only the ZIPs this run looked at; pending renames always."""
+        data = {k: v for k, v in sorted(self.data.items()) if not prune or k in self.used}
+        if self.pending:
+            data[PENDING] = self.pending
+        fsutil.atomic_json(self.path, data)
 
 
 def _taken(state, facts, named, sid, date, assigned):
@@ -185,6 +205,7 @@ def _taken(state, facts, named, sid, date, assigned):
 
 
 def _append_log(cfg, rows, logger):
+    """Append rows to renamed_uploads.csv; False when it cannot be written (the rows stay pending)."""
     path = cfg.reports / NAME_LOG
     try:
         with path.open("a", newline="", encoding="utf-8") as f:
@@ -193,7 +214,39 @@ def _append_log(cfg, rows, logger):
                 writer.writeheader()
             writer.writerows(rows)
     except OSError as e:
-        logger.error("Could not append to %s (is it open in another program?): %s; the renames were %s", path, e, rows)
+        logger.error("Could not append to %s (is it open in another program?): %s; the renames were %s; the next "
+                     "run logs them", path, e, rows)
+        return False
+    return True
+
+
+def _finish_pending(cfg, facts, logger):
+    """Log the renames a killed run made but did not log, and forget the ones it never made (R4-F-002).
+
+    A pending rename was made when its new name exists and its old name does not. Its row is written unless
+    the log already holds it (the run was killed after logging, before clearing the record).
+    """
+    if not facts.pending:
+        return
+    try:
+        with (cfg.reports / NAME_LOG).open(newline="", encoding="utf-8") as f:
+            logged = {(r.get("run_id"), r.get("old_path"), r.get("new_path")) for r in csv.DictReader(f)}
+    except FileNotFoundError:
+        logged = set()
+    except OSError as e:
+        logger.warning("Could not read %s to finish interrupted renames: %s; the next run tries again",
+                       cfg.reports / NAME_LOG, e)
+        return
+    rows = []
+    for row in facts.pending:
+        old, new = cfg.uploads / str(row.get("old_path")), cfg.uploads / str(row.get("new_path"))
+        if new.exists() and not old.exists() and (row.get("run_id"), row.get("old_path"), row.get("new_path")) \
+                not in logged:
+            rows.append({k: row.get(k, "") for k in NAME_FIELDS})
+            logger.info("RENAMED %s -> %s (by an interrupted run; logged now)", row.get("old_path"), new.name)
+    if not rows or _append_log(cfg, rows, logger):
+        facts.pending = []
+        facts.save(prune=False)
 
 
 def name_uploads(cfg, state, ids, pairs, logger):
@@ -202,11 +255,14 @@ def name_uploads(cfg, state, ids, pairs, logger):
     Returns (paths preparation must leave alone this run, held [(subject, path, reason)],
     names [(subject, path, new name, note)], renamed or in a dry run proposed).
     """
+    facts = _Facts(cfg)
+    if not cfg.dry_run:
+        _finish_pending(cfg, facts, logger)
     found = candidates(cfg)
     if not found:
         return set(), [], []
     named = [p for p in prepare.discover(cfg) if p not in set(found)]
-    facts, skip, holds, resolved, log_rows, names = _Facts(cfg), set(), [], [], [], []
+    skip, holds, resolved, names = set(), [], [], []
     listed = {}
     for sid, date in pairs:
         listed.setdefault(sid, set()).add(date)
@@ -265,14 +321,19 @@ def name_uploads(cfg, state, ids, pairs, logger):
             skip.add(path)
             logger.info("WOULD RENAME %s -> %s%s", relative_old, target.name, f" ({note})" if note else "")
             continue
+        row = {"run_id": cfg.run_id, "subject_id": sid, "session": label, "old_path": relative_old,
+               "new_path": relative_new, "study_date": info["dates"][0],
+               "listed_date": date if date in listed.get(sid, set()) else "", "note": note}
+        # On record before it is made, logged right after: a kill in between leaves the row to the next run.
+        facts.pending.append(row)
+        facts.save(prune=False)
         fsutil.retry_locked(lambda: path.rename(target))
         facts.move(path, target)
         renamed += 1
         (logger.warning if "second session" in note else logger.info)(
             "RENAMED %s -> %s%s", relative_old, target.name, f" ({note})" if note else "")
-        log_rows.append({"run_id": cfg.run_id, "subject_id": sid, "session": label, "old_path": relative_old,
-                         "new_path": relative_new, "study_date": info["dates"][0],
-                         "listed_date": date if date in listed.get(sid, set()) else "", "note": note})
+        if _append_log(cfg, [row], logger):
+            facts.pending.remove(row)
         state.checkpoint({"clear_issues": ["prepare:" + str(path)]})
     for issue_key, sid, path, error in holds:
         logger.warning("Held %s: %s", path, error)
@@ -280,8 +341,6 @@ def name_uploads(cfg, state, ids, pairs, logger):
             state.checkpoint({"issues": [prepare.hold_issue(issue_key, sid, "", error, path)]})
     if not cfg.dry_run:
         facts.save()
-        if log_rows:
-            _append_log(cfg, log_rows, logger)
     if renamed:
         logger.info("Named %s upload ZIP(s) from their subject folder and StudyDate%s; see %s", renamed,
                     f", {extra_sessions} as a further session on a date that already had one" if extra_sessions else "",

@@ -263,14 +263,32 @@ def _series_record(key, instances, t0):
     return record
 
 
+class UnreadableObject(ValueError):
+    """An extracted object, which preparation accepted as DICOM, can no longer be read as DICOM (R4-F-007)."""
+
+
 def read_series(root, inventory, stop=None):
-    """{series_key: record} for one extraction (5.1). Non-MR objects and objects without Rows are skipped."""
+    """{series_key: record} for one extraction (5.1). Non-MR objects and objects without Rows are skipped.
+
+    Every file in the inventory was a readable DICOM object when it was extracted. One that pydicom refuses,
+    and that still holds neither SOPInstanceUID nor Modality when read with force, raises UnreadableObject:
+    the session is then not ready (metadata_read_failed), never selected without it (R4-F-007).
+    """
     import pydicom
+    from pydicom.errors import InvalidDicomError
     by_series, sop_to_series = {}, {}
-    for item in inventory["files"]:
+    total = len(inventory["files"])
+    for number, item in enumerate(inventory["files"], 1):
         if stop is not None and stop.is_set():
             raise InterruptedError("Selection interrupted")
-        ds = pydicom.dcmread(Path(root) / item["name"], force=True, stop_before_pixels=True, specific_tags=SELECT_TAGS)
+        path = Path(root) / item["name"]
+        try:
+            ds = pydicom.dcmread(path, stop_before_pixels=True, specific_tags=SELECT_TAGS)
+        except InvalidDicomError:
+            ds = pydicom.dcmread(path, force=True, stop_before_pixels=True, specific_tags=SELECT_TAGS)
+        if "SOPInstanceUID" not in ds and "Modality" not in ds:
+            # Its position only: extracted names are numbers, but the message reaches the log.
+            raise UnreadableObject(f"extracted object {number:,} of {total:,} is not readable as DICOM")
         if "Rows" not in ds or str(ds.get("Modality", "MR")) != "MR":
             continue
         inst = _instance(ds)
