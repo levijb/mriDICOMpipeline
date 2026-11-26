@@ -645,8 +645,28 @@ def dwi_partners(winner, candidates, info):
     return found
 
 
-def follow(d, groups, parents, ov, parent_review):
-    """Outcome of a role whose groups follow selected parent acquisitions (6.5)."""
+def _no_parent(d, live, require):
+    """Maps that can have no parent: the session holds no acquisition of a parent role (6.5, R4-F-028).
+
+    The only one is selected as a fallback (decided_by no_parent); two or more go to review. --no-fallback rules
+    the fallback out. Any other requirement applies to a source acquisition, which is absent here, so it cannot
+    be checked and gives review.
+    """
+    active = {key for key, value in (require or {}).items() if value not in (None, False)}
+    if "no_fallback" in active:
+        d.update(outcome="no_eligible_candidate", reasons=["fallback_only"])
+    elif len(live) > 1 or active:
+        d.update(outcome="review_required", reasons=["derived_unlinked"])
+    else:
+        d.update(outcome="selected_fallback", decided_by="no_parent", winner=live[0], n_eligible=1)
+
+
+def follow(d, groups, parents, ov, parent_review, no_parent=None):
+    """Outcome of a role whose groups follow selected parent acquisitions (6.5).
+
+    no_parent: the requirements of the role the groups stand in for (DWI for ADC), when a map with no possible
+    parent may be selected as a fallback; None keeps such maps in review (QSM maps).
+    """
     d["n_candidates"] = len(groups)
     excluded = set((ov or {}).get("exclude", ()))
     live = [g for g in groups if g.id not in excluded]
@@ -660,6 +680,8 @@ def follow(d, groups, parents, ov, parent_review):
         d.update(outcome="selected", decided_by="follows_source", winner=linked[0])
     elif len(linked) > 1:
         d.update(outcome="review_required", reasons=["multiple_derived_for_source"])
+    elif no_parent is not None and live and all(g.link_state == "no_parent" for g in live):
+        _no_parent(d, live, no_parent)
     elif any(g.link_state != "linked" for g in live):
         d.update(outcome="review_required", reasons=["derived_unlinked"])
     else:
@@ -689,6 +711,8 @@ def decide_session(session, profile, overrides=None, accepted_partial=False):
     groups_by_role = {}
     for g in session.groups:
         groups_by_role.setdefault(selection_role(g.role), []).append(g)
+    # The scanner's processed SWI image (a map of role SWI) can stand in for a missing SWI acquisition (6.5).
+    swi_maps = [g for g in groups_by_role.get("SWI", []) if g.role == "SWI" and g.kind == "map"]
     for role in RANKED:
         rp = profile["roles"][role]
         if not reduces(profile, role):
@@ -697,9 +721,21 @@ def decide_session(session, profile, overrides=None, accepted_partial=False):
                 else "missing"
             decisions[role] = d
             continue
-        decisions[role] = decide_ranked(role, by_role.get(role, []), rp, profile, overrides.get(role), info,
-                                        groups_by_role.get(role, []) if role == "QSM" else (),
+        extra = groups_by_role.get(role, []) if role == "QSM" else swi_maps if role == "SWI" else ()
+        decisions[role] = decide_ranked(role, by_role.get(role, []), rp, profile, overrides.get(role), info, extra,
                                         [a for a in components.get(role, []) if a.phase_only])
+    swi = decisions["SWI"]
+    if reduces(profile, "SWI") and swi["outcome"] == "missing" and swi_maps:
+        # No SWI acquisition in the session, so no processed SWI image can have a parent (owner, 2026-11-25).
+        excluded = set((overrides.get("SWI") or {}).get("exclude", ()))
+        live = [g for g in swi_maps if g.id not in excluded]
+        swi["n_candidates"] = len(swi_maps)
+        if not live:
+            swi.update(outcome="no_eligible_candidate", reasons=[f"excluded_by_reviewer({len(swi_maps)})"])
+        elif all(g.link_state == "no_parent" for g in live):
+            _no_parent(swi, live, profile["roles"]["SWI"].get("require"))
+            if swi["winner"] is not None:
+                swi["rule_recommendation"] = swi["candidate_id"] = swi["winner"].id
     dwi = decisions["DWI"]
     if dwi["outcome"] in ("selected", "selected_fallback"):
         partners = dwi_partners(dwi["winner"], by_role.get("DWI", []), info)
@@ -711,7 +747,7 @@ def decide_session(session, profile, overrides=None, accepted_partial=False):
         else:
             winners = {parent["winner"]} if parent["outcome"] in ("selected", "selected_fallback") else set()
             follow(d, groups_by_role.get(role, []), winners, overrides.get(role),
-                   parent["outcome"] == "review_required")
+                   parent["outcome"] == "review_required", profile["roles"][parent_role].get("require") or {})
         decisions[role] = d
     qsm = decisions["QSM"]
     qsm_groups = groups_by_role.get("QSM", [])
@@ -745,6 +781,7 @@ def decide_session(session, profile, overrides=None, accepted_partial=False):
             selected_groups.add(g.id)
     excluded_groups = {i for role in FOLLOWING for i in (overrides.get(role) or {}).get("exclude", ())}
     excluded_groups |= set((overrides.get("QSM") or {}).get("exclude", ()))
+    excluded_groups |= set((overrides.get("SWI") or {}).get("exclude", ()))
     for role, d in decisions.items():
         if accepted_partial:
             d["warnings"].append("accepted_partial_session")

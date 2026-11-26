@@ -371,7 +371,11 @@ Selected/Subjects/S001/20260725/
 * **One acquisition can be several files:** its echoes, its magnitude and
   phase images, its gradient files. Scanner products (ADC, minIP, the
   processed SWI image) join their own folder only when the acquisition they
-  were made from is the one selected.
+  were made from is the one selected. When the export holds no scan of the
+  kind a product is made from (an ADC without any diffusion series), the
+  product is selected on its own if it is the only one of its kind:
+  `selected_fallback` with `decided_by` `no_parent`. Two or more go to
+  review.
 * **Identity comes from the DICOM headers,** not only from the description:
   sequence parameters decide T1, T1_POST, T2 and FLAIR; gradient files decide
   DWI. Headers are read once per session and cached in
@@ -382,8 +386,8 @@ Selected/Subjects/S001/20260725/
   Scans below the consensus tier (a 2D T1, a 5 mm FLAIR) are selected as
   `selected_fallback` unless `--no-fallback` is given.
 * **Nothing is guessed.** Repeats of one protocol, duplicate copies, maps that
-  cannot be tied to a unique source, and missing evidence that could change
-  the choice give `review_required`. The folder then stays empty until a
+  cannot be tied to a unique source among the scans present, and missing
+  evidence that could change the choice give `review_required`. The folder then stays empty until a
   reviewer decides in `selection_overrides.csv` (see the runbook).
 * **Sessions on one date are one visit.** Two studies of a subject on one day
   (`20260725` and `20260725_2`) usually hold different modalities, so their
@@ -414,7 +418,7 @@ the folder stays empty and `reasons` names the requirement):
 | `--isotropic` | native voxel sides within 20% of each other | `not_isotropic` |
 | `--max-voxel-mm MM` | every native voxel side at most MM; "1 mm" scans are often 0.94-1.11 mm natively, so 1.2 means "about 1 mm" | `voxel_too_large` |
 | `--min-directions N` | diffusion scans with at least N directions in one shell | `too_few_directions` |
-| `--no-fallback` | scans in a preferred tier only (no 2D T1, no FLAIR or T2 thicker than 3 mm) | `fallback_only` |
+| `--no-fallback` | scans in a preferred tier only (no 2D T1, no FLAIR or T2 thicker than 3 mm), and no scanner product selected without its source scan | `fallback_only` |
 | `--field-strength 3` or `1.5,3` | sessions from scanners of these field strengths (a header value of 2.89 counts as 3) | session `session_excluded` |
 | `--manufacturer GE` or `GE,SIEMENS` | sessions from these manufacturers | session `session_excluded` |
 
@@ -488,7 +492,9 @@ BIDS/
   QSIPrep yet.
 * **Scanner maps** (ADC, trace, MIPs, processed SWI, QSM maps) share their
   source scan's name parts only when that scan is in the export. Any other
-  map gets `unlinked` in its `acq-` label, for example `_acq-unlinked_ADC`.
+  map, including one selected without a source (`no_parent`), gets
+  `unlinked` in its `acq-` label, for example `_acq-unlinked_ADC` or
+  `_acq-swiUnlinked_swi`.
 * **Phase images** always carry `part-phase` (and the magnitude of the same
   scan `part-mag`), with `"Units": "arbitrary"` in the sidecar.
 * **Not standard BIDS:** the scanner's processed SWI (`_acq-swi_swi`), minIP

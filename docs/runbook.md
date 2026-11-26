@@ -193,7 +193,10 @@ Look at every row whose `outcome` is not `selected`, `kept_all` or `missing`:
 
 * **`selected_fallback`:** the best scan available is below the consensus
   tier (`tier` names which one, for example `2d_clinical`). Nothing needs
-  doing unless your analysis requires the consensus tier.
+  doing unless your analysis requires the consensus tier. With `decided_by`
+  `no_parent`, the folder holds a scanner product (ADC, EADC, minIP or the
+  processed SWI image) whose source scan is not in the export at all; it was
+  the only one of its kind. Use it knowing its source cannot be checked.
 * **`review_required`:** the rules could not choose. The modality folder in
   the published session is empty and the candidates are in
   `OTHER/<modality>/`. `reasons` says why:
@@ -202,7 +205,9 @@ Look at every row whose `outcome` is not `selected`, `kept_all` or `missing`:
   * `duplicate_series`: two series hold the same acquisition, usually an
     archive copy; choose either.
   * `derived_unlinked`, `parent_review`, `multiple_derived_for_source`: a
-    scanner map (ADC, EADC, minIP, QSM) could not be tied to one source.
+    scanner map (ADC, EADC, minIP, processed SWI, QSM) could not be tied to
+    one source, or two or more maps of one kind exist and the export holds
+    no scan they could come from. `choose` one.
   * `contrast_unknown`: the T1 may be postcontrast.
   * `label_parameter_conflict`: the description and the sequence parameters
     disagree, for example a FLAIR described as T1.
