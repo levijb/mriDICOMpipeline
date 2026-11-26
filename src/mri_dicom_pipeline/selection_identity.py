@@ -409,7 +409,8 @@ def build_acquisitions(volumes):
 
     Rule 1 joins the outputs of each series first. Rule 2 then joins series pair by series pair and never puts
     two volumes of different series with the same TE and part into one acquisition, even when each of them
-    matches a third series: such an acquisition would list itself in duplicate_of (R4-F-019, R4-F-020).
+    matches a third series: such an acquisition would list itself in duplicate_of (R4-F-019, R4-F-020). Two
+    such series are duplicates when they also have the same role; otherwise each is its own acquisition.
     """
     natives = [v for v in volumes if v.kind == "native" and v.role and v.role not in KEPT_ROLES]
     parent = list(range(len(natives)))
@@ -438,7 +439,9 @@ def build_acquisitions(volumes):
                 for v in (a, b):
                     if "multiple_outputs_same_series" not in v.issues:
                         v.issues.append("multiple_outputs_same_series")
-            else:
+            elif a.role == b.role:
+                # Duplicates also need the same role: GE's SWAN phase series has no phase marker in its headers,
+                # and only its description (role SWI_PHASE) tells it from the magnitude (R4-F-021; header-only, D10).
                 duplicates.append((a, b))
     groups = {}
     for i, v in enumerate(natives):

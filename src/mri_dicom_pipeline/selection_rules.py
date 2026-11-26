@@ -528,10 +528,11 @@ def _apply_overrides(d, ids, ov, chosen_lookup):
     return False
 
 
-def decide_ranked(role, candidates, rp, profile, ov, info, extra=()):
+def decide_ranked(role, candidates, rp, profile, ov, info, extra=(), loose_phase=()):
     """Decision for one ranked role (6.4). info collects per-candidate results.
 
-    extra: derived groups an override may also choose (QSM maps).
+    extra: derived groups an override may also choose (QSM maps). loose_phase: phase-only acquisitions filed
+    with the role that are no candidates (SWI_PHASE, 6.1); they still make a winner without phase an orphan.
     """
     d = _decision(role)
     d["n_candidates"] = len(candidates)
@@ -600,7 +601,7 @@ def decide_ranked(role, candidates, rp, profile, ov, info, extra=()):
                 checks.append("contrast_unknown")
             if any("label_parameter_conflict" in m.warnings for m in winner.members):
                 checks.append("label_parameter_conflict")
-            if not winner.has_phase and any(a.phase_only for a in candidates):
+            if not winner.has_phase and any(a.phase_only for a in [*candidates, *loose_phase]):
                 checks.append("orphan_phase")
             if checks:
                 recommendation, winner = winner, None
@@ -680,9 +681,11 @@ def decide_session(session, profile, overrides=None, accepted_partial=False):
     """
     overrides = overrides or {}
     info, decisions, partners = {}, {}, set()
-    by_role = {}
+    by_role, components = {}, {}
     for acq in session.acquisitions:
-        by_role.setdefault(selection_role(acq.role), []).append(acq)
+        # SWI_PHASE has no candidates (6.1): an acquisition with that role holds phase images that did not join
+        # a magnitude acquisition. It is filed under SWI but never chosen as the SWI (R4-F-029).
+        (components if acq.role == "SWI_PHASE" else by_role).setdefault(selection_role(acq.role), []).append(acq)
     groups_by_role = {}
     for g in session.groups:
         groups_by_role.setdefault(selection_role(g.role), []).append(g)
@@ -690,11 +693,13 @@ def decide_session(session, profile, overrides=None, accepted_partial=False):
         rp = profile["roles"][role]
         if not reduces(profile, role):
             d = _decision(role)
-            d["outcome"] = "kept_all" if by_role.get(role) or groups_by_role.get(role) else "missing"
+            d["outcome"] = "kept_all" if by_role.get(role) or components.get(role) or groups_by_role.get(role) \
+                else "missing"
             decisions[role] = d
             continue
         decisions[role] = decide_ranked(role, by_role.get(role, []), rp, profile, overrides.get(role), info,
-                                        groups_by_role.get(role, []) if role == "QSM" else ())
+                                        groups_by_role.get(role, []) if role == "QSM" else (),
+                                        [a for a in components.get(role, []) if a.phase_only])
     dwi = decisions["DWI"]
     if dwi["outcome"] in ("selected", "selected_fallback"):
         partners = dwi_partners(dwi["winner"], by_role.get("DWI", []), info)
@@ -788,7 +793,7 @@ def _fate(v, decisions, info, partners, selected_groups, excluded_groups):
         elif info.get(v.acq.id, {}).get("eligible"):
             fate = "alternative"
         else:
-            fate = "excluded"
+            fate = "excluded"  # an ineligible candidate, or an SWI_PHASE acquisition, which is no candidate
     elif v.group is not None:
         g = v.group
         r = selection_role(g.role)
