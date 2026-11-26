@@ -22,7 +22,7 @@ compare: takes the same record now and compares it with the baseline.
     *   kept_but_files_changed: same receipt ID, but a file was added, removed or touched;
     *   replaced_restored: new receipt ID after a listed file was missing before;
     *   replaced_expected: new receipt ID, explained (the owner's reading of R4-OPS-02, 2026-11-25) by a changed
-        decision (the manifest's roles or files differ), by an R4-F-023/024 fact that changed in the session's
+        decision (the manifest's roles or files differ, or a BIDS manifest's omitted list), by an R4-F-023/024 fact that changed in the session's
         cache (pos_min, pos_max, step_mm, extent_mm, orientation), or by the version alone (only selector_version,
         or a BIDS manifest's exporter_revision, differs); where the decision did not change, the image files
         (NIfTI, bval, bvec) hold the same bytes before and after (their inventory SHA-256 values);
@@ -66,6 +66,9 @@ NOT_RECHECKED = {"software"}  # r4_facts.py compares it with the DICOM's value o
 # be byte-identical before and after. Anything else is a failure.
 FACT_FIELDS = {"pos_min", "pos_max", "step_mm", "extent_mm", "orientation"}  # the facts R4-F-023 and R4-F-024 change
 VERSION_FIELDS = {"selector_version", "exporter_revision"}  # manifest fields that only carry a version
+# A BIDS manifest's list of what the visit leaves out (and why) follows from its decisions and plan, so a change in it
+# is a decision change; it is outside DECISION_KEYS only because the baseline's decision digest was taken without it.
+DECISION_META = {"omitted"}
 IMAGE_SUFFIXES = (".nii.gz", ".nii", ".bval", ".bvec")
 FAIL = {"kept_but_files_changed", "kept_despite_decision_change", "replaced_unexplained", "replaced_images_changed",
         "replaced_differs_from_report", "removed", "no_receipt", "inventory_mismatch"}
@@ -262,13 +265,14 @@ def classify(b, n, report, root, verify, facts_changed=frozenset()):
         cls = "replaced_restored"
     else:
         explained = []
-        decision = n["decision_digest"] != b["decision_digest"]
+        decision = n["decision_digest"] != b["decision_digest"] or bool(set(info["meta_changed"]) & DECISION_META)
         if decision:
             explained.append("decision")
         if facts_changed:
             explained.append("facts R4-F-023/024 (" + ",".join(sorted(facts_changed)) + ")")
-        if info["meta_changed"] and set(info["meta_changed"]) <= VERSION_FIELDS:
-            explained.append("version (" + ",".join(info["meta_changed"]) + ")")
+        versions = set(info["meta_changed"]) - DECISION_META
+        if versions and versions <= VERSION_FIELDS:
+            explained.append("version (" + ",".join(sorted(versions)) + ")")
         info["explained_by"] = explained
         if not explained:
             cls = "replaced_unexplained"
