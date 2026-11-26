@@ -379,7 +379,8 @@ Selected/Subjects/S001/20260725/
 * **Identity comes from the DICOM headers,** not only from the description:
   sequence parameters decide T1, T1_POST, T2 and FLAIR; gradient files decide
   DWI. Headers are read once per session and cached in
-  `Reports/.selection_cache/`, so reruns open no DICOM file.
+  `Reports/.selection_cache/`, so reruns open no DICOM file (a release that
+  changes the cached facts reads them once more).
 * **"Best" means the best protocol fit,** not image quality: 3D before 2D,
   native resolution (from the acquisition matrix, not the reconstructed
   grid), diffusion directions and b-value, phase images and echo count.

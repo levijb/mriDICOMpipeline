@@ -176,15 +176,19 @@ def family_role(family):
 
 
 def gradient_stats(bvals, bvecs, n_volumes):
-    """Diffusion facts from .bval/.bvec values (5.2): b0 count, shells, b_max, directions per shell."""
-    mismatch = (len(bvecs) != 3 or any(len(row) != len(bvals) for row in bvecs)
-                or (n_volumes is not None and len(bvals) != n_volumes))
+    """Diffusion facts from .bval/.bvec values (5.2): b0 count, shells, b_max, directions per shell.
+
+    Directions are counted from the vectors whenever there is one per b-value, also when the count differs
+    from the NIfTI's 4th dimension (R4-F-004).
+    """
+    one_per_value = len(bvecs) == 3 and all(len(row) == len(bvals) for row in bvecs)
+    mismatch = not one_per_value or (n_volumes is not None and len(bvals) != n_volumes)
     shells = {}
     for i, b in enumerate(bvals):
         if b <= 50:
             continue
         found = shells.setdefault(int(round(b / 50.0) * 50), [])
-        if mismatch:
+        if not one_per_value:
             continue
         v = (bvecs[0][i], bvecs[1][i], bvecs[2][i])
         norm = math.sqrt(sum(x * x for x in v))
@@ -196,6 +200,14 @@ def gradient_stats(bvals, bvecs, n_volumes):
     return {"n_volumes": len(bvals), "b0": sum(b <= 50 for b in bvals), "shells": sorted(shells),
             "b_max": max(shells) if shells else None,
             "n_dirs": max((len(d) for d in shells.values()), default=0), "mismatch": mismatch}
+
+
+def gradients_lost(gradients, series):
+    """True when the gradient files of a multi-volume series hold no b-value above 50 while its headers state
+    no b-value at all: dcm2niix wrote zeros because the export lost the gradient table, so this is not a
+    b0-only scan (R4-F-012). A record without has_b_value (older records) says nothing."""
+    return bool(gradients) and gradients["n_volumes"] > 1 and not gradients["shells"] \
+        and (series or {}).get("has_b_value") is False
 
 
 def dwi_family(gradients, min_tensor_directions):
@@ -358,7 +370,9 @@ def setup_volume(v, min_tensor_directions):
     if v.role in (None, "LOCALIZER"):
         v.family = v.role or ""
     elif v.role == "DWI":
-        v.family = dwi_family(v.gradients, min_tensor_directions) if v.role_rule == 3 else "UNCLASSIFIED"
+        lost = gradients_lost(v.gradients, None if v.mixed else v.series)
+        v.family = ("UNCLASSIFIED" if v.role_rule != 3 else "DWI_UNKNOWN" if lost
+                    else dwi_family(v.gradients, min_tensor_directions))
     elif v.role in ("T1", "T1_POST", "T2", "FLAIR"):
         v.family = structural or "UNCLASSIFIED"
     else:
@@ -461,8 +475,9 @@ def build_acquisitions(volumes):
         issues = sorted({issue for v in members for issue in v.issues})
         if len(roles) > 1:
             issues.append("role_conflict")
-        # The first echo whose parameters name a family: for a dual-echo PD/T2 series, the T2 echo.
-        primary = sorted(mags, key=lambda v: (v.family == "UNCLASSIFIED", v.te is None, v.te or 0, v.relpath))[0]
+        # Family, tiers and native sampling come from the first-echo magnitude member (5.5), also when its
+        # parameters name no family, as the PD echo of a dual-echo PD/T2 series (R4-F-016, the HC-08 ruling).
+        primary = sorted(mags, key=lambda v: (v.te is None, v.te or 0, v.relpath))[0]
         acq = Acquisition(members=members, id=short_hash("\n".join(sorted(v.vid for v in members))), role=role,
                           primary=primary, n_echoes=len({round(v.te, 1) for v in mags if v.te is not None}) or 1,
                           has_phase=any(v.part == "phase" for v in members),
@@ -636,9 +651,9 @@ def assign_phases(acquisitions, groups, series_records, contrast_unknown):
         if acq.evidence == "none" and acq.phase == "unknown":
             fallback(acq, acq.primary.s("acq_rel_s"), acq.primary.s("series_number"))
     for group in groups:
-        if group.parent is not None:
-            group.phase, group.evidence = group.parent.phase, group.parent.evidence
-        elif group.series and group.series["series_key"] in first:
+        # Each series gets its own phase (5.7), a linked reformat too: its link gives it its parent's role
+        # (split_t1), not its parent's phase (R4-F-005).
+        if group.series and group.series["series_key"] in first:
             group.phase, group.evidence = first[group.series["series_key"]]
         else:
             fallback(group, (group.series or {}).get("acq_rel_s"), (group.series or {}).get("series_number"))

@@ -20,10 +20,14 @@ from statistics import median
 from . import fsutil, receipts
 from .selection_identity import PART_TOKENS, description_phase, description_tokens, gradient_stats, orientation
 
-CACHE_VERSION = 1
+# 2: positions on the full-precision slice normal (R4-F-023), one-position step and extent (R4-F-024), has_b_value
+CACHE_VERSION = 2
 IMAGE_TYPE_TEXT = 0x00211175  # Siemens XA ImageTypeText
 GE_COMPLEX = 0x0043102F       # GE magnitude/phase/real/imaginary flag
 GE_PARTS = {0: "mag", 1: "phase", 2: "real", 3: "imag"}
+# Elements that state a diffusion b-value, where dcm2niix reads one: DiffusionBValue, Siemens B_value, GE
+# slop_int_6 and Philips's b-value. Their presence tells a b0-only series from one whose gradient table was lost.
+B_VALUE_TAGS = (0x00189087, 0x0019100C, 0x00431039, 0x20011003)
 SELECT_TAGS = [
     "SOPInstanceUID", "SOPClassUID", "SeriesInstanceUID", "SeriesNumber", "InstanceNumber", "Modality", "Rows",
     "Columns", "PixelSpacing", "ImageType", "Manufacturer", "ManufacturerModelName", "MagneticFieldStrength",
@@ -32,7 +36,7 @@ SELECT_TAGS = [
     "SpacingBetweenSlices", "AcquisitionMatrix", "InPlanePhaseEncodingDirection", "PercentPhaseFieldOfView",
     "ImageOrientationPatient", "ImagePositionPatient", "FrameOfReferenceUID", "AcquisitionTime", "SeriesTime",
     "ContrastBolusAgent", "ContrastBolusStartTime", "NumberOfFrames", "SeriesDescription", "ProtocolName",
-    "ReferencedImageSequence", "SourceImageSequence", IMAGE_TYPE_TEXT, GE_COMPLEX]
+    "ReferencedImageSequence", "SourceImageSequence", IMAGE_TYPE_TEXT, GE_COMPLEX, *B_VALUE_TAGS]
 ENHANCED_MR = {"1.2.840.10008.5.1.4.1.1.4.1", "1.2.840.10008.5.1.4.1.1.4.3"}
 SIDECAR_FIELDS = ("source_series_key", "SeriesNumber", "EchoTime", "EchoNumber", "ImageType", "RepetitionTime",
                   "InversionTime", "FlipAngle", "MRAcquisitionType", "ScanningSequence", "SequenceVariant",
@@ -135,7 +139,10 @@ def _instance(ds):
         "image_type": image_type, "image_type_text": text_tokens, "part": part or "mag",
         "rows": get("Rows"), "cols": get("Columns"),
         "pixel": [round(x, 6) for x in pixel] if pixel and len(pixel) == 2 else None,
+        # Rounded for stack grouping only (5.1); orientation and positions use the full precision (R4-F-023).
         "iop": [round(x, 3) for x in iop] if iop and len(iop) == 6 else None,
+        "iop_full": iop if iop and len(iop) == 6 else None,
+        "b_value": any(get(tag) is not None for tag in B_VALUE_TAGS),
         "ipp": _floats(get("ImagePositionPatient")),
         "tr": _float(get("RepetitionTime")), "te": _float(get("EchoTime")), "ti": _float(get("InversionTime")),
         "flip": _float(get("FlipAngle")), "etl": _float(get("EchoTrainLength")),
@@ -199,17 +206,26 @@ def _series_record(key, instances, t0):
     first_te = tes[0] if tes else None
     base = [i for i in instances if i["part"] == "mag" and (first_te is None or i["te"] is None
                                                              or round(i["te"], 2) == first_te)] or instances
-    iop = _first(base, "iop")
+    iop = _first(base, "iop_full")
     mosaic = "MOSAIC" in image_type
     positions = []
     if iop and not mosaic:
+        # Projections on the unit slice normal at full precision (PS3.3 C.7.6.2.1.1); positions within
+        # 0.001 mm of the previous one are the same slice (R4-F-023).
         r, c = iop[:3], iop[3:]
         n = (r[1] * c[2] - r[2] * c[1], r[2] * c[0] - r[0] * c[2], r[0] * c[1] - r[1] * c[0])
-        positions = sorted({round(sum(a * b for a, b in zip(i["ipp"], n)), 2) for i in base
-                            if i["ipp"] and len(i["ipp"]) == 3})
-    steps = [round(b - a, 4) for a, b in zip(positions, positions[1:])]
-    step = median(steps) if steps else None
+        norm = math.sqrt(sum(x * x for x in n))
+        if norm:
+            n = [x / norm for x in n]
+            projected = sorted(sum(a * b for a, b in zip(i["ipp"], n)) for i in base
+                               if i["ipp"] and len(i["ipp"]) == 3)
+            for p in projected:
+                if not positions or p - positions[-1] > 0.001:
+                    positions.append(p)
+    steps = [b - a for a, b in zip(positions, positions[1:])]
     thick = _first(instances, "thick")
+    # 5.3: with one slice position the step is SpacingBetweenSlices, and the extent the thickness (R4-F-024).
+    step = median(steps) if steps else _first(instances, "sbs") if len(positions) == 1 else None
     times = [i["acq_t"] for i in instances if i["acq_t"] is not None] or \
         [i["ser_t"] for i in instances if i["ser_t"] is not None]
     series_times = [i["ser_t"] for i in instances if i["ser_t"] is not None]
@@ -229,8 +245,9 @@ def _series_record(key, instances, t0):
         "thick_mm": thick, "sbs_mm": _first(instances, "sbs"), "acq_matrix": _first(instances, "matrix"),
         "phase_dir": _first(instances, "phase_dir"), "pct_phase_fov": _first(instances, "pct_phase_fov"),
         "orientation": orientation(iop), "n_positions": len(positions) or None,
-        "pos_min": positions[0] if positions else None, "pos_max": positions[-1] if positions else None,
-        "step_mm": step,
+        "pos_min": round(positions[0], 4) if positions else None,
+        "pos_max": round(positions[-1], 4) if positions else None,
+        "step_mm": round(step, 4) if step is not None else None,
         "uniform_spacing": (max(steps) - min(steps) <= 0.05 + 0.01 * abs(step)) if steps else None,
         "extent_mm": round((len(positions) - 1) * step + thick, 3) if step is not None and thick is not None else None,
         "for_hash": _hash(_first(instances, "for")) if _first(instances, "for") else None,
@@ -241,6 +258,7 @@ def _series_record(key, instances, t0):
         "desc_phase": _first(instances, "desc_phase"),
         "multiframe": any(i["multiframe"] for i in instances),
         "has_image_type_text": any(i["image_type_text"] for i in instances),
+        "has_b_value": any(i["b_value"] for i in instances),
     })
     return record
 
