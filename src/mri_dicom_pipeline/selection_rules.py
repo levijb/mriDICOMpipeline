@@ -13,7 +13,10 @@ import re
 
 from .selection_identity import KEPT_ROLES, close, native_sampling, native_text
 
-RULES_REVISION = 2  # 2: rotated 3D slice counts, vendor sequence conventions (2026-11-19)
+# 2: rotated 3D slice counts, vendor sequence conventions (2026-11-19). 3: round 4 phase 4 (2026-11-25): the SWI
+# token is derived, acquisition join order, duplicates need one role, no SWI_PHASE candidates, the no-parent
+# fallback, first-echo family, lost gradient tables, full-precision positions.
+RULES_REVISION = 3
 RANKED = ("T1", "T1_POST", "T2", "FLAIR", "DWI", "SWI", "QSM", "GRE")
 FOLLOWING = {"ADC": "DWI", "EADC": "DWI", "SWI_MINIP": "SWI"}
 REPORT_ROLES = ("LOCALIZER", "T1", "T1_POST", "T2", "FLAIR", "DWI", "ADC", "EADC", "SWI", "SWI_MINIP", "QSM", "GRE",

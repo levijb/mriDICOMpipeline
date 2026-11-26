@@ -21,7 +21,7 @@ import uuid
 from . import __version__, fsutil, nifti, receipts
 from .selection_rules import selection_role
 
-EXPORTER_REVISION = 1
+EXPORTER_REVISION = 2  # 2: a visit with nothing exportable is recorded too, by its hidden files only (R4-F-003)
 # The newest release the current validator (bids-validator-deno 3.0.2) knows; 1.11.2 only fixed the text.
 BIDS_VERSION = "1.11.1"
 MARKER = ".bids_export.json"

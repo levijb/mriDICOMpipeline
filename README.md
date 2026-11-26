@@ -106,9 +106,9 @@ in range, a folder that is not a subject ID, a name already used in that
 folder, a damaged or encrypted ZIP) stays unnamed with an issue. Every rename
 is appended to `Reports/renamed_uploads.csv` (old and new path, StudyDate,
 listed date, note), which is also the record for undoing one; if a run is
-killed right after a rename, the next run writes its row. `prepare --dry-run` prints
-each proposed name as `WOULD RENAME` and renames nothing. It ends with a
-summary: how many ZIPs would be named, prepared or skipped, then every held
+killed right after a rename, the next run writes its row. `prepare --dry-run`
+prints each proposed name as `WOULD RENAME` and renames nothing. It ends with
+a summary: how many ZIPs would be named, prepared or skipped, then every held
 ZIP with its reason, and every proposed name worth checking (a near date, an
 extra `_N` session, a re-export). Date reasons give the StudyDate, the listed
 or ZIP-name date and the subject. The headers of a
@@ -391,8 +391,9 @@ Selected/Subjects/S001/20260725/
   `selected_fallback` unless `--no-fallback` is given.
 * **Nothing is guessed.** Repeats of one protocol, duplicate copies, maps that
   cannot be tied to a unique source among the scans present, and missing
-  evidence that could change the choice give `review_required`. The folder then stays empty until a
-  reviewer decides in `selection_overrides.csv` (see the runbook).
+  evidence that could change the choice give `review_required`. The folder
+  then stays empty until a reviewer decides in `selection_overrides.csv` (see
+  the runbook).
 * **Sessions on one date are one visit.** Two studies of a subject on one day
   (`20260725` and `20260725_2`) usually hold different modalities, so their
   scans are ranked together and published to one folder,
@@ -533,7 +534,10 @@ pipeline does not de-identify any of them:
 * file and folder names (subject ID and session date);
 * the paths of upload ZIPs below `Uploads/`, including the names of the
   folders they were uploaded in, in `Reports/renamed_uploads.csv`,
-  `issues.csv`, the state files and the logs;
+  `Reports/.naming_cache.json`, `issues.csv`, the state files and the logs.
+  `Reports/.naming_cache.json` also holds the log rows of renames in
+  progress (subject ID, session, old and new path) until they are written
+  to `renamed_uploads.csv`;
 * JSON sidecar fields (a selected technical list; no patient names, IDs or
   free text);
 * NIfTI header text, which dcm2niix fills with fields such as
@@ -547,6 +551,11 @@ pipeline does not de-identify any of them:
 * hashes;
 * logs, where converter lines that look identifying are replaced before they
   reach disk; this matches line patterns and can miss identifiers.
+  `Reports/latest_convert.log` can hold series descriptions and UIDs from
+  the converter's own output;
+* the `Name` in a BIDS export's `dataset_description.json`, which is taken
+  from the project folder's name. Edit it before sharing the dataset if the
+  name identifies anyone; later runs keep the edited file.
 
 File and folder names inside the ZIPs, which can contain patient names, are
 not written to reports, logs or state. `select` copies NIfTI files
