@@ -232,7 +232,10 @@ def test_dual_echo_series_is_one_acquisition_and_unmatched_echo_is_missing_evide
     session, decisions, _, _ = decide([vol(r, "T2", te=12.0), vol(r, "T2", te=96.0)])
     pd, t2 = sorted(session.volumes, key=lambda v: v.te)
     assert pd.family == "UNCLASSIFIED" and t2.family == "T2_2D_TSE" and pd.acq is t2.acq
-    assert t2.acq.family == "T2_2D_TSE" and decisions["T2"]["outcome"] == "selected"
+    # The acquisition takes its family from the first (PD) echo, which names none, so T2 goes to review (5.5; the
+    # owner's HC-08 ruling, round 4 finding R4-F-016; test updated with the owner's approval 2026-11-25).
+    assert t2.acq.family == "UNCLASSIFIED" and decisions["T2"]["outcome"] == "review_required"
+    assert decisions["T2"]["reasons"] == ["metadata_unavailable(1)"]
     session, *_ = decide([vol(r, "T2", te=50.0)])
     assert "metadata_unavailable" in session.volumes[0].issues
 

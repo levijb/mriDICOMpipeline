@@ -187,13 +187,15 @@ def test_a_map_of_an_omitted_scan_is_unlinked_and_numbered_with_the_others():
 
 
 def test_structural_secondary_echo_and_localizer_are_omitted():
-    t2 = ge_t2(echoes=[{"te_ms": t, "echo_number": i + 1, "n_instances": 36} for i, t in enumerate((10.0, 101.8))],
+    # Two T2-family echoes: a PD first echo would send the acquisition to review instead (the owner's HC-08
+    # ruling, round 4 finding R4-F-016; test updated with the owner's approval 2026-11-25).
+    t2 = ge_t2(echoes=[{"te_ms": t, "echo_number": i + 1, "n_instances": 36} for i, t in enumerate((80.0, 101.8))],
                te_ms=None)
     loc = rec("loc", 1, image_type=["ORIGINAL", "PRIMARY", "LOCALIZER"])
-    entries, _ = plan([vol(t2, "T2", te=10.0), vol(t2, "T2", te=101.8), vol(loc, "LOCALIZER")])
+    entries, _ = plan([vol(t2, "T2", te=80.0), vol(t2, "T2", te=101.8), vol(loc, "LOCALIZER")])
     status = {(e["volume"].role, e["volume"].te): (e["status"], e["reason"]) for e in entries}
-    assert status[("T2", 101.8)] == ("standard", "")
-    assert status[("T2", 10.0)] == ("omitted", "secondary_echo")
+    assert status[("T2", 80.0)] == ("standard", "")
+    assert status[("T2", 101.8)] == ("omitted", "secondary_echo")
     assert status[("LOCALIZER", None)] == ("omitted", "role_not_exported")
 
 
