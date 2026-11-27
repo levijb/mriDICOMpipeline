@@ -19,6 +19,7 @@ import re
 import uuid
 
 from . import __version__, fsutil, nifti, receipts
+from .selection_identity import family_role
 from .selection_rules import selection_role
 
 EXPORTER_REVISION = 2  # 2: a visit with nothing exportable is recorded too, by its hidden files only (R4-F-003)
@@ -137,7 +138,7 @@ def _entry(v, fate, agent):
     if role in STRUCTURAL or role == "DWI" and native:
         if not native:
             return _omit(e, "no_bids_mapping")
-        if v.acq is not None and v is not v.acq.primary:
+        if v.acq is not None and v is not (v.acq.primary if role == "DWI" else _structural_echo(v.acq)):
             return _omit(e, "secondary_echo")
         if role == "DWI":
             return _set(e, "dwi", "dwi")
@@ -167,6 +168,17 @@ def _entry(v, fate, agent):
                         rec="mip" if v.kind == "projection" else None)
         return _omit(e, "no_bids_mapping")
     return _omit(e, "no_bids_mapping")
+
+
+def _structural_echo(acq):
+    """The one volume of a structural acquisition that BIDS exports (design section 11): its first echo whose
+    own family names the acquisition's role, else its primary. The PD echo of a dual-echo PD/T2 chosen by an
+    override is then omitted as a secondary echo, although it is the acquisition's primary (5.5; R4-F-034)."""
+    role = "T1" if acq.role in ("T1", "T1_POST") else acq.role
+    mags = [m for m in acq.members if m.part != "phase"] or acq.members
+    named = sorted((m for m in mags if family_role(m.family) == role),
+                   key=lambda m: (m.te is None, m.te or 0, m.relpath))
+    return named[0] if named else acq.primary
 
 
 def _seconds(value):

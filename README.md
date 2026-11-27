@@ -507,7 +507,9 @@ BIDS/
   which the vendor scaling has not been checked for). They are published and
   listed in `.bidsignore`.
 * **Not exported:** localizers, perfusion, unclassified scans, a structural
-  scan's other echoes, and dcm2niix's `_Eq`, `_ROI` and `_Tilt` companions.
+  scan's other echoes (of a dual-echo PD/T2 chosen as T2, the T2 echo is
+  exported and the PD echo is not), and dcm2niix's `_Eq`, `_ROI` and `_Tilt`
+  companions.
   `selection_volumes.csv` gives each file's `export_status` in the plan
   (`standard`, `conventional` or `omitted`) and `export_reason`. Its
   `published` column is `true` only when this run left the file in the root
