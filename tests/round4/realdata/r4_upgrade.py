@@ -15,7 +15,8 @@ selection cache (each file's hash and time, and its series records) and whether 
 Writes <private>/upgrade/baseline.json (subject IDs and folder names: local only; never overwritten without
 --force) and <evidence>/upgrade_baseline_summary.json (counts).
 
-compare: takes the same record now and compares it with the baseline.
+compare: takes the same record now and compares it with the baseline, or with --against after_<run> (an earlier
+compare's record): a re-publish at a later commit whose fixes change no decision must then keep every visit.
 *   Visits, classed by receipt and manifest (scan-selection.md 7.5 rule 5: a visit is replaced when its manifest
     hash changes or a listed file is missing):
     *   kept: same receipt ID, every file present with the same size and modification time;
@@ -358,12 +359,16 @@ def compare_cache(a, base, now, codes):
 
 
 def compare(a, codes):
-    base = load_json(os.path.join(a.private, "upgrade", "baseline.json"))
+    name = a.against if a.against.endswith(".json") else a.against + ".json"
+    if os.path.basename(name) != name or name == f"after_{a.run}.json":
+        raise SystemExit("--against names a record in <private>/upgrade other than this run's own")
+    base = load_json(os.path.join(a.private, "upgrade", name))
     if base is None:
-        raise SystemExit("no baseline.json in <private>/upgrade; run 'before' first")
+        raise SystemExit(f"no {name} in <private>/upgrade; run 'before' first (or name an existing after_<run> record)")
     now = snapshot(a.project, a.output_root)
     write_json(os.path.join(a.private, "upgrade", f"after_{a.run}.json"), now)
-    rows, summary = [], {"run": a.run, "baseline_utc": base["taken_utc"], "now_utc": now["taken_utc"], "roots": {}}
+    rows, summary = [], {"run": a.run, "against": name, "baseline_utc": base["taken_utc"], "now_utc": now["taken_utc"],
+                         "roots": {}}
     cache_rows, rewritten = compare_cache(a, base["cache"], now["cache"], codes)
     facts_by_session = {}
     for r in cache_rows:
@@ -439,6 +444,9 @@ def main(argv=None):
     p.add_argument("--mismatches", help="R4-VAL-01's pre-fix mismatches.csv (compare)")
     p.add_argument("--verify-hashes", action="store_true", help="hash replaced and new visits' files (compare)")
     p.add_argument("--force", action="store_true", help="overwrite an existing baseline (before)")
+    p.add_argument("--against", default="baseline",
+                   help="compare: the record in <private>/upgrade to compare with (default baseline; after_UB or after_UC "
+                        "for a re-publish at a later commit, where every visit should be kept)")
     a = p.parse_args(argv)
     r4real.check_outputs(a.project, a.private, a.evidence)
     for root in a.output_root:

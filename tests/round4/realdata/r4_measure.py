@@ -112,13 +112,28 @@ def main(argv=None):
         def is_map(p):
             return "derived" in p["partner_kind"] or ("outside" in p["partner_kind"] and "ADC" in p["partner_image_type"].split("\\"))
 
+        # Owner reading R4-F-035 (2026-11-26): a partner that select files as SWI_PHASE and whose pixel values are
+        # negative beside a chosen series without negative values (phase_partners.csv, r4_triage.py phase_partners)
+        # is the chosen magnitude's phase image, which the frozen check cannot tell from a copy: not consequential.
+        # The figure that counts them (the frozen check alone, option b) is reported beside it.
+        phase = set()
+        phase_path = os.path.join(a.evidence, "phase_partners.csv")
+        if os.path.exists(phase_path):
+            phase = {(r["visit"], r["chosen_series"], r["partner_series"]) for r in r4real.read_csv(phase_path)
+                     if r["partner_is_phase"] == "True"}
+
+        def is_phase(p):
+            return p["select_role"] == "SWI_PHASE" and (p["visit"], p["chosen_series"], p["partner_series"]) in phase
+
         def flag_class(r):
             ps = partners.get((r["visit"], r["role"], r["series_number"]), [])
             if r["category"] != "copies" or not ps:
                 return "consequential"
             if all(is_map(p) for p in ps):
                 return "R4-F-026"
-            if all(is_map(p) or p["voxels"].startswith("copy") for p in ps):
+            if all(is_map(p) or is_phase(p) for p in ps):
+                return "R4-F-035"
+            if all(is_map(p) or is_phase(p) or p["voxels"].startswith("copy") for p in ps):
                 return "voxel copy"
             return "consequential"
 
@@ -138,7 +153,7 @@ def main(argv=None):
         listing = []
         for k, rows in sorted(per_decision.items()):
             fc = [flag_class(r) for r in rows]
-            cls = next(c for c in ("consequential", "voxel copy", "R4-F-026") if c in fc)
+            cls = next(c for c in ("consequential", "voxel copy", "R4-F-035", "R4-F-026") if c in fc)
             if cls == "consequential":
                 before_review.add(k)
                 if k in owner_right:
@@ -154,6 +169,7 @@ def main(argv=None):
                          ["visit", "role", "series_number", "flags", "class", "frozen_flag", "partner_kinds", "partner_voxels"])
         headline = {k for k, c in classes.items() if c == "consequential"}
         conservative = {k for k, c in classes.items() if c in ("consequential", "voxel copy")}
+        phase_flagged = {k for k, c in classes.items() if c == "R4-F-035"}
         # A check outside the objective checks (R4-F-029): the chosen acquisition holds no volume of the decision's
         # own role (select maps SWI_PHASE acquisitions into SWI).
         by_acq = defaultdict(set)
@@ -164,12 +180,18 @@ def main(argv=None):
         measures["consequential_errors"] = {
             "decisions_where_select_chose": len(chose),
             "headline": r4real.wilson(sum(1 for d in chose if key(d) in headline), len(chose)),
-            "headline_basis": ("frozen checks plus the owner's SWI amendment, with readings R4-F-026 and voxel copies "
+            "headline_basis": ("frozen checks plus the owner's SWI amendment, with readings R4-F-026, R4-F-035 and voxel copies "
                                "(owner, 2026-11-25), less the choices the owner judged right by eye (owner_image_review.json)"),
             "headline_before_image_review": r4real.wilson(sum(1 for d in chose if key(d) in before_review), len(chose)),
             "owner_judged_right": sorted([list(k) for k in owner_right & before_review]),
             "conservative": r4real.wilson(sum(1 for d in chose if key(d) in conservative), len(chose)),
             "conservative_basis": "as the headline, but a choice whose partner is a voxel copy of it still counts",
+            "headline_option_b_R4_F_035_counted": r4real.wilson(sum(1 for d in chose if key(d) in headline | phase_flagged), len(chose)),
+            "conservative_option_b_R4_F_035_counted": r4real.wilson(
+                sum(1 for d in chose if key(d) in conservative | phase_flagged), len(chose)),
+            "R4_F_035_basis": ("owner reading 2026-11-26 (option a): a copies flag whose partners are all derived maps or "
+                               "SWI_PHASE-filed phase images (negative pixel values beside a chosen series without them) is "
+                               "not consequential; the option b figures count those choices, as the frozen check does"),
             "rate_frozen_checks_only": r4real.wilson(sum(1 for d in chose if key(d) in flagged_frozen), len(chose)),
             "rate_with_amendment": r4real.wilson(sum(1 for d in chose if key(d) in flagged_all), len(chose)),
             "decisions_by_class": dict(Counter(classes.values())),

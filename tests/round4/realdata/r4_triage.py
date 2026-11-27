@@ -4,7 +4,8 @@
         --reports D:\\round4\\private\\runA2 --evidence D:\\round4\\evidence\\realdata
 
 WHAT is one of duplicates, copies (after r4_objective.py), ge_part (after duplicates), first_echo, reviews (after
-duplicates, ge_part and first_echo), varying, brief027, pixels (after r4_pixels.py). Each function's docstring says what it reads and writes.
+duplicates, ge_part and first_echo), varying, brief027, pixels (after r4_pixels.py), phase_partners (after copies).
+Each function's docstring says what it reads and writes.
 
 duplicates: for every role decision with reason duplicate_series, compares the voxel data of the top-group
 acquisitions' primary volumes (NiBabel). Pairs whose arrays are equal are copies, as scan-selection.md 5.5
@@ -176,6 +177,52 @@ def copies(a):
     with open(os.path.join(a.evidence, "copies_summary.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(summary, fh, indent=1, sort_keys=True)
     print(json.dumps(summary["flags_by_partner_kinds"]))
+
+
+def phase_partners(a):
+    """R4-F-035 (owner reading, 2026-11-26): for each `copies` partner that select files as SWI_PHASE (copies.csv), the
+    pixel range of one mid-series instance of the chosen series and of the partner (header reader records and DICOM
+    index of <private>, written by r4_facts.py). A partner with negative pixel values beside a chosen series without
+    them is the chosen magnitude's phase image, which the frozen check cannot tell from a copy because its headers
+    state no part. Writes phase_partners.csv and phase_partners_summary.json (coded)."""
+    import pydicom
+
+    rows = [r for r in r4real.read_csv(os.path.join(a.evidence, "copies.csv")) if r["select_role"] == "SWI_PHASE"]
+    cache = {}
+
+    def paths_of(visit, number):
+        if visit not in cache:
+            reader = json.load(open(os.path.join(a.private, "reader", f"{visit}.json"), encoding="utf-8"))["series"]
+            index = json.load(open(os.path.join(a.private, "index", f"{visit}.json"), encoding="utf-8"))
+            cache[visit] = (reader, index)
+        reader, index = cache[visit]
+        return sorted(p for k, s in reader.items() if str(s.get("series_number")) == str(number) for p in index.get(k, []))
+
+    def value_range(paths):
+        if not paths:
+            return None, None
+        pixels = pydicom.dcmread(paths[len(paths) // 2]).pixel_array
+        return int(pixels.min()), int(pixels.max())
+
+    out = []
+    for r in rows:
+        cmin, cmax = value_range(paths_of(r["visit"], r["chosen_series"]))
+        pmin, pmax = value_range(paths_of(r["visit"], r["partner_series"]))
+        phase = cmin is not None and pmin is not None and cmin >= 0 and pmin < 0
+        out.append({"visit": r["visit"], "role": r["role"], "chosen_series": r["chosen_series"],
+                    "partner_series": r["partner_series"], "chosen_min": cmin, "chosen_max": cmax, "partner_min": pmin,
+                    "partner_max": pmax, "partner_is_phase": phase})
+    fields = ["visit", "role", "chosen_series", "partner_series", "chosen_min", "chosen_max", "partner_min", "partner_max",
+              "partner_is_phase"]
+    r4real.write_csv(os.path.join(a.evidence, "phase_partners.csv"), out, fields)
+    mins = sorted(r["partner_min"] for r in out if r["partner_min"] is not None)
+    summary = {"partners": len(out), "decisions": len({(r["visit"], r["role"]) for r in out}),
+               "partner_is_phase": dict(Counter(str(r["partner_is_phase"]) for r in out)),
+               "partner_min": {"lowest": mins[0], "median": mins[len(mins) // 2], "highest": mins[-1]} if mins else None,
+               "chosen_min_values": dict(Counter(str(r["chosen_min"]) for r in out))}
+    with open(os.path.join(a.evidence, "phase_partners_summary.json"), "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(summary, fh, indent=1, sort_keys=True)
+    print(json.dumps(summary))
 
 
 GE_PART = {0: "magnitude", 1: "phase", 2: "real", 3: "imaginary"}
@@ -676,7 +723,7 @@ def pixels(a):
 def main(argv=None):
     p = argparse.ArgumentParser(description="Phase 3 triage helpers")
     p.add_argument("what", choices=["duplicates", "copies", "ge_part", "reviews", "varying", "first_echo", "brief027",
-                                    "pixels"])
+                                    "pixels", "phase_partners"])
     p.add_argument("--project", required=True)
     p.add_argument("--private", required=True)
     p.add_argument("--reports", required=True)
@@ -684,7 +731,7 @@ def main(argv=None):
     a = p.parse_args(argv)
     r4real.check_outputs(a.project, a.private, a.evidence)
     {"duplicates": duplicates, "copies": copies, "ge_part": ge_part, "reviews": reviews, "varying": varying,
-     "first_echo": first_echo, "brief027": brief027, "pixels": pixels}[a.what](a)
+     "first_echo": first_echo, "brief027": brief027, "pixels": pixels, "phase_partners": phase_partners}[a.what](a)
     return 0
 
 
